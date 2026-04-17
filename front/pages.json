@@ -1,0 +1,345 @@
+{
+  "pages": [
+	  {
+	    "path": "pages/tab/discover/index",
+	    "style": {
+	      "navigationBarTitleText": "人脉库",
+	      "navigationStyle": "custom",
+	      "navigationBarBackgroundColor": "#f6f6f8",
+	      "backgroundColor": "#f6f6f8",
+	      "enablePullDownRefresh": true
+	    }
+	  },
+	  {
+	    "path": "pages/debug/index",
+	    "style": {
+	      "navigationBarTitleText": "Debug"
+	    }
+	  },
+   
+    {
+      "path": "pages/tab/discover/city/index",
+      "style": {
+        "navigationBarTitleText": "选择城市",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#ffffff",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/tab/circles/index",
+      "style": {
+        "navigationBarTitleText": "圈子",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/tab/resources/index",
+      "style": {
+        "navigationBarTitleText": "资源",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/tab/messages/index",
+      "style": {
+        "navigationBarTitleText": "消息",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/tab/me/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/me/editInfo/index",
+      "style": {
+        "navigationBarTitleText": "编辑信息",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/me/my-circles/index",
+      "style": {
+        "navigationBarTitleText": "我的圈子",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/points/index",
+      "style": {
+        "navigationBarTitleText": "获取积分",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/points/records/index",
+      "style": {
+        "navigationBarTitleText": "积分明细",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/member-center/index",
+      "style": {
+        "navigationBarTitleText": "会员中心",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/wallet/index",
+      "style": {
+        "navigationBarTitleText": "我的钱包",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/me/wallet/recharge/index",
+      "style": {
+        "navigationBarTitleText": "充值",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/card/index",
+      "style": {
+        "navigationBarTitleText": "个人名片",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/settings/index",
+      "style": {
+        "navigationBarTitleText": "系统设置",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/me/security/index",
+      "style": {
+        "navigationBarTitleText": "账号与安全",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/security/phone/index",
+      "style": {
+        "navigationBarTitleText": "手机号绑定",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/security/password/index",
+      "style": {
+        "navigationBarTitleText": "修改密码",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/privacy/index",
+      "style": {
+        "navigationBarTitleText": "隐私设置",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f8f6f6"
+      }
+    },
+    {
+      "path": "pages/me/privacy/blocked/index",
+      "style": {
+        "navigationBarTitleText": "黑名单",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f8f6f6"
+      }
+    },
+    {
+      "path": "pages/me/auth/index",
+      "style": {
+        "navigationBarTitleText": "我的认证"
+      }
+    },
+    {
+      "path": "pages/me/auth/enterprise/index",
+      "style": {
+        "navigationBarTitleText": "企业认证"
+      }
+    },
+    {
+      "path": "pages/me/auth/realname/index",
+      "style": {
+        "navigationBarTitleText": "实名认证"
+      }
+    },
+    {
+      "path": "pages/me/auth/submit/index",
+      "style": {
+        "navigationBarTitleText": "名片认证"
+      }
+    },
+    {
+      "path": "pages/me/auth/result/index",
+      "style": {
+        "navigationBarTitleText": "提交结果"
+      }
+    },
+    {
+      "path": "pages/common/webview/index",
+      "style": {
+        "navigationBarTitleText": "网页详情"
+      }
+    },
+    {
+      "path": "pages/auth/login/index",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/messages/friend-apply/index",
+      "style": {
+        "navigationBarTitleText": "好友申请",
+        "navigationBarBackgroundColor": "#f8f6f6",
+        "backgroundColor": "#f8f6f6",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/messages/chat/index",
+      "style": {
+        "navigationBarTitleText": "聊天",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/messages/system-notice/index",
+      "style": {
+        "navigationBarTitleText": "系统通知",
+        "navigationBarBackgroundColor": "#f8f6f6",
+        "backgroundColor": "#f8f6f6",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/resources/detail/index",
+      "style": {
+        "navigationBarTitleText": "资源详情",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/resources/publish/index",
+      "style": {
+        "navigationBarTitleText": "发布资源",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/resources/manage/index",
+      "style": {
+        "navigationBarTitleText": "我的发布",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/circles/filter/index",
+      "style": {
+        "navigationBarTitleText": "筛选"
+      }
+    },
+    {
+      "path": "pages/circles/create/index",
+      "style": {
+        "navigationBarTitleText": "创建圈子",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/circles/edit/index",
+      "style": {
+        "navigationBarTitleText": "编辑圈子",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/circles/detail/index",
+      "style": {
+        "navigationBarTitleText": "圈子详情",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    }
+    
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "圈脉链",
+    "navigationBarBackgroundColor": "#F8F8F8",
+    "backgroundColor": "#F8F8F8"
+  },
+  "tabBar": {
+    "color": "#666666",
+    "selectedColor": "#1a57db",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/tab/discover/index",
+        "text": "人脉",
+        "iconPath": "/static/renmai.png",
+        "selectedIconPath": "/static/renmai-s.png"
+      },
+	  {
+	    "pagePath": "pages/tab/resources/index",
+	    "text": "资源",
+	    "iconPath": "/static/zyuan.png",
+	    "selectedIconPath": "/static/ziyuan-s.png"
+	  },
+      {
+        "pagePath": "pages/tab/circles/index",
+        "text": "圈子",
+        "iconPath": "static/quan.png",
+        "selectedIconPath": "/static/quan-s.png"
+      },
+      
+      {
+        "pagePath": "pages/tab/me/index",
+        "text": "我的",
+        "iconPath": "static/my.png",
+        "selectedIconPath": "/static/my-s.png"
+      }
+    ]
+  }
+}
+

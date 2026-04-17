@@ -1,0 +1,27 @@
+# Dependencies
+**/node_modules/
+backend/.venv/
+tools/pnpm/
+
+# Build artifacts
+front/unpackage/
+**/dist/
+**/build/
+
+# Python cache / logs
+backend/__pycache__/
+*.log
+
+# Local environment files
+.env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Scratch / temp folders in this workspace
+tmp-*/
+vue-vben-admin-main/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>圈脉链后台管理</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" v-cloak>
+      <div v-if="!token" class="login-shell">
+        <div class="login-card">
+          <div class="login-brand">
+            <div class="login-brand-badge">QML</div>
+            <div>
+              <div class="login-brand-title">圈脉链后台管理</div>
+              <div class="login-brand-desc">用户、圈子、资源、认证、充值统一管理</div>
+            </div>
+          </div>
+
+          <div class="login-form">
+            <label class="field-label">管理员账号</label>
+            <input
+              v-model.trim="loginForm.username"
+              class="text-field"
+              type="text"
+              placeholder="请输入管理员账号"
+              @keyup.enter="handleLogin"
+            />
+
+            <label class="field-label">管理员密码</label>
+            <input
+              v-model="loginForm.password"
+              class="text-field"
+              type="password"
+              placeholder="请输入管理员密码"
+              @keyup.enter="handleLogin"
+            />
+
+            <button class="primary-btn primary-btn-block" :disabled="loginLoading" @click="handleLogin">
+              {{ loginLoading ? '登录中...' : '登录后台' }}
+            </button>
+
+            <p class="login-tip">默认管理员账户会在后端启动时自动初始化。</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="layout-shell">
+        <aside class="sidebar">
+          <div class="sidebar-head">
+            <div class="sidebar-logo">Q</div>
+            <div>
+              <div class="sidebar-title">圈脉链管理端</div>
+              <div class="sidebar-subtitle">Admin Console</div>
+            </div>
+          </div>
+
+          <nav class="menu-list">
+            <button
+              v-for="item in menuItems"
+              :key="item.key"
+              class="menu-item"
+              :class="activeView === item.key ? 'menu-item-active' : ''"
+              @click="changeView(item.key)"
+            >
+              <span class="menu-item-icon">{{ item.icon }}</span>
+              <span>{{ item.label }}</span>
+            </button>
+          </nav>
+        </aside>
+
+        <div class="layout-main">
+          <header class="topbar">
+            <div>
+              <h1 class="page-title">{{ pageTitleMap[activeView] || '后台管理' }}</h1>
+              <p class="page-desc">{{ pageDescMap[activeView] || '统一管理系统核心数据与状态。' }}</p>
+            </div>
+
+            <div class="topbar-actions">
+              <div class="admin-chip">
+                <div class="admin-avatar">{{ adminInitial }}</div>
+                <div>
+                  <div class="admin-name">{{ profile?.display_name || '管理员' }}</div>
+                  <div class="admin-role">{{ profile?.role || 'super_admin' }}</div>
+                </div>
+              </div>
+              <button class="ghost-btn" @click="logout">退出登录</button>
+            </div>
+          </header>
+
+          <main class="content-area">
+            <section v-if="activeView === 'dashboard'" class="view-panel">
+              <div class="stats-grid">
+                <article v-for="card in statCards" :key="card.key" class="stat-card">
+                  <div class="stat-card-head">
+                    <span class="stat-card-label">{{ card.label }}</span>
+                    <span class="stat-card-icon">{{ card.icon }}</span>
+                  </div>
+                  <div class="stat-card-value">{{ card.value }}</div>
+                  <div class="stat-card-desc">{{ card.desc }}</div>
+                </article>
+              </div>
+
+              <div class="dashboard-grid">
+                <section class="table-card">
+                  <div class="card-head">
+                    <h2>最近用户</h2>
+                    <button class="link-btn" @click="changeView('users')">查看全部</button>
+                  </div>
+                  <table class="data-table compact-table">
+                    <thead>
+                      <tr>
+                        <th>用户ID</th>
+                        <th>昵称</th>
+                        <th>城市</th>
+                        <th>状态</th>
+                        <th>注册时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="item in dashboard.recent_users" :key="item.id">
+                        <td>{{ item.user_id }}</td>
+                        <td>{{ item.nickname || '--' }}</td>
+                        <td>{{ item.city_name || '--' }}</td>
+                        <td><span class="status-pill" :class="item.is_active ? 'status-success' : 'status-muted'">{{ item.is_active ? '正常' : '禁用' }}</span></td>
+                        <td>{{ formatDate(item.created_at) }}</td>
+                      </tr>
+                      <tr v-if="!dashboard.recent_users.length">
+                        <td colspan="5" class="empty-cell">暂无数据</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+
+                <section class="table-card">
+                  <div class="card-head">
+                    <h2>最近资源</h2>
+                    <button class="link-btn" @click="changeView('posts')">查看全部</button>
+                  </div>
+                  <table class="data-table compact-table">
+                    <thead>
+                      <tr>
+                        <th>资源编号</th>
+                        <th>标题</th>
+                        <th>作者</th>
+                        <th>状态</th>
+                        <th>发布时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="item in dashboard.recent_posts" :key="item.post_code">
+                        <td>{{ item.post_code }}</td>
+                        <td>{{ item.title || '--' }}</td>
+                        <td>{{ item.author_nickname || '--' }}</td>
+                        <td><span class="status-pill" :class="item.status === 'active' ? 'status-success' : 'status-warning'">{{ item.status || '--' }}</span></td>
+                        <td>{{ formatDate(item.created_at) }}</td>
+                      </tr>
+                      <tr v-if="!dashboard.recent_posts.length">
+                        <td colspan="5" class="empty-cell">暂无数据</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+              </div>
+            </section>
+
+            <section v-if="activeView === 'users'" class="view-panel">
+              <div class="toolbar">
+                <input v-model.trim="users.keyword" class="text-field toolbar-field" type="text" placeholder="搜索用户ID / 手机 / 昵称 / 城市 / 行业" />
+                <select v-model="users.is_active" class="text-field toolbar-select">
+                  <option value="">全部状态</option>
+                  <option value="true">正常</option>
+                  <option value="false">禁用</option>
+                </select>
+                <button class="primary-btn" @click="loadUsers(1)">查询</button>
+              </div>
+
+              <div class="table-card">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>用户ID</th>
+                      <th>昵称</th>
+                      <th>手机</th>
+                      <th>城市 / 行业</th>
+                      <th>认证</th>
+                      <th>状态</th>
+                      <th>圈子 / 人脉</th>
+                      <th>注册时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in users.items" :key="item.id">
+                      <td>{{ item.user_id }}</td>
+                      <td>{{ item.nickname || '--' }}</td>
+                      <td>{{ item.phone || '--' }}</td>
+                      <td>{{ item.city_name || '--' }} / {{ item.industry_label || '--' }}</td>
+                      <td>{{ item.is_verified ? '已认证' : '未认证' }}</td>
+                      <td><span class="status-pill" :class="item.is_active ? 'status-success' : 'status-muted'">{{ item.is_active ? '正常' : '禁用' }}</span></td>
+                      <td>{{ item.circle_count }} / {{ item.network_count }}</td>
+                      <td>{{ formatDate(item.created_at) }}</td>
+                      <td>
+                        <button class="table-btn" @click="toggleUserStatus(item)">{{ item.is_active ? '禁用' : '启用' }}</button>
+                      </td>
+                    </tr>
+                    <tr v-if="!users.items.length">
+                      <td colspan="9" class="empty-cell">暂无用户数据</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pagination-bar">
+                  <span>共 {{ users.total }} 条</span>
+                  <div class="pagination-actions">
+                    <button class="ghost-btn" :disabled="users.page <= 1" @click="loadUsers(users.page - 1)">上一页</button>
+                    <span>第 {{ users.page }} / {{ totalPages(users) }} 页</span>
+                    <button class="ghost-btn" :disabled="users.page >= totalPages(users)" @click="loadUsers(users.page + 1)">下一页</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="activeView === 'circles'" class="view-panel">
+              <div class="toolbar">
+                <input v-model.trim="circles.keyword" class="text-field toolbar-field" type="text" placeholder="搜索圈子编号 / 名称 / 行业 / 圈主" />
+                <select v-model="circles.status" class="text-field toolbar-select">
+                  <option value="">全部状态</option>
+                  <option value="active">active</option>
+                  <option value="inactive">inactive</option>
+                </select>
+                <button class="primary-btn" @click="loadCircles(1)">查询</button>
+              </div>
+
+              <div class="table-card">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>圈子编号</th>
+                      <th>名称</th>
+                      <th>圈主</th>
+                      <th>行业</th>
+                      <th>成员 / 动态</th>
+                      <th>状态</th>
+                      <th>最近活跃</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in circles.items" :key="item.circle_code">
+                      <td>{{ item.circle_code }}</td>
+                      <td>{{ item.name || '--' }}</td>
+                      <td>{{ item.owner_nickname || '--' }} ({{ item.owner_user_id || '--' }})</td>
+                      <td>{{ item.industry_label || '--' }}</td>
+                      <td>{{ item.member_count }} / {{ item.post_count }}</td>
+                      <td><span class="status-pill" :class="item.status === 'active' ? 'status-success' : 'status-warning'">{{ item.status }}</span></td>
+                      <td>{{ formatDate(item.last_active_at) }}</td>
+                      <td>
+                        <button class="table-btn" @click="toggleCircleStatus(item)">{{ item.status === 'active' ? '下线' : '上线' }}</button>
+                      </td>
+                    </tr>
+                    <tr v-if="!circles.items.length">
+                      <td colspan="8" class="empty-cell">暂无圈子数据</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pagination-bar">
+                  <span>共 {{ circles.total }} 条</span>
+                  <div class="pagination-actions">
+                    <button class="ghost-btn" :disabled="circles.page <= 1" @click="loadCircles(circles.page - 1)">上一页</button>
+                    <span>第 {{ circles.page }} / {{ totalPages(circles) }} 页</span>
+                    <button class="ghost-btn" :disabled="circles.page >= totalPages(circles)" @click="loadCircles(circles.page + 1)">下一页</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="activeView === 'posts'" class="view-panel">
+              <div class="toolbar">
+                <input v-model.trim="posts.keyword" class="text-field toolbar-field" type="text" placeholder="搜索资源编号 / 标题 / 作者 / 行业" />
+                <select v-model="posts.status" class="text-field toolbar-select">
+                  <option value="">全部状态</option>
+                  <option value="active">active</option>
+                  <option value="offline">offline</option>
+                </select>
+                <select v-model="posts.mode" class="text-field toolbar-select">
+                  <option value="">全部类型</option>
+                  <option value="cooperate">找合作</option>
+                  <option value="resource">找资源</option>
+                </select>
+                <button class="primary-btn" @click="loadPosts(1)">查询</button>
+              </div>
+
+              <div class="table-card">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>资源编号</th>
+                      <th>标题</th>
+                      <th>类型</th>
+                      <th>作者</th>
+                      <th>互动</th>
+                      <th>状态</th>
+                      <th>置顶</th>
+                      <th>发布时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in posts.items" :key="item.post_code">
+                      <td>{{ item.post_code }}</td>
+                      <td>{{ item.title || '--' }}</td>
+                      <td>{{ item.mode }}</td>
+                      <td>{{ item.author_nickname || '--' }}</td>
+                      <td>{{ item.view_count }} / {{ item.like_count }} / {{ item.comment_count }}</td>
+                      <td><span class="status-pill" :class="item.status === 'active' ? 'status-success' : 'status-warning'">{{ item.status }}</span></td>
+                      <td>{{ item.is_pinned ? '是' : '否' }}</td>
+                      <td>{{ formatDate(item.created_at) }}</td>
+                      <td class="action-stack">
+                        <button class="table-btn" @click="togglePostStatus(item)">{{ item.status === 'active' ? '下线' : '上线' }}</button>
+                        <button class="table-btn" @click="togglePostPin(item)">{{ item.is_pinned ? '取消置顶' : '置顶' }}</button>
+                      </td>
+                    </tr>
+                    <tr v-if="!posts.items.length">
+                      <td colspan="9" class="empty-cell">暂无资源数据</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pagination-bar">
+                  <span>共 {{ posts.total }} 条</span>
+                  <div class="pagination-actions">
+                    <button class="ghost-btn" :disabled="posts.page <= 1" @click="loadPosts(posts.page - 1)">上一页</button>
+                    <span>第 {{ posts.page }} / {{ totalPages(posts) }} 页</span>
+                    <button class="ghost-btn" :disabled="posts.page >= totalPages(posts)" @click="loadPosts(posts.page + 1)">下一页</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="activeView === 'verifications'" class="view-panel">
+              <div class="toolbar">
+                <select v-model="verifications.status" class="text-field toolbar-select">
+                  <option value="">全部状态</option>
+                  <option value="pending">pending</option>
+                  <option value="approved">approved</option>
+                  <option value="rejected">rejected</option>
+                </select>
+                <select v-model="verifications.verify_type" class="text-field toolbar-select">
+                  <option value="">全部类型</option>
+                  <option value="real_name">real_name</option>
+                  <option value="enterprise">enterprise</option>
+                  <option value="business_card">business_card</option>
+                </select>
+                <button class="primary-btn" @click="loadVerifications(1)">查询</button>
+              </div>
+
+              <div class="table-card">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>用户</th>
+                      <th>类型</th>
+                      <th>状态</th>
+                      <th>提交时间</th>
+                      <th>审核时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in verifications.items" :key="item.id">
+                      <td>{{ item.id }}</td>
+                      <td>{{ item.nickname || '--' }} ({{ item.user_id || '--' }})</td>
+                      <td>{{ item.type }}</td>
+                      <td><span class="status-pill" :class="verificationStatusClass(item.status)">{{ item.status }}</span></td>
+                      <td>{{ formatDate(item.submitted_at) }}</td>
+                      <td>{{ formatDate(item.reviewed_at) }}</td>
+                      <td class="action-stack">
+                        <button class="table-btn" @click="openVerificationModal(item, 'approve')">通过</button>
+                        <button class="table-btn danger-btn" @click="openVerificationModal(item, 'reject')">驳回</button>
+                      </td>
+                    </tr>
+                    <tr v-if="!verifications.items.length">
+                      <td colspan="7" class="empty-cell">暂无认证数据</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pagination-bar">
+                  <span>共 {{ verifications.total }} 条</span>
+                  <div class="pagination-actions">
+                    <button class="ghost-btn" :disabled="verifications.page <= 1" @click="loadVerifications(verifications.page - 1)">上一页</button>
+                    <span>第 {{ verifications.page }} / {{ totalPages(verifications) }} 页</span>
+                    <button class="ghost-btn" :disabled="verifications.page >= totalPages(verifications)" @click="loadVerifications(verifications.page + 1)">下一页</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="activeView === 'recharges'" class="view-panel">
+              <div class="toolbar">
+                <input v-model.trim="recharges.keyword" class="text-field toolbar-field" type="text" placeholder="搜索订单号 / 流水号 / 用户 / 手机" />
+                <select v-model="recharges.status" class="text-field toolbar-select">
+                  <option value="">全部状态</option>
+                  <option value="pending">pending</option>
+                  <option value="paid">paid</option>
+                  <option value="failed">failed</option>
+                </select>
+                <button class="primary-btn" @click="loadRecharges(1)">查询</button>
+              </div>
+
+              <div class="table-card">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>订单号</th>
+                      <th>用户</th>
+                      <th>金额</th>
+                      <th>渠道</th>
+                      <th>状态</th>
+                      <th>创建时间</th>
+                      <th>支付时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in recharges.items" :key="item.id">
+                      <td>{{ item.order_no }}</td>
+                      <td>{{ item.nickname || '--' }} ({{ item.user_id || '--' }})</td>
+                      <td>{{ formatAmount(item.amount) }}</td>
+                      <td>{{ item.pay_channel || '--' }}</td>
+                      <td><span class="status-pill" :class="verificationStatusClass(item.status)">{{ item.status }}</span></td>
+                      <td>{{ formatDate(item.created_at) }}</td>
+                      <td>{{ formatDate(item.paid_at) }}</td>
+                    </tr>
+                    <tr v-if="!recharges.items.length">
+                      <td colspan="7" class="empty-cell">暂无充值订单</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pagination-bar">
+                  <span>共 {{ recharges.total }} 条</span>
+                  <div class="pagination-actions">
+                    <button class="ghost-btn" :disabled="recharges.page <= 1" @click="loadRecharges(recharges.page - 1)">上一页</button>
+                    <span>第 {{ recharges.page }} / {{ totalPages(recharges) }} 页</span>
+                    <button class="ghost-btn" :disabled="recharges.page >= totalPages(recharges)" @click="loadRecharges(recharges.page + 1)">下一页</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="activeView === 'configs'" class="view-panel">
+              <div class="toolbar">
+                <input v-model.trim="configs.keyword" class="text-field toolbar-field" type="text" placeholder="搜索配置键 / 值 / 描述" />
+                <input v-model.trim="configs.config_group" class="text-field toolbar-select" type="text" placeholder="按分组筛选" />
+                <button class="primary-btn" @click="loadConfigs(1)">查询</button>
+              </div>
+
+              <div class="table-card create-card">
+                <div class="card-head">
+                  <h2>新增 / 更新配置</h2>
+                </div>
+                <div class="config-form-grid">
+                  <input v-model.trim="configDraft.config_key" class="text-field" type="text" placeholder="配置键，如 site.title" />
+                  <input v-model.trim="configDraft.config_group" class="text-field" type="text" placeholder="配置分组" />
+                  <input v-model="configDraft.config_value" class="text-field" type="text" placeholder="配置值" />
+                  <input v-model="configDraft.description" class="text-field" type="text" placeholder="描述" />
+                  <button class="primary-btn" @click="saveDraftConfig">保存配置</button>
+                </div>
+              </div>
+
+              <div class="table-card">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>配置键</th>
+                      <th>分组</th>
+                      <th>配置值</th>
+                      <th>描述</th>
+                      <th>更新时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in configs.items" :key="item.id">
+                      <td>{{ item.config_key }}</td>
+                      <td><input v-model="item.config_group" class="table-input" type="text" /></td>
+                      <td><input v-model="item.config_value" class="table-input" type="text" /></td>
+                      <td><input v-model="item.description" class="table-input" type="text" /></td>
+                      <td>{{ formatDate(item.updated_at) }}</td>
+                      <td><button class="table-btn" @click="saveConfig(item)">保存</button></td>
+                    </tr>
+                    <tr v-if="!configs.items.length">
+                      <td colspan="6" class="empty-cell">暂无配置数据</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="pagination-bar">
+                  <span>共 {{ configs.total }} 条</span>
+                  <div class="pagination-actions">
+                    <button class="ghost-btn" :disabled="configs.page <= 1" @click="loadConfigs(configs.page - 1)">上一页</button>
+                    <span>第 {{ configs.page }} / {{ totalPages(configs) }} 页</span>
+                    <button class="ghost-btn" :disabled="configs.page >= totalPages(configs)" @click="loadConfigs(configs.page + 1)">下一页</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
+
+      <div v-if="reviewModal.visible" class="modal-mask">
+        <div class="modal-card">
+          <div class="modal-head">
+            <h3>{{ reviewModal.action === 'approve' ? '通过认证' : '驳回认证' }}</h3>
+            <button class="icon-btn" @click="closeReviewModal">×</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="detail-list">
+              <div><strong>认证记录：</strong>{{ reviewModal.item?.id || '--' }}</div>
+              <div><strong>用户：</strong>{{ reviewModal.item?.nickname || '--' }} ({{ reviewModal.item?.user_id || '--' }})</div>
+              <div><strong>类型：</strong>{{ reviewModal.item?.type || '--' }}</div>
+              <div><strong>状态：</strong>{{ reviewModal.item?.status || '--' }}</div>
+            </div>
+
+            <div class="payload-box">
+              <div class="payload-title">提交内容</div>
+              <pre>{{ formatJson(reviewModal.item?.submit_payload || {}) }}</pre>
+            </div>
+
+            <textarea
+              v-if="reviewModal.action === 'reject'"
+              v-model.trim="reviewModal.reject_reason"
+              class="text-area reject-area"
+              placeholder="请输入驳回原因"
+            ></textarea>
+          </div>
+
+          <div class="modal-actions">
+            <button class="ghost-btn" @click="closeReviewModal">取消</button>
+            <button class="primary-btn" @click="submitVerificationReview">{{ reviewModal.action === 'approve' ? '确认通过' : '确认驳回' }}</button>
+          </div>
+        </div>
+      </div>
+
+      <transition name="toast-fade">
+        <div v-if="toast.show" class="toast" :class="toast.type === 'error' ? 'toast-error' : 'toast-success'">
+          {{ toast.message }}
+        </div>
+      </transition>
+    </div>
+
+    <script src="./assets/vue.global.prod.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

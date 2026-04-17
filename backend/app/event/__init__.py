@@ -1,0 +1,2 @@
+"""Event domain module placeholder."""
+

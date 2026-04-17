@@ -1,0 +1,2 @@
+"""Admin domain module placeholder."""
+
