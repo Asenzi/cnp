@@ -21,7 +21,6 @@ front/unpackage/
 
 # Scratch / temp folders in this workspace
 tmp-*/
-vue-vben-admin-main/
 
 # OS/editor noise
 .DS_Store
