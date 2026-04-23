@@ -181,6 +181,8 @@ const contactSectionData = computed(() => {
       : String(rawProfile.value?.contact_locked_reason || '').trim(),
     targetHasContact: isSelf ? selfHasContact : Boolean(rawProfile.value?.target_has_contact),
     targetContactEnabled: isSelf ? rawProfile.value?.show_contact !== false : Boolean(rawProfile.value?.target_contact_enabled),
+    viewerContactPackageRemainingViews: isSelf ? 0 : Number(rawProfile.value?.viewer_contact_package_remaining_views || 0),
+    viewerContactPackageUsedForView: !isSelf && Boolean(rawProfile.value?.viewer_contact_package_used_for_view),
     isSelf
   }
 })

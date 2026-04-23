@@ -42,16 +42,16 @@ const chooseAvatar = () => {
 
 <style scoped>
 .section-wrap {
-  padding: 0 32rpx;
+  padding: 0 24rpx;
 }
 
 .section-title {
   display: block;
   color: #0f172a;
-  font-size: 32rpx;
-  line-height: 42rpx;
+  font-size: 30rpx;
+  line-height: 38rpx;
   font-weight: 700;
-  margin-bottom: 14rpx;
+  margin-bottom: 12rpx;
 }
 
 .avatar-card {
@@ -59,15 +59,15 @@ const chooseAvatar = () => {
   background: #ffffff;
   border: 1rpx solid #e2e8f0;
   box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
-  padding: 20rpx;
+  padding: 16rpx;
   display: flex;
   align-items: center;
-  gap: 18rpx;
+  gap: 16rpx;
 }
 
 .avatar-image {
-  width: 96rpx;
-  height: 96rpx;
+  width: 88rpx;
+  height: 88rpx;
   border-radius: 50%;
   border: 2rpx solid #dbe2ea;
   background: #f1f5f9;
@@ -85,26 +85,26 @@ const chooseAvatar = () => {
 .avatar-label {
   color: #0f172a;
   font-size: 26rpx;
-  line-height: 34rpx;
+  line-height: 32rpx;
   font-weight: 600;
 }
 
 .avatar-tip {
   color: #64748b;
   font-size: 22rpx;
-  line-height: 30rpx;
+  line-height: 28rpx;
 }
 
 .avatar-btn {
   flex-shrink: 0;
-  min-width: 100rpx;
-  height: 56rpx;
+  min-width: 92rpx;
+  height: 52rpx;
   border-radius: 999rpx;
-  padding: 0 20rpx;
+  padding: 0 18rpx;
   background: #e8f0ff;
   color: #1d4ed8;
   font-size: 24rpx;
-  line-height: 56rpx;
+  line-height: 52rpx;
   text-align: center;
   font-weight: 600;
 }

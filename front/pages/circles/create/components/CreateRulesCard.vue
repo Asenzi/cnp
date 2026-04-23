@@ -39,20 +39,20 @@ const emit = defineEmits(['update:rules', 'update:needPostReview'])
 
 <style scoped>
 .card {
-  margin: 0 32rpx;
+  margin: 0 24rpx;
   background: #ffffff;
   border-radius: 20rpx;
   box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
-  padding: 24rpx;
+  padding: 20rpx;
 }
 
 .card-title {
   display: block;
   color: #0f172a;
-  font-size: 32rpx;
-  line-height: 42rpx;
+  font-size: 30rpx;
+  line-height: 38rpx;
   font-weight: 700;
-  margin-bottom: 14rpx;
+  margin-bottom: 12rpx;
 }
 
 .rules-textarea {

@@ -14,9 +14,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.core.exceptions import BusinessException
 from app.crud import ensure_user_points_account, ensure_user_wallet, get_sys_config_values, get_user_by_id
 from app.models.member_order import MemberOrder
+from app.models.sys_config import SysConfig
 from app.models.user_membership import UserMembership
 from app.points import (
     POINTS_STATUS_NONE,
@@ -28,6 +30,17 @@ from app.points import (
     release_reserved_points_for_member_order,
     reserve_points_for_member_order,
     resolve_member_points_offer,
+)
+from app.payment.contact_package import (
+    CONTACT_PACKAGE_PRODUCT_TYPE,
+    ensure_default_contact_package_configs,
+    get_contact_package_plan,
+    grant_contact_package_views,
+    is_contact_package_plan_id,
+    resolve_contact_package_overview,
+    resolve_contact_package_plans,
+    resolve_contact_package_snapshot,
+    serialize_contact_package_plan,
 )
 
 MEMBER_STATUS_ACTIVE = "active"
@@ -119,6 +132,56 @@ DEFAULT_MEMBER_PLANS = [
         "sort": 3,
     },
 ]
+
+
+def ensure_default_payment_configs() -> None:
+    default_rows: list[tuple[str, str, str]] = [
+        ("member.payment.default_channel", PAY_CHANNEL_WALLET, "会员订阅默认支付方式"),
+        ("member.payment.wallet_enabled", "1", "会员订阅是否启用钱包支付"),
+        ("member.payment.mock_enabled", "1", "会员订阅是否启用模拟支付"),
+        ("member.payment.wxpay_enabled", "1" if settings.WECHAT_PAY_ENABLED else "0", "会员订阅是否启用微信支付"),
+    ]
+    for plan in DEFAULT_MEMBER_PLANS:
+        plan_id = str(plan["id"])
+        prefix = f"member.plan.{plan_id}."
+        default_rows.extend(
+            [
+                (f"{prefix}enabled", "1", f"{plan_id} 会员方案是否启用"),
+                (f"{prefix}name", str(plan["name"]), f"{plan_id} 会员方案名称"),
+                (f"{prefix}subtitle", str(plan["subtitle"]), f"{plan_id} 会员方案副标题"),
+                (f"{prefix}price", str(plan["price"]), f"{plan_id} 会员售价"),
+                (f"{prefix}original_price", str(plan["original_price"]), f"{plan_id} 会员原价"),
+                (f"{prefix}duration_days", str(int(plan["duration_days"])), f"{plan_id} 会员时长天数"),
+                (f"{prefix}recommended", "1" if plan["recommended"] else "0", f"{plan_id} 是否推荐"),
+                (f"{prefix}badge_text", str(plan["badge_text"]), f"{plan_id} 角标文案"),
+                (f"{prefix}sort", str(int(plan["sort"])), f"{plan_id} 排序值"),
+            ]
+        )
+
+    with SessionLocal() as db:
+        existing_keys = {
+            item[0]
+            for item in db.execute(
+                select(SysConfig.config_key).where(SysConfig.config_key.in_([row[0] for row in default_rows]))
+            )
+        }
+        changed = False
+        for config_key, config_value, description in default_rows:
+            if config_key in existing_keys:
+                continue
+            db.add(
+                SysConfig(
+                    config_key=config_key,
+                    config_value=config_value,
+                    config_group="payment",
+                    description=description,
+                )
+            )
+            changed = True
+        if changed:
+            db.commit()
+
+    ensure_default_contact_package_configs()
 
 
 def _utc_now_naive() -> datetime:
@@ -266,10 +329,34 @@ def _serialize_plan(plan: dict, *, points_offer: dict | None = None) -> dict:
         "duration_days": int(plan["duration_days"]),
         "recommended": bool(plan["recommended"]),
         "badge_text": str(plan["badge_text"]),
+        "product_type": "member",
     }
     if points_offer is not None:
         payload["points_offer"] = points_offer
     return payload
+
+
+def _resolve_order_product_type(order: MemberOrder) -> str:
+    if is_contact_package_plan_id(str(order.plan_id or "").strip()):
+        return CONTACT_PACKAGE_PRODUCT_TYPE
+    return "member"
+
+
+def _extract_contact_package_view_count(db: Session, *, order: MemberOrder) -> int:
+    plan = get_contact_package_plan(db=db, plan_id=str(order.plan_id or "").strip(), include_disabled=True)
+    if plan is not None:
+        return max(int(plan.get("view_count") or 0), 0)
+
+    try:
+        parsed = json.loads(str(order.remark or "").strip() or "{}")
+    except Exception:  # noqa: BLE001
+        parsed = {}
+    if isinstance(parsed, dict):
+        try:
+            return max(int(parsed.get("view_count") or 0), 0)
+        except Exception:  # noqa: BLE001
+            return 0
+    return 0
 
 
 def _resolve_member_plans(db: Session) -> list[dict]:
@@ -509,11 +596,23 @@ def _confirm_paid_member_order(
     ext_payload: dict | None = None,
 ) -> dict:
     user_pk = int(order.user_pk)
+    product_type = _resolve_order_product_type(order)
     if str(order.status or "").strip().lower() == ORDER_STATUS_PAID:
+        if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
+            package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=user_pk)
+            return {
+                "order_no": str(order.order_no),
+                "already_paid": True,
+                "product_type": CONTACT_PACKAGE_PRODUCT_TYPE,
+                "contact_package_remaining_views": int(package_snapshot["remaining_views"]),
+                "contact_package_used_views": int(package_snapshot["used_views"]),
+                "contact_package_purchased_views": int(package_snapshot["purchased_views"]),
+            }
         snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
         return {
             "order_no": str(order.order_no),
             "already_paid": True,
+            "product_type": "member",
             "member_expire_at": snapshot["member_expire_at"],
             "member_expire_date_text": snapshot["expire_date_text"],
         }
@@ -544,6 +643,26 @@ def _confirm_paid_member_order(
     order.remark = json.dumps(ext, ensure_ascii=False)[:4000]
     db.add(order)
 
+    if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
+        granted_view_count = _extract_contact_package_view_count(db=db, order=order)
+        package_snapshot = grant_contact_package_views(
+            db=db,
+            user_pk=user_pk,
+            order_no=str(order.order_no),
+            view_count=granted_view_count,
+        )
+        db.commit()
+        db.refresh(order)
+        return {
+            "order_no": str(order.order_no),
+            "already_paid": False,
+            "product_type": CONTACT_PACKAGE_PRODUCT_TYPE,
+            "granted_view_count": granted_view_count,
+            "contact_package_remaining_views": int(package_snapshot["remaining_views"]),
+            "contact_package_used_views": int(package_snapshot["used_views"]),
+            "contact_package_purchased_views": int(package_snapshot["purchased_views"]),
+        }
+
     _upsert_membership_paid_order(
         db=db,
         user_pk=user_pk,
@@ -560,6 +679,7 @@ def _confirm_paid_member_order(
     return {
         "order_no": str(order.order_no),
         "already_paid": False,
+        "product_type": "member",
         "member_expire_at": snapshot["member_expire_at"],
         "member_expire_date_text": snapshot["expire_date_text"],
     }
@@ -615,10 +735,12 @@ def get_member_center_overview(db: Session, *, user_pk: int) -> dict:
     try:
         cleanup_expired_member_points_orders(db=db, user_pk=user_pk)
         plans = _resolve_member_plans(db=db)
+        contact_package_overview = resolve_contact_package_overview(db=db)
         payment_options = _resolve_payment_options(db=db)
         wallet = ensure_user_wallet(db=db, user_pk=user_pk, default_balance=user.balance or 0)
         points_account = ensure_user_points_account(db=db, user_pk=user_pk, default_balance=0)
         snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
+        contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=user_pk)
         serialized_plans: list[dict] = []
         for plan in plans:
             serialized_plans.append(
@@ -632,6 +754,10 @@ def get_member_center_overview(db: Session, *, user_pk: int) -> dict:
                     ),
                 )
             )
+        serialized_contact_package_plans = [
+            serialize_contact_package_plan(plan)
+            for plan in contact_package_overview["plans"]
+        ]
     except SQLAlchemyError as exc:
         raise BusinessException(
             message="会员模块尚未初始化，请先执行数据库迁移",
@@ -657,6 +783,13 @@ def get_member_center_overview(db: Session, *, user_pk: int) -> dict:
             "balance": int(points_account.balance or 0),
             "frozen_balance": int(points_account.frozen_balance or 0),
             "available_balance": max(int(points_account.balance or 0) - int(points_account.frozen_balance or 0), 0),
+        },
+        "contact_package": {
+            "display_enabled": bool(contact_package_overview["display_enabled"]),
+            "remaining_views": int(contact_package_snapshot["remaining_views"]),
+            "used_views": int(contact_package_snapshot["used_views"]),
+            "purchased_views": int(contact_package_snapshot["purchased_views"]),
+            "plans": serialized_contact_package_plans,
         },
         "payment": payment_options,
     }
@@ -942,6 +1075,381 @@ def subscribe_member_plan(
             status_code=500,
         ) from exc
 
+def subscribe_member_plan(
+    db: Session,
+    *,
+    user_pk: int,
+    plan_id: str,
+    pay_channel: str | None = None,
+    use_points_discount: bool | None = None,
+    request_client_ip: str | None = None,
+    request_base_url: str | None = None,
+) -> dict:
+    user = get_user_by_id(db=db, user_id=user_pk)
+    if user is None:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+
+    normalized_plan_id = str(plan_id or "").strip()
+    if not normalized_plan_id:
+        raise BusinessException(message="订阅方案不能为空", code=4511, status_code=400)
+
+    try:
+        cleanup_expired_member_points_orders(db=db, user_pk=user_pk)
+        member_plans = _resolve_member_plans(db=db)
+        contact_package_plans = resolve_contact_package_plans(db=db)
+        selected_member_plan = {str(item["id"]): item for item in member_plans}.get(normalized_plan_id)
+        selected_contact_package_plan = {str(item["id"]): item for item in contact_package_plans}.get(normalized_plan_id)
+        if selected_member_plan is None and selected_contact_package_plan is None:
+            raise BusinessException(message="订阅方案不存在或已下线", code=4512, status_code=400)
+
+        product_type = CONTACT_PACKAGE_PRODUCT_TYPE if selected_contact_package_plan is not None else "member"
+        selected_plan = selected_contact_package_plan or selected_member_plan or {}
+
+        payment_options = _resolve_payment_options(db=db)
+        enabled_channels = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
+        normalized_pay_channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
+        if normalized_pay_channel not in enabled_channels or not enabled_channels[normalized_pay_channel]:
+            raise BusinessException(message="当前支付方式不可用", code=4513, status_code=400)
+
+        plan_price_amount = _to_decimal(selected_plan.get("price"), Decimal("0.00"))
+        original_amount = _to_decimal(selected_plan.get("original_price"), plan_price_amount)
+        if original_amount < plan_price_amount:
+            original_amount = plan_price_amount
+
+        duration_days = 0
+        wants_points_discount = False
+        points_cost = 0
+        points_discount_rate = Decimal("1.0000")
+        price_amount = plan_price_amount
+        contact_package_view_count = 0
+
+        if product_type == "member":
+            duration_days = int(selected_plan["duration_days"])
+            points_offer = resolve_member_points_offer(
+                db=db,
+                user_pk=user_pk,
+                plan_id=str(selected_plan["id"]),
+                price_amount=plan_price_amount,
+            )
+            wants_points_discount = bool(use_points_discount)
+            if wants_points_discount and not bool(points_offer.get("enabled")):
+                raise BusinessException(message="当前套餐暂不支持积分抵扣", code=4514, status_code=400)
+            if wants_points_discount and not bool(points_offer.get("can_use")):
+                raise BusinessException(
+                    message="积分不足，暂时无法使用会员积分抵扣",
+                    code=4519,
+                    status_code=400,
+                    data={
+                        "required_points": int(points_offer.get("required_points") or 0),
+                        "available_points": int(points_offer.get("available_points") or 0),
+                        "missing_points": int(points_offer.get("missing_points") or 0),
+                    },
+                )
+
+            points_cost = int(points_offer.get("required_points") or 0) if wants_points_discount else 0
+            points_discount_rate = (
+                Decimal(str(points_offer.get("discount_rate") or 1)).quantize(Decimal("0.0001"))
+                if wants_points_discount
+                else Decimal("1.0000")
+            )
+            price_amount = (
+                _to_decimal(points_offer.get("discounted_price"), plan_price_amount)
+                if wants_points_discount
+                else plan_price_amount
+            )
+            original_amount = plan_price_amount
+        else:
+            contact_package_view_count = max(int(selected_plan.get("view_count") or 0), 0)
+            if contact_package_view_count <= 0:
+                raise BusinessException(message="人群包查看次数配置无效", code=4528, status_code=400)
+
+        saved_amount = (original_amount - price_amount).quantize(Decimal("0.01"))
+        if saved_amount < Decimal("0.00"):
+            saved_amount = Decimal("0.00")
+
+        wallet = ensure_user_wallet(db=db, user_pk=user_pk, default_balance=user.balance or 0)
+        wallet_balance = Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))
+        if normalized_pay_channel == PAY_CHANNEL_WALLET and price_amount > wallet_balance:
+            normalized_pay_channel = PAY_CHANNEL_WXPAY
+
+        now = _utc_now_naive()
+        order_no = _generate_order_no()
+        package_remark = json.dumps(
+            {
+                "product_type": CONTACT_PACKAGE_PRODUCT_TYPE,
+                "view_count": contact_package_view_count,
+            },
+            ensure_ascii=False,
+        )
+
+        if normalized_pay_channel == PAY_CHANNEL_WALLET:
+            if price_amount > Decimal("0.00"):
+                wallet.balance = (wallet_balance - price_amount).quantize(Decimal("0.01"))
+            points_status = POINTS_STATUS_NONE
+            if wants_points_discount and points_cost > 0:
+                consume_points_for_member_order(
+                    db=db,
+                    user_pk=user_pk,
+                    order_no=order_no,
+                    points_cost=points_cost,
+                    plan_name=str(selected_plan["name"]),
+                    use_reserved_balance=False,
+                    commit=False,
+                )
+                points_status = POINTS_STATUS_SPENT
+            order = MemberOrder(
+                order_no=order_no,
+                user_pk=user_pk,
+                plan_id=str(selected_plan["id"]),
+                plan_name=str(selected_plan["name"]),
+                duration_days=duration_days,
+                amount=price_amount,
+                original_amount=original_amount,
+                points_cost=points_cost,
+                points_discount_rate=points_discount_rate,
+                used_points_discount=wants_points_discount,
+                points_status=points_status,
+                pay_channel=PAY_CHANNEL_WALLET,
+                status=ORDER_STATUS_PAID,
+                remark=package_remark if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else "member subscribe by wallet",
+                paid_at=now,
+            )
+            db.add(order)
+
+            if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
+                package_snapshot = grant_contact_package_views(
+                    db=db,
+                    user_pk=user_pk,
+                    order_no=order_no,
+                    view_count=contact_package_view_count,
+                )
+                db.commit()
+                db.refresh(order)
+                db.refresh(wallet)
+                return {
+                    "action": "wallet_paid",
+                    "product_type": CONTACT_PACKAGE_PRODUCT_TYPE,
+                    "order_no": str(order.order_no),
+                    "plan_id": str(order.plan_id),
+                    "plan_name": str(order.plan_name),
+                    "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                    "original_amount": float(Decimal(str(order.original_amount or 0)).quantize(Decimal("0.01"))),
+                    "saved_amount": float(saved_amount),
+                    "pay_channel": str(order.pay_channel),
+                    "points_cost": 0,
+                    "used_points_discount": False,
+                    "points_status": str(order.points_status or POINTS_STATUS_NONE),
+                    "wallet_balance": float(Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))),
+                    "granted_view_count": contact_package_view_count,
+                    "contact_package_remaining_views": int(package_snapshot["remaining_views"]),
+                    "contact_package_used_views": int(package_snapshot["used_views"]),
+                    "contact_package_purchased_views": int(package_snapshot["purchased_views"]),
+                }
+
+            membership = _upsert_membership_paid_order(
+                db=db,
+                user_pk=user_pk,
+                plan_id=str(selected_plan["id"]),
+                plan_name=str(selected_plan["name"]),
+                duration_days=duration_days,
+                order_no=order_no,
+                now=now,
+            )
+            db.commit()
+            db.refresh(order)
+            db.refresh(membership)
+            db.refresh(wallet)
+            snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
+            return {
+                "action": "wallet_paid",
+                "product_type": "member",
+                "order_no": str(order.order_no),
+                "plan_id": str(order.plan_id),
+                "plan_name": str(order.plan_name),
+                "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                "original_amount": float(Decimal(str(order.original_amount or 0)).quantize(Decimal("0.01"))),
+                "saved_amount": float(saved_amount),
+                "pay_channel": str(order.pay_channel),
+                "points_cost": int(order.points_cost or 0),
+                "used_points_discount": bool(order.used_points_discount),
+                "points_status": str(order.points_status or POINTS_STATUS_NONE),
+                "wallet_balance": float(Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))),
+                "member_expire_at": snapshot["member_expire_at"],
+                "member_expire_date_text": snapshot["expire_date_text"],
+            }
+
+        if normalized_pay_channel == PAY_CHANNEL_MOCK:
+            points_status = POINTS_STATUS_NONE
+            if wants_points_discount and points_cost > 0:
+                consume_points_for_member_order(
+                    db=db,
+                    user_pk=user_pk,
+                    order_no=order_no,
+                    points_cost=points_cost,
+                    plan_name=str(selected_plan["name"]),
+                    use_reserved_balance=False,
+                    commit=False,
+                )
+                points_status = POINTS_STATUS_SPENT
+            order = MemberOrder(
+                order_no=order_no,
+                user_pk=user_pk,
+                plan_id=str(selected_plan["id"]),
+                plan_name=str(selected_plan["name"]),
+                duration_days=duration_days,
+                amount=price_amount,
+                original_amount=original_amount,
+                points_cost=points_cost,
+                points_discount_rate=points_discount_rate,
+                used_points_discount=wants_points_discount,
+                points_status=points_status,
+                pay_channel=PAY_CHANNEL_MOCK,
+                status=ORDER_STATUS_PAID,
+                remark=package_remark if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else "member subscribe by mock",
+                paid_at=now,
+            )
+            db.add(order)
+
+            if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
+                package_snapshot = grant_contact_package_views(
+                    db=db,
+                    user_pk=user_pk,
+                    order_no=order_no,
+                    view_count=contact_package_view_count,
+                )
+                db.commit()
+                db.refresh(order)
+                return {
+                    "action": "mock_paid",
+                    "product_type": CONTACT_PACKAGE_PRODUCT_TYPE,
+                    "order_no": str(order.order_no),
+                    "plan_id": str(order.plan_id),
+                    "plan_name": str(order.plan_name),
+                    "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                    "original_amount": float(Decimal(str(order.original_amount or 0)).quantize(Decimal("0.01"))),
+                    "saved_amount": float(saved_amount),
+                    "pay_channel": str(order.pay_channel),
+                    "points_cost": 0,
+                    "used_points_discount": False,
+                    "points_status": str(order.points_status or POINTS_STATUS_NONE),
+                    "granted_view_count": contact_package_view_count,
+                    "contact_package_remaining_views": int(package_snapshot["remaining_views"]),
+                    "contact_package_used_views": int(package_snapshot["used_views"]),
+                    "contact_package_purchased_views": int(package_snapshot["purchased_views"]),
+                }
+
+            membership = _upsert_membership_paid_order(
+                db=db,
+                user_pk=user_pk,
+                plan_id=str(selected_plan["id"]),
+                plan_name=str(selected_plan["name"]),
+                duration_days=duration_days,
+                order_no=order_no,
+                now=now,
+            )
+            db.commit()
+            db.refresh(order)
+            db.refresh(membership)
+            snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
+            return {
+                "action": "mock_paid",
+                "product_type": "member",
+                "order_no": str(order.order_no),
+                "plan_id": str(order.plan_id),
+                "plan_name": str(order.plan_name),
+                "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                "original_amount": float(Decimal(str(order.original_amount or 0)).quantize(Decimal("0.01"))),
+                "saved_amount": float(saved_amount),
+                "pay_channel": str(order.pay_channel),
+                "points_cost": int(order.points_cost or 0),
+                "used_points_discount": bool(order.used_points_discount),
+                "points_status": str(order.points_status or POINTS_STATUS_NONE),
+                "member_expire_at": snapshot["member_expire_at"],
+                "member_expire_date_text": snapshot["expire_date_text"],
+            }
+
+        if normalized_pay_channel == PAY_CHANNEL_WXPAY:
+            if not enabled_channels.get(PAY_CHANNEL_WXPAY):
+                raise BusinessException(message="微信支付未开启，请联系管理员配置", code=4518, status_code=400)
+            openid = str(user.wechat_openid or "").strip()
+            if not openid:
+                raise BusinessException(message="请先绑定微信账号后再发起微信支付", code=4515, status_code=400)
+
+            if request_base_url:
+                base = str(request_base_url).rstrip("/")
+                fallback_notify_url = f"{base}/api/v1/payment/wechat/notify"
+            else:
+                fallback_notify_url = ""
+            notify_url = str(settings.WECHAT_PAY_NOTIFY_URL or "").strip() or fallback_notify_url
+            if not notify_url:
+                raise BusinessException(message="微信支付回调地址未配置", code=4516, status_code=500)
+
+            points_status = POINTS_STATUS_NONE
+            if wants_points_discount and points_cost > 0:
+                reserve_points_for_member_order(
+                    db=db,
+                    user_pk=user_pk,
+                    points_cost=points_cost,
+                    order_no=order_no,
+                    commit=False,
+                )
+                points_status = POINTS_STATUS_RESERVED
+
+            wxpay_params = _prepare_wxpay_params(
+                user_openid=openid,
+                order_no=order_no,
+                amount_yuan=price_amount,
+                plan_name=str(selected_plan["name"]),
+                client_ip=request_client_ip,
+                notify_url=notify_url,
+            )
+            order = MemberOrder(
+                order_no=order_no,
+                user_pk=user_pk,
+                plan_id=str(selected_plan["id"]),
+                plan_name=str(selected_plan["name"]),
+                duration_days=duration_days,
+                amount=price_amount,
+                original_amount=original_amount,
+                points_cost=points_cost,
+                points_discount_rate=points_discount_rate,
+                used_points_discount=wants_points_discount,
+                points_status=points_status,
+                pay_channel=PAY_CHANNEL_WXPAY,
+                status=ORDER_STATUS_PENDING,
+                remark=package_remark if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else "member subscribe by wxpay pending",
+                paid_at=None,
+            )
+            db.add(order)
+            db.commit()
+            db.refresh(order)
+            return {
+                "action": "wxpay_required",
+                "product_type": product_type,
+                "order_no": str(order.order_no),
+                "plan_id": str(order.plan_id),
+                "plan_name": str(order.plan_name),
+                "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                "original_amount": float(Decimal(str(order.original_amount or 0)).quantize(Decimal("0.01"))),
+                "saved_amount": float(saved_amount),
+                "pay_channel": str(order.pay_channel),
+                "points_cost": int(order.points_cost or 0),
+                "used_points_discount": bool(order.used_points_discount),
+                "points_status": str(order.points_status or POINTS_STATUS_NONE),
+                "need_confirm": True,
+                "granted_view_count": contact_package_view_count if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else 0,
+                "wxpay": wxpay_params,
+            }
+
+        raise BusinessException(message="当前支付方式不支持", code=4517, status_code=400)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise BusinessException(
+            message="订阅创建失败，请确认数据库迁移已完成",
+            code=5502,
+            status_code=500,
+        ) from exc
+
 
 def confirm_member_order_payment(
     db: Session,
@@ -992,6 +1500,7 @@ def get_member_order_status(
     paid = status_text == ORDER_STATUS_PAID
     return {
         "order_no": str(order.order_no),
+        "product_type": _resolve_order_product_type(order),
         "status": status_text or ORDER_STATUS_PENDING,
         "pay_channel": str(order.pay_channel or ""),
         "paid": paid,
@@ -1128,6 +1637,7 @@ def list_member_orders(
         {
             "id": int(item.id),
             "order_no": str(item.order_no),
+            "product_type": _resolve_order_product_type(item),
             "plan_id": str(item.plan_id),
             "plan_name": str(item.plan_name),
             "duration_days": int(item.duration_days or 0),

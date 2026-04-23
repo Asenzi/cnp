@@ -57,14 +57,14 @@ const statusClass = computed(() => {
 
 <style scoped>
 .tx-item {
-  padding: 28rpx;
-  border-radius: 32rpx;
+  padding: 24rpx;
+  border-radius: 24rpx;
   background: #ffffff;
-  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.05);
+  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24rpx;
+  gap: 20rpx;
 }
 
 .tx-left {
@@ -72,13 +72,13 @@ const statusClass = computed(() => {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  gap: 16rpx;
 }
 
 .tx-icon-wrap {
-  width: 76rpx;
-  height: 76rpx;
-  border-radius: 20rpx;
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 16rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -98,20 +98,20 @@ const statusClass = computed(() => {
 }
 
 .tx-icon {
-  width: 42rpx;
-  height: 42rpx;
+  width: 38rpx;
+  height: 38rpx;
 }
 
 .tx-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
+  gap: 4rpx;
 }
 
 .tx-title {
   color: #0f172a;
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 700;
   line-height: 1.3;
 }
@@ -126,11 +126,11 @@ const statusClass = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6rpx;
+  gap: 4rpx;
 }
 
 .tx-amount {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: 700;
   line-height: 1.2;
 }

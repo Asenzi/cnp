@@ -19,6 +19,10 @@ from app.models.system_notice import SystemNotice
 from app.models.user import User
 from app.models.user_verification import UserVerification
 from app.models.wallet_recharge_order import WalletRechargeOrder
+from app.payment.contact_package import (
+    get_admin_contact_package_config as get_contact_package_admin_config,
+    save_admin_contact_package_config as save_contact_package_admin_config,
+)
 from app.schemas.admin import AdminLoginResponse, AdminProfile
 
 ADMIN_JWT_SCOPE = "admin"
@@ -687,7 +691,7 @@ def list_admin_sys_configs(
     normalized_keyword = _normalize_text(keyword)
     normalized_group = _normalize_text(config_group)
 
-    where_conditions = []
+    where_conditions = [~SysConfig.config_key.like("contact.package.%")]
     if normalized_group:
         where_conditions.append(SysConfig.config_group == normalized_group)
     if normalized_keyword:
@@ -740,6 +744,13 @@ def upsert_admin_sys_config(
     if not normalized_key:
         raise BusinessException(message="配置键不能为空", code=4608, status_code=400)
 
+    if normalized_key.startswith("contact.package."):
+        raise BusinessException(
+            message="\u8bf7\u4f7f\u7528\u4eba\u7fa4\u5305\u4e13\u7528\u914d\u7f6e\u7ec4\u4ef6\u8fdb\u884c\u7ef4\u62a4",
+            code=4610,
+            status_code=400,
+        )
+
     row = db.execute(select(SysConfig).where(SysConfig.config_key == normalized_key).limit(1)).scalar_one_or_none()
     if row is None:
         row = SysConfig(
@@ -765,3 +776,20 @@ def upsert_admin_sys_config(
         "created_at": _serialize_datetime(row.created_at),
         "updated_at": _serialize_datetime(row.updated_at),
     }
+
+
+def get_admin_contact_package_config_data(db: Session) -> dict[str, Any]:
+    return get_contact_package_admin_config(db=db)
+
+
+def update_admin_contact_package_config_data(
+    db: Session,
+    *,
+    display_enabled: bool,
+    plans: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return save_contact_package_admin_config(
+        db=db,
+        display_enabled=display_enabled,
+        plans=plans,
+    )

@@ -171,6 +171,8 @@ def create_new_circle(
     db: Session = Depends(db_session),
 ):
     owner = _require_current_user(db=db, current_user_pk=user_id)
+    if not bool(owner.is_verified):
+        raise BusinessException(message='完成实名认证后才可创建圈子并成为圈主', code=4357, status_code=403)
 
     join_type = payload.join_type.strip().lower()
     join_price = Decimal('0.00')

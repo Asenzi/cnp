@@ -5,6 +5,11 @@
         <CreateCoverUploader v-model="form.coverUrl" />
         <CreateAvatarUploader v-model="form.avatarUrl" />
 
+        <view v-if="!realNameVerified" class="verify-notice-card">
+          <text class="verify-notice-title">完成实名认证后才可创建圈子并成为圈主</text>
+          <text class="verify-notice-desc">请先完成实名认证，再继续创建圈子。</text>
+        </view>
+
         <CreateBasicInfoCard
           :name="form.name"
           :industry="form.industry"
@@ -32,13 +37,15 @@
       </view>
     </scroll-view>
 
-    <CreateBottomAction :loading="submitting" @submit="onSubmit" />
+    <CreateBottomAction :loading="submitting" :text="submitButtonText" @submit="onSubmit" />
   </view>
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { createCircle, uploadCircleAvatar, uploadCircleCover } from '../../../api/circle'
+import { getCurrentUserProfile } from '../../../api/user'
 import CreateAvatarUploader from './components/CreateAvatarUploader.vue'
 import CreateBasicInfoCard from './components/CreateBasicInfoCard.vue'
 import CreateBottomAction from './components/CreateBottomAction.vue'
@@ -65,6 +72,26 @@ const form = reactive({
   rules: '',
   needPostReview: false
 })
+const currentUser = ref({})
+
+const parseStoredUserInfo = () => {
+  const stored = uni.getStorageSync('userInfo')
+  if (typeof stored === 'string') {
+    try {
+      return JSON.parse(stored)
+    } catch (err) {
+      return {}
+    }
+  }
+  return stored && typeof stored === 'object' ? stored : {}
+}
+
+currentUser.value = parseStoredUserInfo()
+
+const realNameVerified = computed(() => Boolean(currentUser.value?.is_verified))
+const submitButtonText = computed(() =>
+  realNameVerified.value ? '立即创建圈子' : '完成实名认证后可创建圈子'
+)
 
 const normalizePrice = (value) => {
   const raw = String(value || '').replace(/[^\d.]/g, '')
@@ -82,6 +109,26 @@ const showToast = (title) => {
   })
 }
 
+const hasToken = () => {
+  const token = uni.getStorageSync('token')
+  return typeof token === 'string' ? token.trim().length > 0 : Boolean(token)
+}
+
+const loadCurrentUserProfile = async () => {
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    currentUser.value = {}
+    return
+  }
+
+  try {
+    const profile = await getCurrentUserProfile()
+    currentUser.value = profile || {}
+  } catch (err) {
+    currentUser.value = {}
+  }
+}
+
 const isLocalTempFilePath = (value) => {
   const normalized = String(value || '').trim()
   if (!normalized) {
@@ -97,6 +144,24 @@ const isLocalTempFilePath = (value) => {
 }
 
 const validateForm = () => {
+  if (!hasToken()) {
+    showToast('请先登录')
+    setTimeout(() => {
+      uni.navigateTo({
+        url: '/pages/auth/login/index'
+      })
+    }, 260)
+    return false
+  }
+  if (!realNameVerified.value) {
+    showToast('完成实名认证后才可创建圈子并成为圈主')
+    setTimeout(() => {
+      uni.navigateTo({
+        url: '/pages/me/auth/realname/index'
+      })
+    }, 260)
+    return false
+  }
   if (!form.name.trim()) {
     showToast('请输入圈子名称')
     return false
@@ -118,6 +183,10 @@ const validateForm = () => {
   }
   return true
 }
+
+onShow(() => {
+  loadCurrentUserProfile()
+})
 
 const onSubmit = async () => {
   if (submitting.value) {
@@ -212,9 +281,46 @@ const onSubmit = async () => {
   gap: 20rpx;
 }
 
+.verify-notice-card {
+  margin: 0 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, rgba(26, 87, 219, 0.08), rgba(26, 87, 219, 0.02));
+  border: 1rpx solid rgba(37, 99, 235, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.verify-notice-title {
+  font-size: 26rpx;
+  line-height: 1.5;
+  font-weight: 700;
+  color: #1e40af;
+}
+
+.verify-notice-desc {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #64748b;
+}
+
 @media (prefers-color-scheme: dark) {
   .create-circle-page {
     background: #111621;
+  }
+
+  .verify-notice-card {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(96, 165, 250, 0.04));
+    border-color: rgba(96, 165, 250, 0.18);
+  }
+
+  .verify-notice-title {
+    color: #93c5fd;
+  }
+
+  .verify-notice-desc {
+    color: #cbd5e1;
   }
 }
 </style>

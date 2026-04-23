@@ -35,19 +35,20 @@ defineProps({
 .status-card {
   position: relative;
   overflow: hidden;
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 24rpx;
+  padding: 48rpx 40rpx 40rpx;
   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border: 1px solid rgba(51, 65, 85, 0.6);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+  border: 1rpx solid rgba(51, 65, 85, 0.6);
+  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.24);
+  font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
 .status-glow {
   position: absolute;
-  width: 180px;
-  height: 180px;
-  right: -70px;
-  top: -70px;
+  width: 360rpx;
+  height: 360rpx;
+  right: -140rpx;
+  top: -140rpx;
   border-radius: 999px;
   background: rgba(212, 175, 55, 0.1);
 }
@@ -58,15 +59,16 @@ defineProps({
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 14px;
+  gap: 32rpx;
 }
 
 .status-title {
   display: block;
-  font-size: 19px;
-  line-height: 32px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
+  font-size: 40rpx;
+  line-height: 56rpx;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
   background: linear-gradient(to right, #fde68a, #d4af37);
   -webkit-background-clip: text;
   background-clip: text;
@@ -75,58 +77,62 @@ defineProps({
 
 .status-subtitle {
   display: block;
-  margin-top: 4px;
+  margin-top: 12rpx;
   color: #94a3b8;
-  font-size: 7px;
-  line-height: 18px;
+  font-size: 24rpx;
+  line-height: 36rpx;
+  letter-spacing: 0.02em;
 }
 
 .status-pill {
   flex-shrink: 0;
   border-radius: 999px;
-  border: 1px solid rgba(212, 175, 55, 0.4);
+  border: 1rpx solid rgba(212, 175, 55, 0.4);
   background: rgba(212, 175, 55, 0.18);
-  padding: 4px 12px;
+  padding: 8rpx 24rpx;
 }
 
 .status-pill-text {
   color: #d4af37;
-  font-size: 7px;
-  line-height: 18px;
+  font-size: 22rpx;
+  line-height: 32rpx;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .status-bottom {
   position: relative;
   z-index: 1;
-  margin-top: 28px;
+  margin-top: 56rpx;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 12px;
+  gap: 32rpx;
 }
 
 .status-expire {
   display: block;
   color: #cbd5e1;
-  font-size: 9px;
-  line-height: 22px;
+  font-size: 24rpx;
+  line-height: 36rpx;
 }
 
 .status-slogan {
   display: block;
-  margin-top: 6px;
+  margin-top: 12rpx;
   color: #e2e8f0;
-  font-size: 11px;
-  line-height: 24px;
-  font-style: italic;
-  font-weight: 500;
+  font-size: 28rpx;
+  line-height: 40rpx;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
 .status-vip-icon {
-  width: 54px;
-  height: 54px;
-  opacity: 0.48;
+  width: 96rpx;
+  height: 96rpx;
+  opacity: 0.44;
   flex-shrink: 0;
 }
 </style>

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.admin.service import (
     get_admin_dashboard_overview,
+    get_admin_contact_package_config_data,
     get_admin_profile_data,
     list_admin_circles,
     list_admin_recharge_orders,
@@ -18,6 +19,7 @@ from app.admin.service import (
     set_admin_resource_post_pin,
     set_admin_resource_post_status,
     set_admin_user_active,
+    update_admin_contact_package_config_data,
     upsert_admin_sys_config,
 )
 from app.api.deps import db_session, get_current_admin_user, get_current_admin_user_from_header_or_query
@@ -28,6 +30,7 @@ from app.models.admin_user import AdminUser
 from app.review import list_admin_content_reviews, review_content_submission
 from app.schemas.admin import (
     AdminCircleStatusPayload,
+    AdminContactPackageConfigPayload,
     AdminConfigUpsertPayload,
     AdminLoginRequest,
     AdminResourcePostPinPayload,
@@ -344,6 +347,30 @@ def admin_list_recharges(
             page=page,
             page_size=page_size,
         )
+    )
+
+
+@router.get("/contact-package-config", summary="Get contact package config for admin")
+def admin_get_contact_package_config(
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(data=get_admin_contact_package_config_data(db=db))
+
+
+@router.put("/contact-package-config", summary="Save contact package config for admin")
+def admin_save_contact_package_config(
+    payload: AdminContactPackageConfigPayload,
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=update_admin_contact_package_config_data(
+            db=db,
+            display_enabled=payload.display_enabled,
+            plans=[item.model_dump(mode="python") for item in payload.plans],
+        ),
+        message="\u4eba\u7fa4\u5305\u914d\u7f6e\u5df2\u4fdd\u5b58",
     )
 
 

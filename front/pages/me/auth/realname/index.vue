@@ -3,13 +3,6 @@
     <view class="page-shell">
       <scroll-view class="main-scroll" scroll-y :show-scrollbar="false">
         <view class="main-content">
-          <view class="hero-card">
-            <text class="hero-title">腾讯云实名认证</text>
-            <text class="hero-desc">
-              平台将通过腾讯云实人核身校验姓名、身份证号和当前操作人是否一致。同一身份仅可绑定一个账号。
-            </text>
-          </view>
-
           <view class="form-wrap">
             <view class="field-item">
               <text class="field-label">真实姓名</text>
@@ -33,6 +26,33 @@
                 placeholder="请输入18位身份证号码"
                 placeholder-class="field-placeholder"
               />
+            </view>
+
+            <view class="field-item">
+              <text class="field-label">微信号</text>
+              <input
+                v-model="wechatId"
+                class="field-input"
+                maxlength="50"
+                :disabled="hasContactInfo || loading"
+                placeholder="请输入您的微信号"
+                placeholder-class="field-placeholder"
+              />
+              <text v-if="hasContactInfo" class="field-hint">联系方式提交后不可修改</text>
+            </view>
+
+            <view class="field-item">
+              <text class="field-label">手机号</text>
+              <input
+                v-model="phoneNumber"
+                class="field-input"
+                type="number"
+                maxlength="11"
+                :disabled="hasContactInfo || loading"
+                placeholder="请输入您的手机号"
+                placeholder-class="field-placeholder"
+              />
+              <text v-if="hasContactInfo" class="field-hint">联系方式提交后不可修改</text>
             </view>
           </view>
 
@@ -125,11 +145,19 @@ const verifiedSource = ref('')
 
 const realName = ref('')
 const idNumber = ref('')
+const wechatId = ref('')
+const phoneNumber = ref('')
 const maskedIdNumber = ref('')
 const pendingBizToken = ref('')
 const pendingRedirectUrl = ref('')
 
 const isApproved = computed(() => currentStatus.value === VERIFICATION_STATUS.APPROVED)
+const hasContactInfo = computed(() => {
+  return Boolean(
+    (wechatId.value && String(wechatId.value).trim()) ||
+    (phoneNumber.value && String(phoneNumber.value).trim())
+  ) && currentStatus.value !== VERIFICATION_STATUS.NOT_SUBMITTED
+})
 const hasPendingSession = computed(() => Boolean(pendingBizToken.value) && !isApproved.value)
 const showSecondaryButton = computed(() => hasPendingSession.value && Boolean(pendingRedirectUrl.value))
 
@@ -251,6 +279,17 @@ const validateIdentityInput = () => {
   if (!/^\d{17}[\dX]$|^\d{15}$/.test(normalizedId)) {
     return '身份证号码格式不正确'
   }
+  const normalizedWechat = String(wechatId.value || '').trim()
+  if (!normalizedWechat) {
+    return '请输入微信号'
+  }
+  const normalizedPhone = String(phoneNumber.value || '').trim()
+  if (!normalizedPhone) {
+    return '请输入手机号'
+  }
+  if (!/^1[3-9]\d{9}$/.test(normalizedPhone)) {
+    return '手机号格式不正确'
+  }
   return ''
 }
 
@@ -271,6 +310,8 @@ const loadRealNameDetail = async () => {
     idNumber.value = isApproved.value
       ? maskedIdNumber.value
       : String(detail?.id_number || '').trim()
+    wechatId.value = String(detail?.wechat_id || '').trim()
+    phoneNumber.value = String(detail?.phone_number || '').trim()
 
     if (isApproved.value) {
       clearPendingSession()
@@ -304,21 +345,25 @@ const startVerification = async () => {
   try {
     const data = await startTencentRealNameVerification({
       real_name: String(realName.value || '').trim(),
-      id_number: String(idNumber.value || '').trim().toUpperCase()
+      id_number: String(idNumber.value || '').trim().toUpperCase(),
+      wechat_id: String(wechatId.value || '').trim(),
+      phone_number: String(phoneNumber.value || '').trim()
     })
-    currentStatus.value = data?.status || VERIFICATION_STATUS.PENDING
+
+    // 二要素验证是同步的，直接完成认证
+    currentStatus.value = VERIFICATION_STATUS.PENDING
     verificationProvider.value = String(data?.provider || 'tencent_cloud').trim()
     maskedIdNumber.value = String(data?.id_number_masked || '').trim()
     persistPendingSession({
       providerBizToken: String(data?.provider_biz_token || '').trim(),
-      redirectUrl: String(data?.redirect_url || '').trim()
+      redirectUrl: ''  // 二要素验证不需要跳转
     })
-    showToast('核身会话已创建')
-    if (pendingRedirectUrl.value) {
-      setTimeout(() => {
-        openVerificationPage()
-      }, 180)
-    }
+
+    // 直接调用完成接口
+    showToast('正在验证身份信息...')
+    setTimeout(() => {
+      finishVerification()
+    }, 500)
   } catch (err) {
     showToast(err?.message || '实名认证发起失败')
   } finally {
@@ -394,71 +439,49 @@ onShow(() => {
 
 .main-scroll {
   flex: 1;
-  padding-bottom: 144px;
+  padding-bottom: 160rpx;
   box-sizing: border-box;
 }
 
 .main-content {
-  padding: 20px 16px 0;
+  padding: 32rpx;
   box-sizing: border-box;
 }
 
-.hero-card,
 .status-card,
 .action-card {
-  padding: 18px 16px;
-  border-radius: 18px;
+  padding: 28rpx;
+  border-radius: 20rpx;
   box-sizing: border-box;
-}
-
-.hero-card {
-  background: linear-gradient(135deg, #1a57db 0%, #4f8bff 100%);
-  box-shadow: 0 16px 28px rgba(26, 87, 219, 0.18);
-}
-
-.hero-title {
-  display: block;
-  color: #ffffff;
-  font-size: 22px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
-.hero-desc {
-  display: block;
-  margin-top: 10px;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 14px;
-  line-height: 1.7;
 }
 
 .form-wrap {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 18px;
+  gap: 24rpx;
+  margin-top: 0;
 }
 
 .field-item {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16rpx;
 }
 
 .field-label {
   color: #0f172a;
-  font-size: 14px;
+  font-size: 28rpx;
   font-weight: 600;
 }
 
 .field-input {
-  height: 52px;
-  border-radius: 14px;
+  height: 88rpx;
+  border-radius: 20rpx;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  padding: 0 14px;
+  border: 2rpx solid #e2e8f0;
+  padding: 0 24rpx;
   color: #0f172a;
-  font-size: 15px;
+  font-size: 28rpx;
   box-sizing: border-box;
 }
 
@@ -466,36 +489,43 @@ onShow(() => {
   color: #94a3b8;
 }
 
+.field-hint {
+  color: #f59e0b;
+  font-size: 22rpx;
+  line-height: 1.5;
+  margin-top: -8rpx;
+}
+
 .status-card,
 .action-card {
-  margin-top: 18px;
+  margin-top: 32rpx;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 2rpx solid #e2e8f0;
 }
 
 .status-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20rpx;
 }
 
 .status-title,
 .action-title {
   color: #0f172a;
-  font-size: 16px;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
 .status-tag {
-  min-width: 74px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 999px;
+  min-width: 120rpx;
+  height: 52rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 22rpx;
   font-weight: 700;
   box-sizing: border-box;
 }
@@ -523,61 +553,61 @@ onShow(() => {
 .status-desc,
 .action-desc {
   display: block;
-  margin-top: 10px;
+  margin-top: 16rpx;
   color: #64748b;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 26rpx;
+  line-height: 1.6;
 }
 
 .meta-row {
-  margin-top: 12px;
+  margin-top: 20rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20rpx;
 }
 
 .meta-label {
   color: #64748b;
-  font-size: 13px;
+  font-size: 24rpx;
 }
 
 .meta-value {
   color: #0f172a;
-  font-size: 13px;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
 .tip-list {
-  margin-top: 12px;
+  margin-top: 20rpx;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12rpx;
 }
 
 .tip-item {
   color: #475569;
-  font-size: 13px;
+  font-size: 24rpx;
   line-height: 1.6;
 }
 
 .reject-wrap {
-  margin-top: 18px;
-  padding: 14px 16px;
-  border-radius: 14px;
+  margin-top: 32rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 20rpx;
   background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.16);
+  border: 2rpx solid rgba(239, 68, 68, 0.16);
 }
 
 .reject-text {
   color: #b91c1c;
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .footer-bar {
-  padding: 16px;
-  border-top: 1px solid #e2e8f0;
+  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-top: 2rpx solid #e2e8f0;
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(8px);
 }
@@ -585,7 +615,7 @@ onShow(() => {
 .submit-btn,
 .secondary-btn {
   width: 100%;
-  border-radius: 14px;
+  border-radius: 20rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -593,9 +623,9 @@ onShow(() => {
 }
 
 .submit-btn {
-  height: 54px;
+  height: 88rpx;
   background: #1a57db;
-  box-shadow: 0 12px 24px rgba(26, 87, 219, 0.18);
+  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.18);
 }
 
 .submit-btn-hover {
@@ -609,14 +639,14 @@ onShow(() => {
 
 .submit-text {
   color: #ffffff;
-  font-size: 16px;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
 .secondary-btn {
-  height: 50px;
-  margin-top: 12px;
-  border: 1px solid #cbd5e1;
+  height: 80rpx;
+  margin-top: 20rpx;
+  border: 2rpx solid #cbd5e1;
   background: #ffffff;
 }
 
@@ -626,7 +656,7 @@ onShow(() => {
 
 .secondary-text {
   color: #0f172a;
-  font-size: 15px;
+  font-size: 28rpx;
   font-weight: 600;
 }
 </style>

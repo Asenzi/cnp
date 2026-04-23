@@ -82,7 +82,7 @@
             placeholder="仅用于对外展示，不等同于绑定手机号"
             placeholder-class="field-placeholder"
           />
-          <text class="field-tip">完善展示手机号、展示微信号，并完成实名认证和会员开通后，才可查看别人的联系方式。</text>
+          <text class="field-tip">完善展示手机号、展示微信号，并完成实名认证后，开通会员或购买人群包，才可查看别人的联系方式。</text>
         </view>
 
         <view class="field-group">
@@ -125,43 +125,6 @@
           />
         </view>
 
-        <view class="field-group">
-          <text class="field-label">名片附件</text>
-
-          <view class="upload-area" hover-class="upload-area-hover" @tap="onUploadCard">
-            <view class="upload-inner">
-              <image class="upload-icon" mode="aspectFit" src="/static/me-icons/upload-primary.png" />
-              <text class="upload-text">点击选择名片文件 (JPG, PNG, PDF)</text>
-            </view>
-          </view>
-
-          <view class="file-list">
-            <view v-for="(file, index) in attachedFiles" :key="file.name + index" class="file-item">
-              <view class="file-left">
-                <image class="file-type-icon" mode="aspectFit" src="/static/me-icons/image-primary.png" />
-                <view class="file-meta">
-                  <text class="file-name">{{ file.name }}</text>
-                  <text class="file-size">{{ file.size }}</text>
-                </view>
-              </view>
-              <view class="file-remove" hover-class="file-remove-hover" @tap="removeFile(index)">
-                <image class="cancel-icon" mode="aspectFit" src="/static/me-icons/cancel-slate.png" />
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <view class="toggle-card">
-          <view class="toggle-copy">
-            <text class="toggle-title">展示联系方式</text>
-            <text class="toggle-desc">开启后仅展示你填写的展示手机号和微信号，绑定手机号不会对外公开</text>
-          </view>
-          <view class="switch-wrap" @tap="toggleShowContact">
-            <view class="switch-track" :class="{ 'switch-track-on': showContact }"></view>
-            <view class="switch-thumb" :class="{ 'switch-thumb-on': showContact }"></view>
-          </view>
-        </view>
-
         <view class="save-wrap">
           <view class="save-btn" hover-class="save-btn-hover" @tap="onSave">
             <text class="save-text">{{ saving ? '保存中...' : '保存修改' }}</text>
@@ -178,8 +141,7 @@ import { onShow } from '@dcloudio/uni-app'
 import {
   getCurrentUserProfile,
   updateCurrentUserProfile,
-  uploadCurrentUserAvatar,
-  uploadCurrentUserCardFile
+  uploadCurrentUserAvatar
 } from '../../../api/user'
 import { getApiBaseUrl } from '../../../utils/request'
 import { PROVINCE_CITY_OPTIONS } from './modules/city-picker-data'
@@ -200,7 +162,6 @@ const companyName = ref('')
 const jobTitle = ref('')
 const displayPhone = ref('')
 const displayWechat = ref('')
-const showContact = ref(true)
 const DISPLAY_PHONE_REGEX = /^1\d{10}$/
 
 const industryOptions = [
@@ -231,8 +192,6 @@ const provinceOptions = PROVINCE_CITY_OPTIONS
 const provinceIndex = ref(0)
 const cityIndex = ref(0)
 const selectedCityCode = ref('')
-
-const attachedFiles = ref([])
 
 const currentProvince = computed(() => provinceOptions[provinceIndex.value] || provinceOptions[0] || { cities: [] })
 
@@ -305,26 +264,6 @@ const onCityColumnChange = (event) => {
   }
 }
 
-const toggleShowContact = () => {
-  showContact.value = !showContact.value
-}
-
-const removeFile = (index) => {
-  attachedFiles.value.splice(index, 1)
-}
-
-const formatBytes = (size = 0) => {
-  if (size <= 0) {
-    return '--'
-  }
-  const mb = size / (1024 * 1024)
-  if (mb >= 1) {
-    return `${mb.toFixed(1)} MB`
-  }
-  const kb = size / 1024
-  return `${Math.max(1, Math.round(kb))} KB`
-}
-
 const syncCityIndex = (nextCityIndex = 0) => {
   const cities = currentProvince.value?.cities || []
   if (!cities.length) {
@@ -363,49 +302,6 @@ const findCitySelection = (cityCode = '', cityName = '') => {
   return null
 }
 
-const onUploadCard = () => {
-  uni.chooseMessageFile({
-    count: 3,
-    type: 'file',
-    extension: ['jpg', 'jpeg', 'png', 'pdf'],
-    success: async (res) => {
-      const files = res?.tempFiles || []
-      if (!files.length) {
-        return
-      }
-
-      for (const file of files) {
-        if ((attachedFiles.value || []).length >= 5) {
-          break
-        }
-
-        const filePath = file?.path
-        if (!filePath) {
-          continue
-        }
-
-        try {
-          const uploaded = await uploadCurrentUserCardFile(filePath, file?.name || '附件')
-          attachedFiles.value = [
-            ...attachedFiles.value,
-            {
-              name: uploaded?.name || file?.name || '附件',
-              size: formatBytes(uploaded?.size || file?.size || 0),
-              size_bytes: uploaded?.size || file?.size || 0,
-              url: uploaded?.url || ''
-            }
-          ]
-        } catch (err) {
-          showToast(err?.message || '附件上传失败')
-          return
-        }
-      }
-
-      showToast('附件上传成功')
-    }
-  })
-}
-
 const applyProfile = (profile = {}) => {
   avatarUrl.value = typeof profile?.avatar_url === 'string' && profile.avatar_url.trim() ? profile.avatar_url : DEFAULT_AVATAR
   nickname.value = typeof profile?.nickname === 'string' ? profile.nickname : ''
@@ -414,7 +310,6 @@ const applyProfile = (profile = {}) => {
   jobTitle.value = typeof profile?.job_title === 'string' ? profile.job_title : ''
   displayPhone.value = typeof profile?.display_phone === 'string' ? profile.display_phone : ''
   displayWechat.value = typeof profile?.display_wechat === 'string' ? profile.display_wechat : ''
-  showContact.value = profile?.show_contact !== false
 
   const code = typeof profile?.industry_code === 'string' ? profile.industry_code.trim() : ''
   const label = typeof profile?.industry_label === 'string' ? profile.industry_label.trim() : ''
@@ -440,16 +335,6 @@ const applyProfile = (profile = {}) => {
     syncCityIndex(0)
     selectedCityCode.value = ''
   }
-
-  const serverFiles = Array.isArray(profile?.card_files) ? profile.card_files : []
-  attachedFiles.value = serverFiles
-    .filter((item) => item && typeof item === 'object')
-    .map((item) => ({
-      name: item?.name || '附件',
-      size: formatBytes(item?.size || 0),
-      size_bytes: item?.size || 0,
-      url: item?.url || ''
-    }))
 }
 
 const loadProfile = async () => {
@@ -567,15 +452,7 @@ const onSave = async () => {
     display_phone: normalizedDisplayPhone || null,
     display_wechat: normalizedDisplayWechat || null,
     city_code: selectedCity?.value || null,
-    city_name: selectedCity?.label || null,
-    card_files: attachedFiles.value.map((file) => ({
-      name: file.name,
-      url: String(file.url || '').startsWith(`${baseUrl}/static/uploads/`)
-        ? String(file.url || '').replace(baseUrl, '')
-        : String(file.url || ''),
-      size: file.size_bytes || 0
-    })),
-    show_contact: showContact.value
+    city_name: selectedCity?.label || null
   }
 
   saving.value = true
@@ -826,164 +703,6 @@ onShow(() => {
   box-sizing: border-box;
 }
 
-.upload-area {
-  height: 256rpx;
-  border: 2rpx dashed #e2e8f0;
-  border-radius: 24rpx;
-  background: rgba(248, 250, 252, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.upload-area-hover {
-  background: #f1f5f9;
-}
-
-.upload-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-}
-
-.upload-icon {
-  width: 64rpx;
-  height: 64rpx;
-}
-
-.upload-text {
-  font-size: 24rpx;
-  color: #64748b;
-}
-
-.file-list {
-  margin-top: 16rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.file-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24rpx;
-  border-radius: 16rpx;
-  border: 1rpx solid rgba(26, 87, 219, 0.2);
-  background: rgba(26, 87, 219, 0.05);
-}
-
-.file-left {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.file-type-icon {
-  width: 40rpx;
-  height: 40rpx;
-}
-
-.file-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.file-name {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: #0f172a;
-}
-
-.file-size {
-  font-size: 22rpx;
-  color: #64748b;
-}
-
-.file-remove {
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 999rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.file-remove-hover {
-  background: rgba(148, 163, 184, 0.18);
-}
-
-.cancel-icon {
-  width: 36rpx;
-  height: 36rpx;
-}
-
-.toggle-card {
-  margin-top: 8rpx;
-  padding: 28rpx;
-  border-radius: 24rpx;
-  border: 1rpx solid #f1f5f9;
-  background: #f8fafc;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
-}
-
-.toggle-copy {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.toggle-title {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.toggle-desc {
-  font-size: 22rpx;
-  color: #64748b;
-}
-
-.switch-wrap {
-  position: relative;
-  width: 88rpx;
-  height: 48rpx;
-}
-
-.switch-track {
-  width: 88rpx;
-  height: 48rpx;
-  border-radius: 999rpx;
-  background: #cbd5e1;
-  transition: background 0.2s ease;
-}
-
-.switch-track-on {
-  background: #1a57db;
-}
-
-.switch-thumb {
-  position: absolute;
-  top: 8rpx;
-  left: 8rpx;
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 999rpx;
-  background: #ffffff;
-  transition: transform 0.2s ease;
-}
-
-.switch-thumb-on {
-  transform: translateX(40rpx);
-}
-
 .save-wrap {
   margin-top: -16rpx;
 }
@@ -1029,16 +748,13 @@ onShow(() => {
   }
 
   .back-icon,
-  .expand-icon,
-  .cancel-icon {
+  .expand-icon {
     filter: invert(90%) sepia(10%) saturate(272%) hue-rotate(177deg) brightness(107%) contrast(95%);
   }
 
   .nav-title,
   .field-label,
-  .picker-text,
-  .file-name,
-  .toggle-title {
+  .picker-text {
     color: #f1f5f9;
   }
 
@@ -1050,10 +766,7 @@ onShow(() => {
     border-color: #111621;
   }
 
-  .avatar-tip,
-  .upload-text,
-  .file-size,
-  .toggle-desc {
+  .avatar-tip {
     color: #94a3b8;
   }
 
@@ -1069,35 +782,5 @@ onShow(() => {
     color: #64748b;
   }
 
-  .upload-area {
-    background: rgba(15, 23, 42, 0.6);
-    border-color: #1e293b;
-  }
-
-  .upload-area-hover {
-    background: #1e293b;
-  }
-
-  .file-item {
-    border-color: rgba(26, 87, 219, 0.25);
-    background: rgba(26, 87, 219, 0.1);
-  }
-
-  .file-remove-hover {
-    background: rgba(100, 116, 139, 0.25);
-  }
-
-  .toggle-card {
-    background: #0f172a;
-    border-color: #1e293b;
-  }
-
-  .switch-track {
-    background: #334155;
-  }
-
-  .switch-track-on {
-    background: #1a57db;
-  }
 }
 </style>

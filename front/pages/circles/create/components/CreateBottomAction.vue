@@ -41,19 +41,19 @@ const emit = defineEmits(['submit'])
   background: rgba(255, 255, 255, 0.84);
   border-top: 1rpx solid #e2e8f0;
   backdrop-filter: blur(12rpx);
-  padding: 14rpx 24rpx calc(14rpx + env(safe-area-inset-bottom));
+  padding: 12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
 }
 
 .create-btn {
   width: 100%;
   height: 88rpx;
-  border-radius: 16rpx;
+  border-radius: 20rpx;
   border: 0;
   background: #1a57db;
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 700;
-  box-shadow: 0 10rpx 20rpx rgba(26, 87, 219, 0.22);
+  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;

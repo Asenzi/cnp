@@ -51,7 +51,7 @@
     /* 小程序特有相关 */
     "mp-weixin" : {
         "appid" : "wxd801f2e147f4abb1",
-        "requiredPrivateInfos" : [ "getLocation" ],
+        "requiredPrivateInfos" : [ "getLocation", "chooseLocation" ],
         "permission" : {
             "scope.userLocation" : {
                 "desc" : "用于展示您所在城市与附近人脉"

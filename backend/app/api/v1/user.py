@@ -32,7 +32,7 @@ from app.schemas.user import (
     UpdateCurrentUserProfileRequest,
     UpdatePrivacySettingsRequest,
 )
-from app.payment import resolve_member_snapshot
+from app.payment import consume_contact_package_view, resolve_contact_package_snapshot, resolve_member_snapshot
 from app.review import submit_profile_update_review
 from app.verification.constants import VerificationStatus, VerificationType
 
@@ -210,6 +210,8 @@ def _resolve_contact_view_state(
             "contact_locked_reason": None if target_has_contact else "你还未完善展示手机号或微信号",
             "target_has_contact": target_has_contact,
             "target_contact_enabled": target_contact_enabled,
+            "viewer_contact_package_remaining_views": 0,
+            "viewer_contact_package_used_for_view": False,
         }
 
     viewer_display_phone = _normalize_optional_text(viewer_user.display_phone, 20)
@@ -217,6 +219,8 @@ def _resolve_contact_view_state(
     viewer_real_name_verified = _has_approved_real_name_verification(db=db, user=viewer_user)
     viewer_member_snapshot = resolve_member_snapshot(db=db, user_pk=int(viewer_user.id))
     viewer_is_member = bool(viewer_member_snapshot["is_member"])
+    viewer_contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=int(viewer_user.id))
+    viewer_has_contact_package = bool(viewer_contact_package_snapshot["has_remaining_views"])
 
     locked_reason = None
     if not target_contact_enabled:
@@ -227,10 +231,18 @@ def _resolve_contact_view_state(
         locked_reason = "请先完善自己的展示手机号和微信号"
     elif not viewer_real_name_verified:
         locked_reason = "完成实名认证后可查看对方联系方式"
-    elif not viewer_is_member:
-        locked_reason = "开通会员后可查看对方联系方式"
+    elif not viewer_is_member and not viewer_has_contact_package:
+        locked_reason = "开通会员或购买人群包后可查看对方联系方式"
 
     contact_visible = locked_reason is None
+    viewer_contact_package_used_for_view = False
+    if contact_visible and not viewer_is_member:
+        viewer_contact_package_snapshot = consume_contact_package_view(
+            db=db,
+            user_pk=int(viewer_user.id),
+            commit=True,
+        )
+        viewer_contact_package_used_for_view = True
     return {
         "display_phone": target_display_phone if contact_visible else None,
         "display_wechat": target_display_wechat if contact_visible else None,
@@ -238,12 +250,15 @@ def _resolve_contact_view_state(
         "contact_locked_reason": locked_reason,
         "target_has_contact": target_has_contact,
         "target_contact_enabled": target_contact_enabled,
+        "viewer_contact_package_remaining_views": int(viewer_contact_package_snapshot["remaining_views"]),
+        "viewer_contact_package_used_for_view": viewer_contact_package_used_for_view,
     }
 
 
 def _serialize_user(user, request: Request, db: Session) -> dict:
     stats = _resolve_user_stats(db=db, user=user)
     member_snapshot = resolve_member_snapshot(db=db, user_pk=int(user.id))
+    contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=int(user.id))
     real_name_verified = _has_approved_real_name_verification(db=db, user=user)
     display_phone = _normalize_optional_text(user.display_phone, 20)
     display_wechat = _normalize_optional_text(user.display_wechat, 64)
@@ -294,8 +309,14 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
         "member_plan_id": str(member_snapshot["member_plan_id"]),
         "member_plan_name": str(member_snapshot["member_plan_name"]),
         "real_name_verified": bool(real_name_verified),
+        "contact_package_remaining_views": int(contact_package_snapshot["remaining_views"]),
+        "contact_package_used_views": int(contact_package_snapshot["used_views"]),
+        "contact_package_purchased_views": int(contact_package_snapshot["purchased_views"]),
         "can_view_others_contact": bool(
-            display_phone and display_wechat and real_name_verified and member_snapshot["is_member"]
+            display_phone
+            and display_wechat
+            and real_name_verified
+            and (member_snapshot["is_member"] or contact_package_snapshot["has_remaining_views"])
         ),
     }
 
@@ -345,6 +366,8 @@ def _serialize_public_user_profile(
         "contact_locked_reason": contact_state["contact_locked_reason"],
         "target_has_contact": contact_state["target_has_contact"],
         "target_contact_enabled": contact_state["target_contact_enabled"],
+        "viewer_contact_package_remaining_views": int(contact_state["viewer_contact_package_remaining_views"] or 0),
+        "viewer_contact_package_used_for_view": bool(contact_state["viewer_contact_package_used_for_view"]),
     }
 
 

@@ -26,27 +26,27 @@ defineEmits(['open'])
 <style scoped>
 .member-card-wrap {
   margin-top: 0;
-  margin-bottom: 46rpx;
-  border-radius: 20rpx;
-  background: #ffffff;
-  border: 1rpx solid #f1f5f9;
-  padding: 16rpx;
+  margin-bottom: 32rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #2f6cff 0%, #1a57db 100%);
+  border: 1rpx solid rgba(26, 87, 219, 0.3);
+  padding: 12rpx;
 }
 
 .member-card {
-  border-radius: 20rpx;
+  border-radius: 16rpx;
   background: linear-gradient(135deg, #2f6cff 0%, #1a57db 100%);
-  min-height: 132rpx;
+  min-height: 112rpx;
   display: flex;
   align-items: center;
-  gap: 18rpx;
-  padding: 0 22rpx;
+  gap: 16rpx;
+  padding: 0 20rpx;
 }
 
 .member-icon {
-  width: 76rpx;
-  height: 76rpx;
-  border-radius: 16rpx;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 12rpx;
   background: rgba(255, 255, 255, 0.16);
   display: flex;
   align-items: center;
@@ -55,8 +55,8 @@ defineEmits(['open'])
 }
 
 .member-icon-badge {
-  width: 40rpx;
-  height: 40rpx;
+  width: 36rpx;
+  height: 36rpx;
   border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.92);
   display: flex;
@@ -66,7 +66,7 @@ defineEmits(['open'])
 
 .member-star {
   color: #1a57db;
-  font-size: 22rpx;
+  font-size: 20rpx;
   line-height: 1;
   font-weight: 700;
 }
@@ -81,22 +81,22 @@ defineEmits(['open'])
 
 .member-title {
   color: #ffffff;
-  font-size: 34rpx;
-  line-height: 42rpx;
+  font-size: 30rpx;
+  line-height: 38rpx;
   font-weight: 700;
 }
 
 .member-desc {
   color: rgba(255, 255, 255, 0.88);
-  font-size: 24rpx;
-  line-height: 32rpx;
+  font-size: 22rpx;
+  line-height: 28rpx;
 }
 
 .member-open-btn {
   margin: 0;
-  padding: 0 24rpx;
-  height: 56rpx;
-  line-height: 56rpx;
+  padding: 0 20rpx;
+  height: 52rpx;
+  line-height: 52rpx;
   border-radius: 999rpx;
   border: 0;
   background: #ffffff;
@@ -116,8 +116,8 @@ defineEmits(['open'])
 
 @media (prefers-color-scheme: dark) {
   .member-card-wrap {
-    background: #0f172a;
-    border-color: #1e293b;
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    border-color: rgba(29, 78, 216, 0.4);
   }
 
   .member-card {

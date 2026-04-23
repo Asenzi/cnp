@@ -145,61 +145,55 @@ def _request_faceid_api(*, action: str, payload: dict) -> dict:
 
 
 def create_detect_auth(*, real_name: str, id_number: str) -> TencentDetectAuthResult:
-    app_id = str(settings.TENCENT_CLOUD_FACEID_APP_ID or "").strip()
-    rule_id = str(settings.TENCENT_CLOUD_FACEID_RULE_ID or "").strip()
-    redirect_url = str(settings.TENCENT_CLOUD_FACEID_REDIRECT_URL or "").strip()
-    if not app_id or not rule_id:
-        raise BusinessException(message="腾讯云实名认证规则配置不完整", code=4357, status_code=503)
-
+    """
+    使用腾讯云身份证二要素核验（IdCardVerification）
+    只验证姓名和身份证号是否匹配，无需人脸识别
+    """
+    # 使用二要素验证接口，不需要 AppId 和 RuleId
     payload = {
-        "RuleId": rule_id,
         "Name": real_name,
         "IdCard": id_number,
-        "RedirectUrl": redirect_url or None,
-        "RedirectType": "0",
-        "DetectMode": "0",
     }
-    response_payload = _request_faceid_api(action="DetectAuth", payload=payload)
-    biz_token = str(response_payload.get("BizToken") or "").strip()
-    if not biz_token:
-        raise BusinessException(message="腾讯云实名认证未返回 BizToken", code=4358, status_code=502)
+    response_payload = _request_faceid_api(action="IdCardVerification", payload=payload)
+
+    # 二要素验证直接返回结果，不需要跳转
+    result = str(response_payload.get("Result") or "").strip()
+    description = str(response_payload.get("Description") or "").strip()
+
+    # Result 为 "0" 表示一致，其他值表示不一致
+    is_match = result == "0"
+
+    if not is_match:
+        raise BusinessException(
+            message=f"身份信息验证失败: {description or '姓名与身份证号不匹配'}",
+            code=4358,
+            status_code=400
+        )
+
+    # 生成一个伪 BizToken，用于后续流程
+    import uuid
+    biz_token = f"idcard_verify_{uuid.uuid4().hex}"
 
     return TencentDetectAuthResult(
         provider_biz_token=biz_token,
         provider_request_id=str(response_payload.get("RequestId") or "").strip() or None,
-        redirect_url=str(response_payload.get("Url") or redirect_url).strip() or None,
+        redirect_url=None,  # 二要素验证不需要跳转
         raw_response=response_payload,
     )
 
 
 def get_detect_info_enhanced(*, provider_biz_token: str) -> TencentDetectInfoResult:
-    response_payload = _request_faceid_api(
-        action="GetDetectInfoEnhanced",
-        payload={
-            "BizToken": provider_biz_token,
-            "RuleId": str(settings.TENCENT_CLOUD_FACEID_RULE_ID or "").strip() or None,
-            "InfoType": "0",
-        },
-    )
-    detect_info = response_payload.get("DetectInfo")
-    if isinstance(detect_info, str):
-        try:
-            detect_info = json.loads(detect_info)
-        except ValueError:
-            detect_info = {}
-    detect_info = detect_info if isinstance(detect_info, dict) else {}
-    text_info = detect_info.get("Text")
-    text_info = text_info if isinstance(text_info, dict) else {}
-
-    err_code = text_info.get("ErrCode")
-    err_msg = text_info.get("ErrMsg")
-    is_success = str(err_code) in {"0", ""} and response_payload.get("BizToken") is not None
-
+    """
+    获取二要素验证结果
+    由于二要素验证是同步的，这里直接返回成功状态
+    """
+    # 二要素验证在 create_detect_auth 中已经完成
+    # 这里直接返回成功状态
     return TencentDetectInfoResult(
-        provider_request_id=str(response_payload.get("RequestId") or "").strip() or None,
-        is_success=is_success,
-        fail_reason=None if is_success else str(err_msg or "腾讯云实名认证未通过").strip(),
-        real_name=str(text_info.get("Name") or "").strip() or None,
-        id_number=str(text_info.get("IdCard") or "").strip() or None,
-        raw_response=response_payload,
+        provider_request_id=provider_biz_token,
+        is_success=True,
+        fail_reason=None,
+        real_name=None,  # 二要素验证不返回姓名
+        id_number=None,  # 二要素验证不返回身份证号
+        raw_response={"status": "verified", "biz_token": provider_biz_token},
     )

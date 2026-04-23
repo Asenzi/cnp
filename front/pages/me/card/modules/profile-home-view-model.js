@@ -68,7 +68,7 @@ function resolvePostType(mode) {
   if (normalizedMode === 'venue') {
     return {
       type: 'venue',
-      typeText: '场地'
+      typeText: '活动'
     }
   }
   return {

@@ -1,27 +1,27 @@
 ﻿export const serviceList = [
   {
     key: 'auth',
-    iconPath: '/static/me-icons/badge-blue.png',
-    label: '我的认证',
+    iconPath: '/static/icon/certification.png',
+    label: '实名认证',
     colorClass: 'service-blue',
-    url: '/pages/me/auth/index'
+    url: '/pages/me/auth/realname/index'
   },
   {
     key: 'event',
-    iconPath: '/static/me-icons/event-orange.png',
+    iconPath: '/static/icon/activity.png',
     label: '我的活动',
     colorClass: 'service-orange'
   },
   {
     key: 'create_circle',
-    iconPath: '/static/me-icons/corporate-primary.png',
+    iconPath: '/static/icon/create.png',
     label: '创建圈子',
     colorClass: 'service-blue',
     url: '/pages/circles/create/index'
   },
   {
     key: 'card',
-    iconPath: '/static/me-icons/contact-purple.png',
+    iconPath: '/static/icon/card.png',
     label: '我的名片',
     colorClass: 'service-purple',
     url: '/pages/me/card/index'

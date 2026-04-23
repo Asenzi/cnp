@@ -13,6 +13,7 @@ from .user import User
 from .user_block import UserBlock
 from .user_circle_membership import UserCircleMembership
 from .user_connection import UserConnection
+from .user_contact_package_balance import UserContactPackageBalance
 from .user_friend_request import UserFriendRequest
 from .user_membership import UserMembership
 from .user_message import UserMessage
@@ -41,6 +42,7 @@ __all__ = [
     "UserBlock",
     "UserCircleMembership",
     "UserConnection",
+    "UserContactPackageBalance",
     "UserFriendRequest",
     "UserMembership",
     "UserMessage",

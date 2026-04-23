@@ -9,7 +9,7 @@ const DEFAULT_SAMPLE_RECORDS = [
     timeText: '今天, 14:20',
     amount: 2450,
     statusText: '交易成功',
-    iconPath: '/static/me-icons/payments-green.png',
+    iconPath: '/static/icon/income.png',
     iconBgClass: 'icon-bg-blue',
     sortTs: Date.now() - 1
   },
@@ -19,7 +19,7 @@ const DEFAULT_SAMPLE_RECORDS = [
     timeText: '昨天',
     amount: -1200,
     statusText: '交易成功',
-    iconPath: '/static/me-icons/description-primary.png',
+    iconPath: '/static/icon/spending.png',
     iconBgClass: 'icon-bg-orange',
     sortTs: Date.now() - 2
   }
@@ -112,13 +112,13 @@ function resolveStatusLabel(status) {
 function resolvePayChannelIcon(channel) {
   if (channel === 'wallet') {
     return {
-      iconPath: '/static/me-icons/description-primary.png',
+      iconPath: '/static/icon/spending.png',
       iconBgClass: 'icon-bg-orange'
     }
   }
   if (channel === 'wxpay') {
     return {
-      iconPath: '/static/me-icons/payments-green.png',
+      iconPath: '/static/icon/income.png',
       iconBgClass: 'icon-bg-blue'
     }
   }
@@ -131,18 +131,21 @@ function resolvePayChannelIcon(channel) {
 export function mapMemberOrderRecord(item) {
   const status = normalizeStatus(item?.status)
   const amount = toNumber(item?.paid_amount, 0)
-  const channel = String(item?.pay_channel || '').trim().toLowerCase()
-  const { iconPath, iconBgClass } = resolvePayChannelIcon(channel)
   const planName = String(item?.plan_name || '').trim()
+  const productType = String(item?.product_type || 'member').trim().toLowerCase()
+  const title = productType === 'contact_package'
+    ? `${planName || '人群包'}支出`
+    : `${planName || '会员费'}支出`
 
   return {
     id: `member_${String(item?.order_no || item?.id || Math.random())}`,
     title: planName ? `${planName}费支出` : '会员费支出',
+    title,
     timeText: formatOrderTime(item?.paid_at || item?.created_at),
     amount: -Math.abs(amount),
     statusText: resolveStatusLabel(status),
-    iconPath,
-    iconBgClass,
+    iconPath: '/static/icon/spending.png',
+    iconBgClass: 'icon-bg-orange',
     sortTs: toTimestamp(item?.paid_at || item?.created_at)
   }
 }
@@ -150,8 +153,6 @@ export function mapMemberOrderRecord(item) {
 export function mapRechargeOrderRecord(item) {
   const status = normalizeStatus(item?.status)
   const amount = toNumber(item?.amount, 0)
-  const channel = String(item?.pay_channel || '').trim().toLowerCase()
-  const { iconPath, iconBgClass } = resolvePayChannelIcon(channel)
 
   return {
     id: `recharge_${String(item?.order_no || item?.id || Math.random())}`,
@@ -159,8 +160,8 @@ export function mapRechargeOrderRecord(item) {
     timeText: formatOrderTime(item?.paid_at || item?.created_at),
     amount: Math.abs(amount),
     statusText: resolveStatusLabel(status),
-    iconPath,
-    iconBgClass,
+    iconPath: '/static/icon/income.png',
+    iconBgClass: 'icon-bg-blue',
     sortTs: toTimestamp(item?.paid_at || item?.created_at)
   }
 }

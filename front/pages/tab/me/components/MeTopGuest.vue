@@ -34,10 +34,12 @@
         <text class="guest-stat-value">--</text>
         <text class="guest-stat-label">我的圈子</text>
       </view>
+      <!-- 积分功能暂时隐藏
       <view class="guest-stat-card guest-stat-card-click" hover-class="guest-stat-card-active" @tap="$emit('open-points')">
         <text class="guest-stat-value">--</text>
         <text class="guest-stat-label">积分</text>
       </view>
+      -->
       <view class="guest-stat-card">
         <text class="guest-stat-value">--</text>
         <text class="guest-stat-label">账户余额</text>
@@ -47,7 +49,7 @@
 </template>
 
 <script setup>
-defineEmits(['login', 'open-circles', 'open-points'])
+defineEmits(['login', 'open-circles'])
 </script>
 
 <style scoped>

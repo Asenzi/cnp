@@ -225,10 +225,26 @@ const onSubmit = async () => {
     const amount = Number(selectedAmount.value)
     const createResult = await createWalletRecharge({ amount })
     const action = String(createResult?.action || '').trim()
+
+    // 微信支付流程
     if (action === 'wxpay_required') {
+      const wxpay = createResult?.wxpay || {}
+      if (!wxpay?.timeStamp || !wxpay?.nonceStr || !wxpay?.package || !wxpay?.signType || !wxpay?.paySign) {
+        throw new Error('微信支付参数异常，请联系客服')
+      }
       await invokeWxpayAndConfirm(createResult)
+      handlePaymentSuccess()
+      return
     }
-    handlePaymentSuccess()
+
+    // 模拟支付流程（开发测试用）
+    if (action === 'mock_paid') {
+      handlePaymentSuccess()
+      return
+    }
+
+    // 未知支付方式
+    throw new Error('支付方式异常')
   } catch (err) {
     const errMsg = String(err?.errMsg || err?.message || '').toLowerCase()
     if (errMsg.includes('cancel')) {
@@ -282,41 +298,41 @@ onLoad(() => {
 }
 
 .page-content {
-  padding: 24rpx 24rpx calc(170rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 24rpx calc(140rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 20rpx;
 }
 
 .section {
-  border-radius: 24rpx;
-  padding: 24rpx;
+  border-radius: 20rpx;
+  padding: 20rpx;
   background: #ffffff;
 }
 
 .section-title {
   display: block;
   color: #0f172a;
-  font-size: 38rpx;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
 .amount-grid {
-  margin-top: 18rpx;
+  margin-top: 16rpx;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14rpx;
+  gap: 12rpx;
 }
 
 .amount-item {
   position: relative;
-  height: 92rpx;
+  height: 84rpx;
   border: 1rpx solid #cbd5e1;
-  border-radius: 18rpx;
+  border-radius: 16rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6rpx;
+  gap: 4rpx;
   background: #f8fafc;
   text-align: center;
 }
@@ -329,8 +345,8 @@ onLoad(() => {
 .amount-item-active::after {
   content: '';
   position: absolute;
-  right: 10rpx;
-  top: 10rpx;
+  right: 8rpx;
+  top: 8rpx;
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
@@ -339,19 +355,19 @@ onLoad(() => {
 
 .amount-yuan {
   color: #1e293b;
-  font-size: 28rpx;
+  font-size: 26rpx;
   line-height: 1;
 }
 
 .amount-value {
   color: #0f172a;
-  font-size: 44rpx;
+  font-size: 38rpx;
   font-weight: 700;
   line-height: 1;
 }
 
 .custom-input-wrap {
-  margin-top: 16rpx;
+  margin-top: 14rpx;
   height: 88rpx;
   border: 1rpx solid #cbd5e1;
   border-radius: 16rpx;
@@ -368,7 +384,7 @@ onLoad(() => {
 
 .custom-yuan {
   color: #0f172a;
-  font-size: 34rpx;
+  font-size: 32rpx;
   font-weight: 700;
 }
 
@@ -376,18 +392,18 @@ onLoad(() => {
   flex: 1;
   margin-left: 10rpx;
   color: #0f172a;
-  font-size: 32rpx;
+  font-size: 30rpx;
 }
 
 .tip-text {
   display: block;
-  margin-top: 12rpx;
+  margin-top: 10rpx;
   color: #64748b;
-  font-size: 24rpx;
+  font-size: 22rpx;
 }
 
 .pay-summary {
-  gap: 18rpx;
+  gap: 16rpx;
 }
 
 .summary-row {
@@ -408,19 +424,19 @@ onLoad(() => {
 }
 
 .summary-icon {
-  width: 30rpx;
-  height: 30rpx;
+  width: 28rpx;
+  height: 28rpx;
 }
 
 .summary-value {
   color: #0f172a;
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 600;
 }
 
 .summary-amount {
   color: #1a57db;
-  font-size: 40rpx;
+  font-size: 36rpx;
   font-weight: 700;
 }
 
@@ -428,13 +444,15 @@ onLoad(() => {
   margin-top: -4rpx;
   display: flex;
   align-items: center;
-  gap: 10rpx;
-  padding: 10rpx 4rpx;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 12rpx 4rpx;
 }
 
 .safe-icon {
-  width: 26rpx;
-  height: 26rpx;
+  width: 24rpx;
+  height: 24rpx;
+  opacity: 0.7;
 }
 
 .safe-text {
@@ -447,23 +465,24 @@ onLoad(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
+  padding: 12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.96);
   border-top: 1rpx solid #e2e8f0;
 }
 
 .submit-btn {
-  height: 90rpx;
+  height: 88rpx;
   border: 0;
   border-radius: 20rpx;
   background: #1a57db;
   color: #ffffff;
-  font-size: 36rpx;
+  font-size: 30rpx;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
+  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.18);
 }
 
 .submit-btn::after {

@@ -16,7 +16,9 @@
       <view>
         <text class="plan-name">{{ plan.name }}</text>
         <text v-if="plan.subtitle" class="plan-subtitle">{{ plan.subtitle }}</text>
+        <!-- 积分功能暂时隐藏
         <text v-if="pointsOfferText" class="plan-points-offer">{{ pointsOfferText }}</text>
+        -->
       </view>
 
       <view class="price-wrap">
@@ -84,20 +86,22 @@ const formatAmount = (value) => {
 <style scoped>
 .plan-card {
   position: relative;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border-radius: 24rpx;
+  border: 1rpx solid #e2e8f0;
   background: #ffffff;
-  padding: 20px;
+  padding: 36rpx 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+  font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
 .plan-card-recommended {
-  border: 2px solid #d4af37;
+  border: 2rpx solid #d4af37;
   background: rgba(212, 175, 55, 0.05);
 }
 
 .plan-card-selected {
   border-color: #1a57db;
-  box-shadow: 0 0 0 2px rgba(26, 87, 219, 0.14);
+  box-shadow: 0 0 0 2rpx rgba(26, 87, 219, 0.14), 0 8rpx 20rpx rgba(26, 87, 219, 0.08);
 }
 
 .plan-card-active {
@@ -108,65 +112,71 @@ const formatAmount = (value) => {
   position: absolute;
   right: 0;
   top: 0;
-  border-radius: 0 3px 0 8px;
+  border-radius: 0 12rpx 0 20rpx;
   background: #d4af37;
-  padding: 4px 10px;
+  padding: 8rpx 20rpx;
   z-index: 2;
 }
 
 .plan-badge-text {
   color: #111621;
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 22rpx;
+  line-height: 28rpx;
   font-weight: 700;
 }
 
 .plan-main {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 14px;
+  align-items: flex-end;
+  gap: 32rpx;
 }
 
 .plan-card-recommended .plan-main {
-  margin-top: 26px;
+  margin-top: 48rpx;
 }
 
 .plan-name {
   display: block;
   color: #0f172a;
-  font-size: 19px;
-  line-height: 26px;
+  font-size: 36rpx;
+  line-height: 48rpx;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
 .plan-subtitle {
   display: block;
-  margin-top: 4px;
+  margin-top: 8rpx;
   color: #64748b;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 24rpx;
+  line-height: 36rpx;
 }
 
 .plan-points-offer {
   display: block;
-  margin-top: 8px;
+  margin-top: 12rpx;
   color: #1d4ed8;
-  font-size: 12px;
-  line-height: 17px;
+  font-size: 22rpx;
+  line-height: 32rpx;
   font-weight: 700;
 }
 
 .price-wrap {
   text-align: right;
+  min-width: 180rpx;
 }
 
 .price-main {
   display: block;
   color: #0f172a;
-  font-size: 25px;
-  line-height: 32px;
-  font-weight: 800;
+  font-size: 52rpx;
+  line-height: 56rpx;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
 .plan-card-recommended .price-main {
@@ -176,8 +186,9 @@ const formatAmount = (value) => {
 .price-origin {
   display: block;
   color: #94a3b8;
-  font-size: 15px;
-  line-height: 20px;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 32rpx;
   text-decoration: line-through;
 }
 

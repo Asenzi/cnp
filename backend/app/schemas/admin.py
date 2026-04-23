@@ -45,3 +45,16 @@ class AdminConfigUpsertPayload(BaseModel):
     config_value: str = Field(default="", max_length=255)
     config_group: str | None = Field(default=None, max_length=64)
     description: str | None = Field(default=None, max_length=1000)
+
+
+class AdminContactPackagePlanPayload(BaseModel):
+    id: str | None = Field(default=None, max_length=64)
+    name: str = Field(min_length=1, max_length=64)
+    price: float = Field(gt=0, le=1000000)
+    view_count: int = Field(ge=1, le=100000)
+    enabled: bool = True
+
+
+class AdminContactPackageConfigPayload(BaseModel):
+    display_enabled: bool = False
+    plans: list[AdminContactPackagePlanPayload] = Field(default_factory=list)

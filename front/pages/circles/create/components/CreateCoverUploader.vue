@@ -41,16 +41,16 @@ const chooseCover = () => {
 
 <style scoped>
 .section-wrap {
-  padding: 0 32rpx;
+  padding: 0 24rpx;
 }
 
 .section-title {
   display: block;
   color: #0f172a;
-  font-size: 32rpx;
-  line-height: 42rpx;
+  font-size: 30rpx;
+  line-height: 38rpx;
   font-weight: 700;
-  margin-bottom: 14rpx;
+  margin-bottom: 12rpx;
 }
 
 .cover-card {

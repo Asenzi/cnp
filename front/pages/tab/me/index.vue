@@ -12,10 +12,9 @@
           :with-member-card="showMemberCenter"
           @edit="goEditInfo"
           @open-circles="goMyCircles"
-          @open-points="goPoints"
           @open-wallet="goWallet"
         />
-        <MeTopGuest v-else @login="goLogin" @open-circles="goMyCircles" @open-points="goPoints" />
+        <MeTopGuest v-else @login="goLogin" @open-circles="goMyCircles" />
         <MeMemberCenterCard v-if="showMemberCenter" @open="onOpenMember" />
 
         <view class="block-wrap">
@@ -93,6 +92,8 @@ const isMemberOpened = computed(() => {
   return false
 })
 
+const hasRealNameVerified = computed(() => Boolean(currentUser.value?.is_verified))
+
 const showMemberCenter = computed(() => {
   return isLoggedIn.value && !isMemberOpened.value
 })
@@ -150,11 +151,12 @@ const goMyCircles = () => {
   })
 }
 
-const goPoints = () => {
-  uni.navigateTo({
-    url: '/pages/me/points/index'
-  })
-}
+// 积分功能暂时隐藏
+// const goPoints = () => {
+//   uni.navigateTo({
+//     url: '/pages/me/points/index'
+//   })
+// }
 
 const goWallet = () => {
   if (walletNavigating) {
@@ -187,6 +189,22 @@ const onOpenMember = () => {
 const onServiceTap = (item) => {
   if (!isLoggedIn.value) {
     onNeedLogin()
+    return
+  }
+
+  if (item?.key === 'auth') {
+    if (hasRealNameVerified.value) {
+      uni.showModal({
+        title: '实名认证',
+        content: '您已经实名认证。',
+        showCancel: false
+      })
+      return
+    }
+
+    uni.navigateTo({
+      url: '/pages/me/auth/realname/index'
+    })
     return
   }
 
@@ -287,17 +305,17 @@ onShow(() => {
 }
 
 .main {
-  padding: 32rpx;
-  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 32rpx;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
 }
 
 .block-wrap {
-  margin-bottom: 64rpx;
+  margin-bottom: 48rpx;
 }
 
 .block-title {
   display: block;
-  margin-bottom: 32rpx;
+  margin-bottom: 24rpx;
   font-size: 32rpx;
   font-weight: 700;
   color: #0f172a;

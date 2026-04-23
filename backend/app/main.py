@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logger import logger, setup_logging
 from app.core.redis import close_redis, init_redis
+from app.payment import ensure_default_payment_configs
 from app.points import ensure_default_points_configs
 
 setup_logging(settings.DEBUG)
@@ -45,6 +46,7 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 async def on_startup() -> None:
     ensure_default_admin_user()
     ensure_default_points_configs()
+    ensure_default_payment_configs()
     await init_redis()
     logger.info("service started")
 

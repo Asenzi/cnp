@@ -154,7 +154,7 @@ const modeText = computed(() => {
     return '找资源'
   }
   if (mode === 'venue') {
-    return '场地发布'
+    return '发布活动'
   }
   return '找合作'
 })
@@ -165,7 +165,7 @@ const sceneTag = computed(() => {
     return '资源匹配'
   }
   if (mode === 'venue') {
-    return '场地对接'
+    return '活动对接'
   }
   return '合作对接'
 })

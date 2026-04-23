@@ -26,31 +26,32 @@ defineProps({
 .benefit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 24rpx;
 }
 
 .benefit-item {
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border-radius: 24rpx;
+  border: 1rpx solid #e2e8f0;
   background: #ffffff;
-  padding: 16px;
+  padding: 32rpx;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  gap: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
 .benefit-item-wide {
   grid-column: span 2 / span 2;
   flex-direction: row;
   align-items: center;
-  gap: 14px;
+  gap: 28rpx;
 }
 
 .benefit-icon-wrap {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 20rpx;
   background: rgba(26, 87, 219, 0.1);
   display: flex;
   align-items: center;
@@ -59,13 +60,13 @@ defineProps({
 }
 
 .benefit-icon-img {
-  width: 23px;
-  height: 23px;
+  width: 40rpx;
+  height: 40rpx;
 }
 
 .benefit-icon-text {
   color: #1a57db;
-  font-size: 15px;
+  font-size: 28rpx;
   line-height: 1;
   font-weight: 700;
 }
@@ -78,17 +79,17 @@ defineProps({
 .benefit-title {
   display: block;
   color: #0f172a;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 28rpx;
+  line-height: 40rpx;
   font-weight: 700;
 }
 
 .benefit-desc {
   display: block;
-  margin-top: 3px;
+  margin-top: 8rpx;
   color: #64748b;
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 24rpx;
+  line-height: 36rpx;
 }
 
 @media (prefers-color-scheme: dark) {

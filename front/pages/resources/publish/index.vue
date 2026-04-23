@@ -68,50 +68,23 @@
           </view>
         </view>
 
-        <view v-if="form.mode === 'venue'" class="venue-panel">
-          <view class="venue-head">
-            <view class="venue-head-mark"></view>
-            <text class="venue-head-title">场地详细信息</text>
+        <view v-if="form.mode === 'venue'" class="card venue-card">
+          <view class="card-head">
+            <text class="card-head-title">定位信息</text>
           </view>
 
-          <view class="venue-rows">
-            <view class="venue-row venue-row-line">
-              <text class="venue-label">场地面积 (㎡)</text>
-              <input
-                class="venue-input"
-                type="number"
-                :value="venueForm.area"
-                placeholder="输入面积"
-                placeholder-class="placeholder-body"
-                @input="onInputVenueArea"
-              />
+          <button class="industry-trigger" hover-class="industry-trigger-hover" @tap="onChooseLocation">
+            <view class="industry-trigger-content sync-trigger-content">
+              <text v-if="venueForm.location" class="sync-selected-text">{{ venueForm.location }}</text>
+              <text v-else class="industry-trigger-placeholder">点击选择定位</text>
             </view>
-
-            <view class="venue-row venue-row-line">
-              <text class="venue-label">容纳人数</text>
-              <input
-                class="venue-input"
-                type="number"
-                :value="venueForm.capacity"
-                placeholder="输入人数"
-                placeholder-class="placeholder-body"
-                @input="onInputVenueCapacity"
-              />
-            </view>
-
-            <view class="venue-row">
-              <text class="venue-label">地理位置</text>
-              <button class="location-trigger" hover-class="location-trigger-hover" @tap="onChooseLocation">
-                <text class="location-trigger-text">{{ venueForm.location || '点击选择' }}</text>
-              </button>
-            </view>
-          </view>
+            <text class="industry-trigger-arrow">›</text>
+          </button>
         </view>
 
         <view class="card tags-card">
           <view class="card-head">
             <text class="card-head-title">行业/资源标签</text>
-            <text class="card-head-action" @tap="openIndustryPopup">选择标签</text>
           </view>
 
           <button class="industry-trigger" hover-class="industry-trigger-hover" @tap="openIndustryPopup">
@@ -126,7 +99,6 @@
         <view class="card sync-card">
           <view class="card-head">
             <text class="card-head-title">同步到圈子</text>
-            <text class="card-head-action" @tap="openCirclePopup">选择圈子</text>
           </view>
 
           <button class="industry-trigger" hover-class="industry-trigger-hover" @tap="openCirclePopup">
@@ -292,10 +264,10 @@ import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
 const modeOptions = [
   { key: 'cooperate', title: '找合作' },
   { key: 'resource', title: '找资源' },
-  { key: 'venue', title: '场地发布' }
+  { key: 'venue', title: '发布活动' }
 ]
 
-const validityOptions = [
+const validityOptions = [ 
   { value: '3d', label: '3天' },
   { value: '7d', label: '7天' },
   { value: '30d', label: '30天' },
@@ -307,7 +279,13 @@ const visibilityOptions = [
   { value: 'verified', label: '仅实名用户' }
 ]
 
-const VENUE_META_LABELS = {
+const ACTIVITY_META_LABELS = {
+  area: '活动面积',
+  capacity: '容纳人数',
+  location: '活动地点'
+}
+
+const LEGACY_VENUE_META_LABELS = {
   area: '场地面积',
   capacity: '容纳人数',
   location: '地理位置'
@@ -402,7 +380,7 @@ const circleEmptyText = computed(() => {
 
 const descriptionPlaceholder = computed(() => {
   if (form.value.mode === 'venue') {
-    return '请输入资源或场地详情描述...'
+    return '请输入资源或活动详情描述...'
   }
   return '请输入资源或合作详情描述...'
 })
@@ -440,6 +418,38 @@ const showToast = (title) => {
     title,
     icon: 'none'
   })
+}
+
+const ensureLocationPermission = async () => {
+  const setting = await new Promise((resolve) => {
+    uni.getSetting({
+      success: resolve,
+      fail: () => resolve({ authSetting: {} })
+    })
+  })
+
+  if (setting?.authSetting?.['scope.userLocation']) {
+    return true
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      uni.authorize({
+        scope: 'scope.userLocation',
+        success: resolve,
+        fail: reject
+      })
+    })
+    return true
+  } catch (err) {
+    const message = String(err?.errMsg || '').toLowerCase()
+    if (message.includes('auth deny') || message.includes('deny') || message.includes('authorize')) {
+      showToast('请在设置中开启定位权限')
+    } else {
+      showToast('定位权限未开启')
+    }
+    return false
+  }
 }
 
 const setMode = (mode) => {
@@ -532,6 +542,11 @@ const onInputVenueCapacity = (event) => {
 
 const onChooseLocation = async () => {
   try {
+    const permitted = await ensureLocationPermission()
+    if (!permitted) {
+      return
+    }
+
     const result = await new Promise((resolve, reject) => {
       uni.chooseLocation({
         success: resolve,
@@ -543,9 +558,14 @@ const onChooseLocation = async () => {
     venueForm.value.location = [name, address].filter(Boolean).join(' / ')
   } catch (err) {
     const message = String(err?.errMsg || '')
-    if (message && !message.includes('cancel')) {
-      showToast('位置选择失败')
+    if (!message || message.includes('cancel') || message.includes('chooseLocation:fail cancel')) {
+      return
     }
+    if (message.includes('auth deny') || message.includes('permission')) {
+      showToast('请在设置中开启定位权限')
+      return
+    }
+    showToast(message || '位置选择失败，请检查定位服务')
   }
 }
 
@@ -693,24 +713,38 @@ const stripVenueMetaFromDescription = (rawDescription) => {
     location: ''
   }
 
+  const stripPrefix = (value, label) => {
+    const prefix = `${label}\uFF1A`
+    if (!value.startsWith(prefix)) {
+      return ''
+    }
+    return value.replace(prefix, '').trim()
+  }
+
   lines.forEach((line) => {
     const value = String(line || '').trim()
     if (!value) {
       return
     }
 
-    if (value.startsWith(`${VENUE_META_LABELS.area}：`)) {
-      venue.area = value.replace(`${VENUE_META_LABELS.area}：`, '').replace(/㎡/g, '').trim()
+    const activityArea = stripPrefix(value, ACTIVITY_META_LABELS.area)
+    const legacyArea = stripPrefix(value, LEGACY_VENUE_META_LABELS.area)
+    if (activityArea || legacyArea) {
+      venue.area = (activityArea || legacyArea).replace(/\u33A1/g, '').trim()
       return
     }
 
-    if (value.startsWith(`${VENUE_META_LABELS.capacity}：`)) {
-      venue.capacity = value.replace(`${VENUE_META_LABELS.capacity}：`, '').replace(/人/g, '').trim()
+    const activityCapacity = stripPrefix(value, ACTIVITY_META_LABELS.capacity)
+    const legacyCapacity = stripPrefix(value, LEGACY_VENUE_META_LABELS.capacity)
+    if (activityCapacity || legacyCapacity) {
+      venue.capacity = (activityCapacity || legacyCapacity).replace(/\u4eba/g, '').trim()
       return
     }
 
-    if (value.startsWith(`${VENUE_META_LABELS.location}：`)) {
-      venue.location = value.replace(`${VENUE_META_LABELS.location}：`, '').trim()
+    const activityLocation = stripPrefix(value, ACTIVITY_META_LABELS.location)
+    const legacyLocation = stripPrefix(value, LEGACY_VENUE_META_LABELS.location)
+    if (activityLocation || legacyLocation) {
+      venue.location = activityLocation || legacyLocation
       return
     }
 
@@ -731,13 +765,13 @@ const buildSubmitDescription = () => {
 
   const metaLines = []
   if (venueForm.value.area) {
-    metaLines.push(`${VENUE_META_LABELS.area}：${venueForm.value.area}㎡`)
+    metaLines.push(`${ACTIVITY_META_LABELS.area}\uFF1A${venueForm.value.area}\u33A1`)
   }
   if (venueForm.value.capacity) {
-    metaLines.push(`${VENUE_META_LABELS.capacity}：${venueForm.value.capacity}人`)
+    metaLines.push(`${ACTIVITY_META_LABELS.capacity}\uFF1A${venueForm.value.capacity}\u4eba`)
   }
   if (venueForm.value.location) {
-    metaLines.push(`${VENUE_META_LABELS.location}：${venueForm.value.location}`)
+    metaLines.push(`${ACTIVITY_META_LABELS.location}\uFF1A${venueForm.value.location}`)
   }
 
   return [base, ...metaLines].filter(Boolean).join('\n')
@@ -796,6 +830,11 @@ const onSubmit = async () => {
 
   if (uploading.value) {
     showToast('请等待图片上传完成')
+    return
+  }
+
+  if (form.value.mode === 'venue' && !String(venueForm.value.location || '').trim()) {
+    showToast('请先选择定位')
     return
   }
 
@@ -874,15 +913,15 @@ onLoad((query = {}) => {
 .page-body {
   width: 100%;
   box-sizing: border-box;
-  padding: 18rpx 24rpx 36rpx;
+  padding: 24rpx 32rpx 48rpx;
 }
 
 .mode-strip {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 48rpx;
-  padding: 12rpx 8rpx 18rpx;
+  gap: 40rpx;
+  padding: 8rpx 0 16rpx;
 }
 
 .mode-tab,
@@ -938,9 +977,9 @@ onLoad((query = {}) => {
 .mode-tab-label {
   display: block;
   color: #94a3b8;
-  font-size: 32rpx;
-  line-height: 44rpx;
-  font-weight: 800;
+  font-size: 30rpx;
+  line-height: 40rpx;
+  font-weight: 700;
 }
 
 .mode-tab-active .mode-tab-label {
@@ -951,62 +990,62 @@ onLoad((query = {}) => {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -8rpx;
-  height: 6rpx;
+  bottom: -6rpx;
+  height: 4rpx;
   border-radius: 999rpx;
   background: #1a57db;
 }
 
 .card,
 .venue-panel {
-  margin-top: 24rpx;
-  border-radius: 24rpx;
+  margin-top: 20rpx;
+  border-radius: 20rpx;
 }
 
 .card {
   background: #ffffff;
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
 }
 
 .title-card {
-  padding: 26rpx 28rpx;
+  padding: 24rpx 28rpx;
 }
 
 .title-input {
   width: 100%;
   color: #0f172a;
-  font-size: 36rpx;
-  line-height: 48rpx;
-  font-weight: 800;
+  font-size: 32rpx;
+  line-height: 44rpx;
+  font-weight: 700;
 }
 
 .placeholder-title {
   color: #cbd5e1;
-  font-size: 36rpx;
-  line-height: 48rpx;
-  font-weight: 800;
+  font-size: 32rpx;
+  line-height: 44rpx;
+  font-weight: 700;
 }
 
 .editor-card {
-  padding: 28rpx;
+  padding: 24rpx 28rpx;
 }
 
 .desc-input {
   width: 100%;
-  min-height: 176rpx;
+  min-height: 160rpx;
   color: #475569;
   font-size: 28rpx;
-  line-height: 42rpx;
+  line-height: 40rpx;
 }
 
 .placeholder-body {
   color: #94a3b8;
   font-size: 28rpx;
-  line-height: 42rpx;
+  line-height: 40rpx;
 }
 
 .media-section {
-  margin-top: 24rpx;
+  margin-top: 20rpx;
 }
 
 .media-label,
@@ -1014,22 +1053,22 @@ onLoad((query = {}) => {
   display: block;
   color: #94a3b8;
   font-size: 22rpx;
-  line-height: 30rpx;
-  font-weight: 800;
+  line-height: 28rpx;
+  font-weight: 700;
 }
 
 .media-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx;
-  margin-top: 24rpx;
+  gap: 12rpx;
+  margin-top: 20rpx;
 }
 
 .media-item,
 .upload-tile {
-  width: 194rpx;
-  height: 194rpx;
-  border-radius: 24rpx;
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 20rpx;
 }
 
 .media-item {
@@ -1045,15 +1084,15 @@ onLoad((query = {}) => {
 
 .remove-btn {
   position: absolute;
-  top: 8rpx;
-  right: 8rpx;
-  width: 40rpx;
-  height: 40rpx;
+  top: 6rpx;
+  right: 6rpx;
+  width: 36rpx;
+  height: 36rpx;
   border-radius: 999rpx;
   background: rgba(15, 23, 42, 0.66);
   color: #ffffff;
-  font-size: 28rpx;
-  line-height: 40rpx;
+  font-size: 26rpx;
+  line-height: 36rpx;
   text-align: center;
   padding: 0;
 }
@@ -1063,7 +1102,7 @@ onLoad((query = {}) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
+  gap: 6rpx;
   margin: 0;
   background: #f8fafc;
   border: 2rpx dashed #e2e8f0;
@@ -1071,41 +1110,42 @@ onLoad((query = {}) => {
 }
 
 .upload-icon {
-  font-size: 42rpx;
-  line-height: 42rpx;
+  font-size: 38rpx;
+  line-height: 38rpx;
   font-weight: 300;
 }
 
 .upload-text {
   font-size: 20rpx;
-  line-height: 28rpx;
+  line-height: 26rpx;
 }
 
 .venue-panel {
-  padding: 28rpx;
-  background: #f1f4f9;
+  padding: 24rpx 28rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
 }
 
 .venue-head {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 20rpx;
+  gap: 10rpx;
+  margin-bottom: 16rpx;
 }
 
 .venue-head-mark {
-  width: 18rpx;
-  height: 18rpx;
-  border-radius: 6rpx;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 4rpx;
   background: #1a57db;
-  box-shadow: 0 0 0 8rpx rgba(26, 87, 219, 0.12);
+  box-shadow: 0 0 0 6rpx rgba(26, 87, 219, 0.12);
 }
 
 .venue-head-title {
-  color: #1a57db;
+  color: #0f172a;
   font-size: 28rpx;
-  line-height: 40rpx;
-  font-weight: 800;
+  line-height: 38rpx;
+  font-weight: 700;
 }
 
 .venue-row {
@@ -1147,25 +1187,26 @@ onLoad((query = {}) => {
   font-weight: 600;
 }
 
+.venue-card,
 .tags-card,
 .sync-card,
 .settings-card,
 .visibility-card {
-  padding: 28rpx;
+  padding: 24rpx 28rpx;
 }
 
 .card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
+  justify-content: flex-start;
+  gap: 20rpx;
 }
 
 .card-head-title {
   color: #0f172a;
   font-size: 28rpx;
-  line-height: 40rpx;
-  font-weight: 800;
+  line-height: 38rpx;
+  font-weight: 700;
 }
 
 .card-head-action {
@@ -1176,10 +1217,10 @@ onLoad((query = {}) => {
 }
 
 .industry-trigger {
-  margin-top: 24rpx;
+  margin-top: 20rpx;
   padding: 0 24rpx;
-  height: 88rpx;
-  border-radius: 18rpx;
+  height: 80rpx;
+  border-radius: 16rpx;
   background: #f8fafc;
   border: 2rpx solid #e2e8f0;
   display: flex;
@@ -1225,10 +1266,10 @@ onLoad((query = {}) => {
 
 .sync-meta-text {
   display: block;
-  margin-top: 16rpx;
+  margin-top: 12rpx;
   color: #94a3b8;
   font-size: 22rpx;
-  line-height: 32rpx;
+  line-height: 30rpx;
 }
 
 .filter-mask {
@@ -1242,9 +1283,9 @@ onLoad((query = {}) => {
 
 .filter-panel {
   width: 100%;
-  border-radius: 28rpx 28rpx 0 0;
+  border-radius: 24rpx 24rpx 0 0;
   background: #ffffff;
-  padding: 32rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
 }
 
 .panel-head {
@@ -1256,14 +1297,14 @@ onLoad((query = {}) => {
 .panel-title {
   color: #0f172a;
   font-size: 32rpx;
-  line-height: 44rpx;
+  line-height: 42rpx;
   font-weight: 700;
 }
 
 .panel-subtitle {
   color: #64748b;
   font-size: 22rpx;
-  line-height: 32rpx;
+  line-height: 30rpx;
 }
 
 .section {
@@ -1273,7 +1314,7 @@ onLoad((query = {}) => {
 .section-label {
   color: #334155;
   font-size: 24rpx;
-  line-height: 34rpx;
+  line-height: 32rpx;
   font-weight: 600;
 }
 
@@ -1292,10 +1333,10 @@ onLoad((query = {}) => {
 }
 
 .circle-option {
-  border-radius: 18rpx;
+  border-radius: 16rpx;
   border: 1rpx solid #e2e8f0;
   background: #f8fafc;
-  padding: 20rpx;
+  padding: 18rpx 20rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1365,9 +1406,9 @@ onLoad((query = {}) => {
 }
 
 .option-chip {
-  min-height: 72rpx;
-  border-radius: 16rpx;
-  padding: 0 20rpx;
+  min-height: 68rpx;
+  border-radius: 14rpx;
+  padding: 0 18rpx;
   border: 1rpx solid #e2e8f0;
   background: #f8fafc;
   display: flex;
@@ -1394,7 +1435,7 @@ onLoad((query = {}) => {
 }
 
 .actions {
-  margin-top: 28rpx;
+  margin-top: 24rpx;
   display: flex;
   align-items: center;
   gap: 12rpx;
@@ -1402,10 +1443,10 @@ onLoad((query = {}) => {
 
 .reset-btn,
 .apply-btn {
-  height: 74rpx;
-  border-radius: 14rpx;
+  height: 72rpx;
+  border-radius: 12rpx;
   font-size: 26rpx;
-  line-height: 74rpx;
+  line-height: 72rpx;
   font-weight: 700;
 }
 
@@ -1424,19 +1465,19 @@ onLoad((query = {}) => {
 .settings-grid {
   display: flex;
   gap: 12rpx;
-  margin-top: 24rpx;
+  margin-top: 20rpx;
 }
 
 .settings-option {
   flex: 1;
-  height: 76rpx;
-  border-radius: 16rpx;
+  height: 72rpx;
+  border-radius: 14rpx;
   background: #ffffff;
   border: 2rpx solid #f1f5f9;
   color: #64748b;
   font-size: 24rpx;
-  line-height: 72rpx;
-  font-weight: 800;
+  line-height: 68rpx;
+  font-weight: 700;
   text-align: center;
 }
 
@@ -1448,37 +1489,37 @@ onLoad((query = {}) => {
 
 .visibility-subtitle {
   display: block;
-  margin-top: 8rpx;
+  margin-top: 6rpx;
   color: #94a3b8;
   font-size: 20rpx;
-  line-height: 28rpx;
+  line-height: 26rpx;
 }
 
 .visibility-switch {
   display: flex;
   gap: 8rpx;
-  margin-top: 24rpx;
-  padding: 8rpx;
-  border-radius: 16rpx;
+  margin-top: 20rpx;
+  padding: 6rpx;
+  border-radius: 14rpx;
   background: #f1f5f9;
 }
 
 .visibility-option {
   flex: 1;
-  height: 64rpx;
-  border-radius: 12rpx;
+  height: 60rpx;
+  border-radius: 10rpx;
   background: transparent;
   color: #64748b;
   font-size: 22rpx;
-  line-height: 64rpx;
-  font-weight: 800;
+  line-height: 60rpx;
+  font-weight: 700;
   text-align: center;
 }
 
 .visibility-option-active {
   background: #ffffff;
   color: #1a57db;
-  box-shadow: 0 6rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.06);
 }
 
 .bottom-bar {
@@ -1487,7 +1528,7 @@ onLoad((query = {}) => {
   right: 0;
   bottom: 0;
   z-index: 20;
-  padding: 24rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.9);
   border-top: 2rpx solid rgba(226, 232, 240, 0.72);
 }
@@ -1496,21 +1537,21 @@ onLoad((query = {}) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
+  gap: 10rpx;
   width: 100%;
-  height: 96rpx;
-  border-radius: 24rpx;
+  height: 88rpx;
+  border-radius: 20rpx;
   background: #1a57db;
   color: #ffffff;
-  font-size: 32rpx;
-  line-height: 44rpx;
-  font-weight: 800;
-  box-shadow: 0 18rpx 36rpx rgba(26, 87, 219, 0.18);
+  font-size: 30rpx;
+  line-height: 40rpx;
+  font-weight: 700;
+  box-shadow: 0 12rpx 28rpx rgba(26, 87, 219, 0.18);
 }
 
 .submit-btn-arrow {
-  font-size: 34rpx;
-  line-height: 34rpx;
+  font-size: 32rpx;
+  line-height: 32rpx;
 }
 
 .submit-btn-disabled {
@@ -1530,9 +1571,9 @@ onLoad((query = {}) => {
 }
 
 .loading-card {
-  width: 280rpx;
-  padding: 28rpx 24rpx;
-  border-radius: 24rpx;
+  width: 260rpx;
+  padding: 24rpx 20rpx;
+  border-radius: 20rpx;
   background: rgba(255, 255, 255, 0.96);
   text-align: center;
 }
@@ -1540,9 +1581,9 @@ onLoad((query = {}) => {
 .loading-title {
   display: block;
   color: #0f172a;
-  font-size: 30rpx;
-  line-height: 42rpx;
-  font-weight: 800;
+  font-size: 28rpx;
+  line-height: 38rpx;
+  font-weight: 700;
 }
 
 .loading-desc {
@@ -1550,6 +1591,6 @@ onLoad((query = {}) => {
   margin-top: 8rpx;
   color: #64748b;
   font-size: 24rpx;
-  line-height: 34rpx;
+  line-height: 32rpx;
 }
 </style>

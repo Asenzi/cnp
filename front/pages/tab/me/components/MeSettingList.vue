@@ -42,8 +42,8 @@ const onTap = (item) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24rpx;
-  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 12rpx;
 }
 
 .setting-item-active {
@@ -57,8 +57,8 @@ const onTap = (item) => {
 }
 
 .setting-icon-img {
-  width: 40rpx;
-  height: 40rpx;
+  width: 36rpx;
+  height: 36rpx;
 }
 
 .setting-text {
@@ -67,8 +67,8 @@ const onTap = (item) => {
 }
 
 .chevron-img {
-  width: 36rpx;
-  height: 36rpx;
+  width: 32rpx;
+  height: 32rpx;
 }
 
 @media (prefers-color-scheme: dark) {

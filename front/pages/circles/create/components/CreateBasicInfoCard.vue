@@ -83,33 +83,33 @@ const onChangeIndustry = (event) => {
 
 <style scoped>
 .card {
-  margin: 0 32rpx;
+  margin: 0 24rpx;
   background: #ffffff;
   border-radius: 20rpx;
   box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
-  padding: 24rpx;
+  padding: 20rpx;
 }
 
 .card-title {
   display: block;
   color: #0f172a;
-  font-size: 32rpx;
-  line-height: 42rpx;
+  font-size: 30rpx;
+  line-height: 38rpx;
   font-weight: 700;
-  margin-bottom: 20rpx;
+  margin-bottom: 16rpx;
 }
 
 .field-block + .field-block {
-  margin-top: 20rpx;
+  margin-top: 16rpx;
 }
 
 .field-label {
   display: block;
   color: #334155;
   font-size: 24rpx;
-  line-height: 32rpx;
+  line-height: 30rpx;
   font-weight: 600;
-  margin-bottom: 10rpx;
+  margin-bottom: 8rpx;
 }
 
 .field-input,

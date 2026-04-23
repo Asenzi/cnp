@@ -9,7 +9,8 @@ front/unpackage/
 **/build/
 
 # Python cache / logs
-backend/__pycache__/
+**/__pycache__/
+**/*.pyc
 *.log
 
 # Local environment files

@@ -28,14 +28,14 @@ const onTap = (item) => {
 .service-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24rpx;
+  gap: 20rpx;
 }
 
 .service-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .service-item-active {
@@ -43,8 +43,8 @@ const onTap = (item) => {
 }
 
 .service-icon-box {
-  width: 96rpx;
-  height: 96rpx;
+  width: 88rpx;
+  height: 88rpx;
   border-radius: 999rpx;
   display: flex;
   align-items: center;
@@ -52,8 +52,8 @@ const onTap = (item) => {
 }
 
 .service-icon-img {
-  width: 42rpx;
-  height: 42rpx;
+  width: 40rpx;
+  height: 40rpx;
 }
 
 .service-blue {

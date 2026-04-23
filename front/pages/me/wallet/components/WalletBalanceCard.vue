@@ -17,7 +17,7 @@
           <text class="wallet-id-value">{{ walletId }}</text>
         </view>
         <view class="wallet-icon-wrap">
-          <image class="wallet-icon" mode="aspectFit" src="/static/me-icons/payments-green.png" />
+          <image class="wallet-icon" mode="aspectFit" src="/static/icon/wallet.png" />
         </view>
       </view>
     </view>
@@ -41,10 +41,10 @@ defineProps({
 .wallet-card {
   position: relative;
   overflow: hidden;
-  border-radius: 48rpx;
-  padding: 56rpx 48rpx;
+  border-radius: 32rpx;
+  padding: 48rpx 40rpx;
   background: #1a57db;
-  box-shadow: 0 18rpx 40rpx rgba(26, 87, 219, 0.25);
+  box-shadow: 0 12rpx 32rpx rgba(26, 87, 219, 0.22);
 }
 
 .wallet-glow {
@@ -53,19 +53,19 @@ defineProps({
 }
 
 .wallet-glow-right {
-  width: 520rpx;
-  height: 520rpx;
-  right: -180rpx;
-  top: -180rpx;
+  width: 480rpx;
+  height: 480rpx;
+  right: -160rpx;
+  top: -160rpx;
   background: rgba(255, 255, 255, 0.1);
   filter: blur(20rpx);
 }
 
 .wallet-glow-left {
-  width: 420rpx;
-  height: 420rpx;
-  left: -130rpx;
-  bottom: -180rpx;
+  width: 380rpx;
+  height: 380rpx;
+  left: -120rpx;
+  bottom: -160rpx;
   background: rgba(96, 165, 250, 0.2);
   filter: blur(24rpx);
 }
@@ -83,29 +83,29 @@ defineProps({
 }
 
 .wallet-amount-row {
-  margin-top: 12rpx;
+  margin-top: 10rpx;
   display: flex;
   align-items: baseline;
-  gap: 8rpx;
+  gap: 6rpx;
 }
 
 .wallet-yuan {
   color: #bfdbfe;
-  font-size: 40rpx;
+  font-size: 36rpx;
   font-weight: 700;
 }
 
 .wallet-amount {
   color: #ffffff;
-  font-size: 72rpx;
+  font-size: 64rpx;
   line-height: 1.05;
   font-weight: 800;
   letter-spacing: 1rpx;
 }
 
 .wallet-footer {
-  margin-top: 56rpx;
-  padding-top: 24rpx;
+  margin-top: 48rpx;
+  padding-top: 20rpx;
   border-top: 1rpx solid rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
@@ -133,9 +133,9 @@ defineProps({
 }
 
 .wallet-icon-wrap {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 20rpx;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 16rpx;
   background: rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
@@ -143,7 +143,7 @@ defineProps({
 }
 
 .wallet-icon {
-  width: 38rpx;
-  height: 38rpx;
+  width: 34rpx;
+  height: 34rpx;
 }
 </style>

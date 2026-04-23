@@ -6,7 +6,7 @@
 
         <view class="action-wrap">
           <button class="recharge-btn" hover-class="recharge-btn-active" @tap="onTapRecharge" @click="onTapRecharge">
-            <image class="recharge-icon" mode="aspectFit" src="/static/me-icons/payments-green.png" />
+            <image class="recharge-icon" mode="aspectFit" src="/static/icon/recharge.png" />
             <text>充值</text>
           </button>
         </view>
@@ -14,24 +14,46 @@
         <view class="section-head">
           <text class="section-title">收支明细</text>
 
-          <view class="filter-wrap">
+          <view class="filter-row">
             <button
               class="filter-btn"
-              :class="{ 'filter-btn-selected': selectedFilter !== 'all' || showFilterMenu }"
+              :class="{ 'filter-btn-selected': selectedTimeFilter !== 'all' || showTimeFilterMenu }"
               hover-class="filter-btn-active"
-              @tap.stop="onTapFilter"
+              @tap.stop="onTapTimeFilter"
             >
-              <text>{{ filterButtonText }}</text>
+              <text>{{ timeFilterButtonText }}</text>
               <image class="filter-icon" mode="aspectFit" src="/static/me-icons/tune-gray.png" />
             </button>
 
-            <view v-if="showFilterMenu" class="filter-dropdown" @tap.stop>
+            <button
+              class="filter-btn"
+              :class="{ 'filter-btn-selected': selectedTypeFilter !== 'all' || showTypeFilterMenu }"
+              hover-class="filter-btn-active"
+              @tap.stop="onTapTypeFilter"
+            >
+              <text>{{ typeFilterButtonText }}</text>
+              <image class="filter-icon" mode="aspectFit" src="/static/me-icons/tune-gray.png" />
+            </button>
+
+            <view v-if="showTimeFilterMenu" class="filter-dropdown time-filter-dropdown" @tap.stop>
               <view
-                v-for="option in FILTER_OPTIONS"
+                v-for="option in TIME_FILTER_OPTIONS"
                 :key="option.value"
                 class="filter-option"
-                :class="{ 'filter-option-active': selectedFilter === option.value }"
-                @tap="onSelectFilter(option.value)"
+                :class="{ 'filter-option-active': selectedTimeFilter === option.value }"
+                @tap="onSelectTimeFilter(option.value)"
+              >
+                <text class="filter-option-text">{{ option.label }}</text>
+              </view>
+            </view>
+
+            <view v-if="showTypeFilterMenu" class="filter-dropdown type-filter-dropdown" @tap.stop>
+              <view
+                v-for="option in TYPE_FILTER_OPTIONS"
+                :key="option.value"
+                class="filter-option"
+                :class="{ 'filter-option-active': selectedTypeFilter === option.value }"
+                @tap="onSelectTypeFilter(option.value)"
               >
                 <text class="filter-option-text">{{ option.label }}</text>
               </view>
@@ -42,24 +64,17 @@
         <view v-if="displayRecords.length > 0" class="tx-list">
           <WalletTransactionItem v-for="item in displayRecords" :key="item.id" :item="item" />
         </view>
-        <view v-else class="empty-tip">{{ emptyTipText }}</view>
+        <view v-else class="empty-wrap">
+          <image class="empty-icon" mode="aspectFit" src="/static/icon/block.png" />
+          <text class="empty-text">{{ emptyTipText }}</text>
+        </view>
 
         <view v-if="loadingMore" class="load-tip">加载中...</view>
-        <view v-else-if="!hasMore && displayRecords.length > 0" class="load-tip">没有更多记录了</view>
-
-        <WalletSafetyNotice />
-
-        <view class="wallet-footer">
-          <view class="footer-brand-row">
-            <image class="footer-shield" mode="aspectFit" src="/static/me-icons/shield-person-primary.png" />
-            <text class="footer-brand">由 SAPPHIRE LEDGER 提供安全保护</text>
-          </view>
-          <text class="footer-copy">© 2024 QuanMaiLian Business Ecosystem</text>
-        </view>
+        <view v-else-if="!hasMore && displayRecords.length > 0" class="load-tip">没有更多了</view>
       </view>
     </scroll-view>
 
-    <view v-if="showFilterMenu" class="filter-mask" @tap="closeFilterMenu"></view>
+    <view v-if="showTimeFilterMenu || showTypeFilterMenu" class="filter-mask" @tap="closeAllFilterMenus"></view>
   </view>
 </template>
 
@@ -69,17 +84,22 @@ import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-
 import { getMemberCenterOverview, getMemberOrders, getWalletRechargeOrders } from '../../../api/payment'
 import { getCurrentUserProfile } from '../../../api/user'
 import WalletBalanceCard from './components/WalletBalanceCard.vue'
-import WalletSafetyNotice from './components/WalletSafetyNotice.vue'
 import WalletTransactionItem from './components/WalletTransactionItem.vue'
 import {
   formatWalletBalance,
   mapMemberOrderRecord,
   mapRechargeOrderRecord,
-  mergeWalletRecords,
-  withFallbackRecords
+  mergeWalletRecords
 } from './modules/wallet-view-model'
 
-const FILTER_OPTIONS = [
+const TIME_FILTER_OPTIONS = [
+  { label: '全部时间', value: 'all' },
+  { label: '近一周', value: 'week' },
+  { label: '近一月', value: 'month' },
+  { label: '近一年', value: 'year' }
+]
+
+const TYPE_FILTER_OPTIONS = [
   { label: '全部', value: 'all' },
   { label: '支出', value: 'expense' },
   { label: '收入', value: 'income' }
@@ -88,8 +108,10 @@ const FILTER_OPTIONS = [
 const walletBalance = ref(0)
 const walletId = ref('--')
 const records = ref([])
-const selectedFilter = ref('all')
-const showFilterMenu = ref(false)
+const selectedTimeFilter = ref('all')
+const selectedTypeFilter = ref('all')
+const showTimeFilterMenu = ref(false)
+const showTypeFilterMenu = ref(false)
 
 const memberRecords = ref([])
 const memberCursor = ref('')
@@ -103,30 +125,58 @@ const loadingMore = ref(false)
 const hasMore = ref(false)
 
 const displayBalance = computed(() => formatWalletBalance(walletBalance.value))
-const filterButtonText = computed(() => {
-  if (selectedFilter.value === 'expense') {
-    return '支出'
-  }
-  if (selectedFilter.value === 'income') {
-    return '收入'
-  }
-  return '筛选'
+
+const timeFilterButtonText = computed(() => {
+  const option = TIME_FILTER_OPTIONS.find((opt) => opt.value === selectedTimeFilter.value)
+  return option?.label || '时间'
 })
+
+const typeFilterButtonText = computed(() => {
+  const option = TYPE_FILTER_OPTIONS.find((opt) => opt.value === selectedTypeFilter.value)
+  return option?.label || '类型'
+})
+
+const getTimeFilterTimestamp = () => {
+  const now = Date.now()
+  if (selectedTimeFilter.value === 'week') {
+    return now - 7 * 24 * 60 * 60 * 1000
+  }
+  if (selectedTimeFilter.value === 'month') {
+    return now - 30 * 24 * 60 * 60 * 1000
+  }
+  if (selectedTimeFilter.value === 'year') {
+    return now - 365 * 24 * 60 * 60 * 1000
+  }
+  return 0
+}
+
 const displayRecords = computed(() => {
-  const list = Array.isArray(records.value) ? records.value : []
-  if (selectedFilter.value === 'expense') {
-    return list.filter((item) => Number(item?.amount || 0) < 0)
+  let list = Array.isArray(records.value) ? records.value : []
+
+  // 时间筛选
+  const timeThreshold = getTimeFilterTimestamp()
+  if (timeThreshold > 0) {
+    list = list.filter((item) => {
+      const itemTs = Number(item?.sortTs || 0)
+      return itemTs >= timeThreshold
+    })
   }
-  if (selectedFilter.value === 'income') {
-    return list.filter((item) => Number(item?.amount || 0) > 0)
+
+  // 类型筛选
+  if (selectedTypeFilter.value === 'expense') {
+    list = list.filter((item) => Number(item?.amount || 0) < 0)
+  } else if (selectedTypeFilter.value === 'income') {
+    list = list.filter((item) => Number(item?.amount || 0) > 0)
   }
+
   return list
 })
+
 const emptyTipText = computed(() => {
-  if (selectedFilter.value === 'expense') {
+  if (selectedTypeFilter.value === 'expense') {
     return '暂无支出记录'
   }
-  if (selectedFilter.value === 'income') {
+  if (selectedTypeFilter.value === 'income') {
     return '暂无收入记录'
   }
   return '暂无收支记录'
@@ -142,12 +192,13 @@ const resolveWalletId = (profile = {}) => {
 
 const mergeRecords = (reset = false) => {
   const merged = mergeWalletRecords(memberRecords.value, rechargeRecords.value)
-  records.value = reset ? withFallbackRecords(merged) : merged
+  records.value = merged
   hasMore.value = Boolean(memberHasMore.value || rechargeHasMore.value)
 }
 
-const closeFilterMenu = () => {
-  showFilterMenu.value = false
+const closeAllFilterMenus = () => {
+  showTimeFilterMenu.value = false
+  showTypeFilterMenu.value = false
 }
 
 const loadWalletOverview = async () => {
@@ -240,19 +291,30 @@ const refreshWalletPage = async () => {
 }
 
 const onTapRecharge = () => {
-  closeFilterMenu()
+  closeAllFilterMenus()
   uni.navigateTo({
     url: '/pages/me/wallet/recharge/index'
   })
 }
 
-const onTapFilter = () => {
-  showFilterMenu.value = !showFilterMenu.value
+const onTapTimeFilter = () => {
+  showTypeFilterMenu.value = false
+  showTimeFilterMenu.value = !showTimeFilterMenu.value
 }
 
-const onSelectFilter = (value) => {
-  selectedFilter.value = String(value || 'all')
-  closeFilterMenu()
+const onTapTypeFilter = () => {
+  showTimeFilterMenu.value = false
+  showTypeFilterMenu.value = !showTypeFilterMenu.value
+}
+
+const onSelectTimeFilter = (value) => {
+  selectedTimeFilter.value = String(value || 'all')
+  closeAllFilterMenus()
+}
+
+const onSelectTypeFilter = (value) => {
+  selectedTypeFilter.value = String(value || 'all')
+  closeAllFilterMenus()
 }
 
 onLoad(async () => {
@@ -264,7 +326,7 @@ onShow(async () => {
 })
 
 onPullDownRefresh(async () => {
-  closeFilterMenu()
+  closeAllFilterMenus()
   try {
     await refreshWalletPage()
   } finally {
@@ -273,7 +335,7 @@ onPullDownRefresh(async () => {
 })
 
 onReachBottom(async () => {
-  closeFilterMenu()
+  closeAllFilterMenus()
   await loadWalletRecords(false)
 })
 </script>
@@ -291,26 +353,26 @@ onReachBottom(async () => {
 }
 
 .wallet-content {
-  padding: 24rpx 32rpx calc(48rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 24rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
 .action-wrap {
-  margin-top: 36rpx;
+  margin-top: 32rpx;
 }
 
 .recharge-btn {
   height: 88rpx;
-  border-radius: 28rpx;
+  border-radius: 20rpx;
   border: 0;
   background: #1a57db;
   color: #ffffff;
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
-  box-shadow: 0 10rpx 26rpx rgba(26, 87, 219, 0.2);
+  gap: 10rpx;
+  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.18);
 }
 
 .recharge-btn::after {
@@ -318,8 +380,8 @@ onReachBottom(async () => {
 }
 
 .recharge-icon {
-  width: 34rpx;
-  height: 34rpx;
+  width: 32rpx;
+  height: 32rpx;
 }
 
 .recharge-btn-active {
@@ -327,8 +389,8 @@ onReachBottom(async () => {
 }
 
 .section-head {
-  margin-top: 44rpx;
-  margin-bottom: 20rpx;
+  margin-top: 40rpx;
+  margin-bottom: 16rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -336,20 +398,23 @@ onReachBottom(async () => {
 
 .section-title {
   color: #0f172a;
-  font-size: 34rpx;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
-.filter-wrap {
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
   position: relative;
   z-index: 30;
 }
 
 .filter-btn {
   margin: 0;
-  padding: 0 16rpx;
-  height: 54rpx;
-  border-radius: 18rpx;
+  padding: 0 14rpx;
+  height: 50rpx;
+  border-radius: 16rpx;
   border: 0;
   background: rgba(26, 87, 219, 0.08);
   color: #1a57db;
@@ -369,8 +434,8 @@ onReachBottom(async () => {
 }
 
 .filter-icon {
-  width: 24rpx;
-  height: 24rpx;
+  width: 22rpx;
+  height: 22rpx;
 }
 
 .filter-btn-active {
@@ -386,19 +451,26 @@ onReachBottom(async () => {
 
 .filter-dropdown {
   position: absolute;
-  top: calc(100% + 12rpx);
-  right: 0;
-  min-width: 168rpx;
-  padding: 12rpx;
-  border-radius: 24rpx;
+  top: calc(100% + 10rpx);
+  min-width: 160rpx;
+  padding: 10rpx;
+  border-radius: 20rpx;
   background: #ffffff;
-  box-shadow: 0 14rpx 36rpx rgba(15, 23, 42, 0.12);
+  box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.12);
+}
+
+.time-filter-dropdown {
+  right: 90rpx;
+}
+
+.type-filter-dropdown {
+  right: 0;
 }
 
 .filter-option {
-  min-height: 64rpx;
-  padding: 0 18rpx;
-  border-radius: 16rpx;
+  min-height: 60rpx;
+  padding: 0 16rpx;
+  border-radius: 14rpx;
   display: flex;
   align-items: center;
 }
@@ -416,53 +488,34 @@ onReachBottom(async () => {
 .tx-list {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 16rpx;
 }
 
-.empty-tip {
-  padding: 32rpx 0 12rpx;
-  text-align: center;
+.empty-wrap {
+  padding: 80rpx 0 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.empty-icon {
+  width: 120rpx;
+  height: 120rpx;
+  opacity: 0.4;
+}
+
+.empty-text {
   color: #94a3b8;
   font-size: 24rpx;
 }
 
 .load-tip {
-  margin-top: 20rpx;
+  margin-top: 16rpx;
+  margin-bottom: 20rpx;
   text-align: center;
   color: #94a3b8;
   font-size: 22rpx;
-}
-
-.wallet-footer {
-  margin-top: 36rpx;
-  padding: 12rpx 0 8rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.footer-brand-row {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.footer-shield {
-  width: 24rpx;
-  height: 24rpx;
-}
-
-.footer-brand {
-  color: #94a3b8;
-  font-size: 18rpx;
-  font-weight: 700;
-  letter-spacing: 1rpx;
-}
-
-.footer-copy {
-  color: #cbd5e1;
-  font-size: 16rpx;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -485,14 +538,6 @@ onReachBottom(async () => {
 
   .filter-option-text {
     color: #e2e8f0;
-  }
-
-  .footer-brand {
-    color: #64748b;
-  }
-
-  .footer-copy {
-    color: #475569;
   }
 }
 </style>

@@ -28,11 +28,15 @@
           </view>
           <text class="contact-action">复制</text>
         </view>
+
+        <view v-if="showPackageRemaining" class="contact-package-tip">
+          <text class="contact-package-tip-text">人群包剩余 {{ packageRemainingText }} 次</text>
+        </view>
       </template>
 
       <view v-else class="contact-locked">
         <text class="contact-locked-title">{{ lockedTitle }}</text>
-        <text class="contact-locked-desc">{{ lockedDesc }}</text>
+        <text class="contact-locked-desc">{{ effectiveLockedDesc }}</text>
       </view>
     </view>
   </view>
@@ -66,6 +70,28 @@ const lockedDesc = computed(() => {
     return '对方公开并完善展示联系方式后，你才能在这里看到。'
   }
   return '先完善自己的展示手机号和微信号，并完成实名认证、开通会员后，再查看他人的联系方式。'
+})
+
+const effectiveLockedDesc = computed(() => {
+  if (props.contact?.isSelf) {
+    return '填写展示手机号和展示微信号后，别人才可以在你的名片页看到这些联系方式。'
+  }
+  if (!props.contact?.targetContactEnabled || !props.contact?.targetHasContact) {
+    return '对方开启并完善展示联系方式后，你才可以在这里查看。'
+  }
+  return '先完善自己的展示手机号和微信号，并完成实名认证后，开通会员或购买人群包，再查看他人的联系方式。'
+})
+
+const showPackageRemaining = computed(() => {
+  return Boolean(
+    hasVisibleContact.value
+    && !props.contact?.isSelf
+    && props.contact?.viewerContactPackageUsedForView
+  )
+})
+
+const packageRemainingText = computed(() => {
+  return Number(props.contact?.viewerContactPackageRemainingViews || 0).toLocaleString('zh-CN')
 })
 
 const copyValue = (value, successTitle) => {
@@ -187,6 +213,19 @@ const copyValue = (value, successTitle) => {
   gap: 10rpx;
 }
 
+.contact-package-tip {
+  border-radius: 18rpx;
+  background: rgba(26, 87, 219, 0.08);
+  padding: 18rpx 20rpx;
+}
+
+.contact-package-tip-text {
+  color: #1a57db;
+  font-size: 22rpx;
+  line-height: 30rpx;
+  font-weight: 600;
+}
+
 .contact-locked-title {
   color: #0f172a;
   font-size: 26rpx;
@@ -220,6 +259,14 @@ const copyValue = (value, successTitle) => {
   .contact-label,
   .contact-locked-desc {
     color: #cbd5e1;
+  }
+
+  .contact-package-tip {
+    background: rgba(59, 130, 246, 0.16);
+  }
+
+  .contact-package-tip-text {
+    color: #93c5fd;
   }
 }
 </style>

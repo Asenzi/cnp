@@ -44,7 +44,7 @@ const resolvedType = computed(() => {
     return '供应'
   }
   if (mode === 'venue') {
-    return '场地'
+    return '活动'
   }
   return '需求'
 })
@@ -206,4 +206,4 @@ const resolvedAuthorName = computed(() => {
     color: #94a3b8;
   }
 }
-</style>
+</style>
