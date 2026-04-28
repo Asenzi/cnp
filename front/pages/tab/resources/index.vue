@@ -28,9 +28,26 @@
       @refresherabort="onRefresherRestore"
     >
       <view class="feed-wrap">
-        <view v-if="loading && !hasAny" class="status-wrap">
-          <text class="status-text">加载中...</text>
-        </view>
+        <template v-if="loading && !hasAny">
+          <view v-for="i in 4" :key="`skeleton-${i}`" class="skeleton-card">
+            <view class="skeleton-header">
+              <view class="skeleton-avatar"></view>
+              <view class="skeleton-info">
+                <view class="skeleton-line skeleton-name"></view>
+                <view class="skeleton-line skeleton-time"></view>
+              </view>
+            </view>
+            <view class="skeleton-content">
+              <view class="skeleton-line skeleton-text"></view>
+              <view class="skeleton-line skeleton-text"></view>
+              <view class="skeleton-line skeleton-text-short"></view>
+            </view>
+            <view class="skeleton-footer">
+              <view class="skeleton-tag"></view>
+              <view class="skeleton-tag"></view>
+            </view>
+          </view>
+        </template>
 
         <view v-else-if="loadError && !hasAny" class="status-wrap">
           <text class="status-text">{{ loadError }}</text>
@@ -39,18 +56,26 @@
 
         <template v-else>
           <ProfilePostCard
-            v-for="post in feedCards"
+            v-for="(post, index) in feedCards"
             :key="post.id"
             :item="post"
+            :show-interest="true"
+            :style="{ animationDelay: `${index * 50}ms` }"
+            class="feed-card-enter"
             @detail="onTapDetail"
+            @interest="onToggleInterest"
           />
 
           <view v-if="showEmpty" class="empty-wrap">
+            <view class="empty-icon-wrap">
+              <text class="empty-icon">📦</text>
+            </view>
             <text class="empty-title">暂无匹配内容</text>
             <text class="empty-desc">换个关键词或筛选条件试试</text>
           </view>
 
           <view v-if="loadingMore" class="load-more-wrap">
+            <view class="loading-spinner loading-spinner-small"></view>
             <text class="load-more-text">加载中...</text>
           </view>
           <view v-else-if="hasMore && hasAny" class="load-more-wrap">
@@ -67,7 +92,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
-import { getResourceFeed, getResourceFilters } from '../../../api/post'
+import { getResourceFeed, getResourceFilters, toggleResourceInterest } from '../../../api/post'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import ProfilePostCard from '../../me/card/components/ProfilePostCard.vue'
 import ResourcePublishFab from './components/ResourcePublishFab.vue'
@@ -108,6 +133,9 @@ const filterOptions = ref({
 })
 const currentCity = ref(String(uni.getStorageSync('currentCity') || uni.getStorageSync('locationCity') || '').trim() || texts.defaultCity)
 const locating = ref(false)
+const isPageAlive = ref(true) // 页面生命周期标记
+const loginRedirectTimer = ref(null) // 登录跳转定时器
+const currentRequestId = ref(0) // 请求ID，用于取消过期请求
 // 暂时隐藏城市定位筛选入口，但保留相关状态和逻辑，便于后续恢复
 const showLocationFilter = false
 
@@ -130,12 +158,15 @@ const capsuleAvoidRightInsetPx = capsuleLeft > 0
   : 0
 
 const hasAny = computed(() => posts.value.length > 0)
+
+// 优化：缓存 feedCards，避免每次都重新 map
 const feedCards = computed(() => {
   return posts.value.map((post) => ({
     ...mapProfilePostItem(post),
     rawPost: post
   }))
 })
+
 const showEmpty = computed(() => loaded.value && !loading.value && !hasAny.value && !loadError.value)
 const normalizedKeyword = computed(() => String(keyword.value || '').trim())
 const hasActiveFilter = computed(() => Boolean(selectedIndustry.value))
@@ -249,10 +280,21 @@ const ensureLoggedIn = () => {
   if (!hasPromptedLogin.value) {
     hasPromptedLogin.value = true
     showToast(texts.loginFirst)
-    setTimeout(() => {
-      uni.navigateTo({
-        url: '/pages/auth/login/index'
-      })
+
+    // 清除之前的定时器
+    if (loginRedirectTimer.value) {
+      clearTimeout(loginRedirectTimer.value)
+      loginRedirectTimer.value = null
+    }
+
+    // 设置新的定时器并保存引用
+    loginRedirectTimer.value = setTimeout(() => {
+      if (isPageAlive.value) {
+        uni.navigateTo({
+          url: '/pages/auth/login/index'
+        })
+      }
+      loginRedirectTimer.value = null
     }, 220)
   }
   return false
@@ -302,6 +344,9 @@ const fetchFeed = async (reset = false) => {
     return
   }
 
+  // 生成新的请求ID
+  const thisRequestId = ++currentRequestId.value
+
   if (reset) {
     loading.value = true
     loadError.value = ''
@@ -335,12 +380,19 @@ const fetchFeed = async (reset = false) => {
     }
 
     const data = await getResourceFeed(params)
+
+    // 检查请求是否已过期
+    if (!isPageAlive.value || thisRequestId !== currentRequestId.value) {
+      return
+    }
+
     const incoming = Array.isArray(data?.items) ? data.items : []
     if (reset) {
       posts.value = incoming
     } else {
-      const exists = new Set(posts.value.map((item) => item.post_code))
-      const appended = incoming.filter((item) => !exists.has(item.post_code))
+      // 优化：使用 Map 提高去重性能
+      const existsMap = new Map(posts.value.map((item) => [item.post_code, true]))
+      const appended = incoming.filter((item) => !existsMap.has(item.post_code))
       posts.value = [...posts.value, ...appended]
     }
 
@@ -358,6 +410,11 @@ const fetchFeed = async (reset = false) => {
       appendFirstPageHistory(recoContextKey, currentFirstPageIds)
     }
   } catch (err) {
+    // 检查请求是否已过期
+    if (!isPageAlive.value || thisRequestId !== currentRequestId.value) {
+      return
+    }
+
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
@@ -372,8 +429,11 @@ const fetchFeed = async (reset = false) => {
     }
     showToast(message)
   } finally {
-    loading.value = false
-    loadingMore.value = false
+    // 只有当前请求才更新 loading 状态
+    if (thisRequestId === currentRequestId.value) {
+      loading.value = false
+      loadingMore.value = false
+    }
   }
 }
 
@@ -447,6 +507,62 @@ const onTapPublish = () => {
   })
 }
 
+const onToggleInterest = async (post) => {
+  const postCode = String(post?.postCode || post?.rawPost?.post_code || post?.post_code || '').trim()
+  if (!postCode) {
+    return
+  }
+
+  const wasInterested = Boolean(
+    post?.interested ||
+    post?.isInterested ||
+    post?.is_interested ||
+    post?.rawPost?.interested ||
+    post?.rawPost?.isInterested ||
+    post?.rawPost?.is_interested ||
+    post?.followed ||
+    post?.isFollowed ||
+    post?.is_followed
+  )
+
+  // 乐观更新UI - 更新原始posts数组
+  const targetIndex = posts.value.findIndex((item) => item.post_code === postCode)
+
+  if (targetIndex >= 0) {
+    posts.value[targetIndex] = {
+      ...posts.value[targetIndex],
+      interested: !wasInterested,
+      isInterested: !wasInterested,
+      is_interested: !wasInterested
+    }
+  }
+
+  try {
+    await toggleResourceInterest(postCode)
+
+    uni.showToast({
+      title: wasInterested ? '已取消感兴趣' : '已标记感兴趣',
+      icon: 'none'
+    })
+  } catch (err) {
+    // 失败时回滚
+    if (targetIndex >= 0) {
+      posts.value[targetIndex] = {
+        ...posts.value[targetIndex],
+        interested: wasInterested,
+        isInterested: wasInterested,
+        is_interested: wasInterested
+      }
+    }
+
+    const message = err?.message || '操作失败，请稍后重试'
+    uni.showToast({
+      title: message,
+      icon: 'none'
+    })
+  }
+}
+
 const onRetry = () => {
   fetchFeed(true)
 }
@@ -463,9 +579,11 @@ const refreshResourceData = async () => {
 }
 
 const runRefreshResourceData = async () => {
+  // 防抖：如果正在刷新，忽略
   if (refreshing.value) {
     return
   }
+
   refreshing.value = true
   try {
     await refreshResourceData()
@@ -486,19 +604,25 @@ const onRefresherRestore = () => {
 watch(keyword, () => {
   if (searchTimer) {
     clearTimeout(searchTimer)
+    searchTimer = null
   }
   searchTimer = setTimeout(() => {
-    fetchFeed(true)
+    if (isPageAlive.value) {
+      fetchFeed(true)
+    }
+    searchTimer = null
   }, 280)
 })
 
 onShow(() => {
+  isPageAlive.value = true
   hasPromptedLogin.value = false
   currentCity.value = String(uni.getStorageSync('currentCity') || uni.getStorageSync('locationCity') || '').trim() || currentCity.value || texts.defaultCity
   refreshLocation({ silent: true })
 })
 
 onMounted(async () => {
+  isPageAlive.value = true
   await refreshResourceData()
 })
 
@@ -507,10 +631,21 @@ onPullDownRefresh(async () => {
 })
 
 onUnmounted(() => {
+  isPageAlive.value = false
+
+  // 清理所有定时器
   if (searchTimer) {
     clearTimeout(searchTimer)
     searchTimer = null
   }
+
+  if (loginRedirectTimer.value) {
+    clearTimeout(loginRedirectTimer.value)
+    loginRedirectTimer.value = null
+  }
+
+  // 取消所有进行中的请求
+  currentRequestId.value++
 })
 </script>
 
@@ -528,48 +663,197 @@ onUnmounted(() => {
 }
 
 .feed-wrap {
-  padding: 16rpx 24rpx calc(180rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 32rpx calc(120rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+/* 卡片进入动画 */
+.feed-card-enter {
+  animation: fadeInUp 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 骨架屏样式 */
+.skeleton-card {
+  border-radius: 24rpx;
+  background: #ffffff;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.skeleton-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 40rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeleton-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.skeleton-line {
+  height: 24rpx;
+  border-radius: 12rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-name {
+  width: 160rpx;
+}
+
+.skeleton-time {
+  width: 120rpx;
+}
+
+.skeleton-content {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.skeleton-text {
+  width: 100%;
+  height: 28rpx;
+}
+
+.skeleton-text-short {
+  width: 60%;
+  height: 28rpx;
+}
+
+.skeleton-footer {
+  display: flex;
+  gap: 16rpx;
+}
+
+.skeleton-tag {
+  width: 120rpx;
+  height: 48rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .status-wrap,
 .empty-wrap {
-  border-radius: 16rpx;
-  border: 1rpx dashed #cbd5e1;
-  background: #ffffff;
-  min-height: 220rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  min-height: 320rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14rpx;
+  gap: 20rpx;
+  padding: 48rpx 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+}
+
+/* 加载动画 */
+.loading-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid #e2e8f0;
+  border-top-color: #1a57db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-spinner-small {
+  width: 32rpx;
+  height: 32rpx;
+  border-width: 3rpx;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .status-text,
 .empty-desc {
   color: #64748b;
-  font-size: 24rpx;
-  line-height: 32rpx;
+  font-size: 26rpx;
+  line-height: 36rpx;
+}
+
+/* 空状态图标 */
+.empty-icon-wrap {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 60rpx;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8rpx;
+}
+
+.empty-icon {
+  font-size: 64rpx;
+  line-height: 64rpx;
 }
 
 .empty-title {
-  color: #111827;
-  font-size: 30rpx;
-  line-height: 38rpx;
-  font-weight: 700;
+  color: #1e293b;
+  font-size: 32rpx;
+  line-height: 44rpx;
+  font-weight: 600;
+  margin-top: 8rpx;
 }
 
 .retry-btn {
-  height: 58rpx;
-  border-radius: 999rpx;
+  height: 72rpx;
+  border-radius: 36rpx;
   border: 0;
-  padding: 0 28rpx;
-  font-size: 24rpx;
-  line-height: 58rpx;
+  padding: 0 40rpx;
+  font-size: 28rpx;
+  line-height: 72rpx;
   color: #ffffff;
-  background: #1a57db;
+  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
+  box-shadow: 0 8rpx 16rpx rgba(26, 87, 219, 0.2);
+  margin-top: 8rpx;
 }
 
 .retry-btn::after {
@@ -577,31 +861,57 @@ onUnmounted(() => {
 }
 
 .retry-btn-active {
-  opacity: 0.9;
+  opacity: 0.85;
+  transform: scale(0.98);
 }
 
 .load-more-wrap {
-  padding: 14rpx 0 8rpx;
+  padding: 20rpx 0 12rpx;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
 }
 
 .load-more-text {
   color: #94a3b8;
-  font-size: 22rpx;
-  line-height: 30rpx;
+  font-size: 24rpx;
+  line-height: 32rpx;
 }
 
 @media (prefers-color-scheme: dark) {
   .resource-page,
   .feed-scroll,
   .feed-wrap {
-    background: #111621;
+    background: #0f172a;
+  }
+
+  .skeleton-card {
+    background: #1e293b;
+    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+  }
+
+  .skeleton-avatar,
+  .skeleton-line,
+  .skeleton-tag {
+    background: linear-gradient(90deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+    background-size: 200% 100%;
   }
 
   .status-wrap,
   .empty-wrap {
-    background: #0f172a;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+  }
+
+  .loading-spinner {
     border-color: #334155;
+    border-top-color: #3b82f6;
+  }
+
+  .empty-icon-wrap {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
   }
 
   .status-text,
@@ -610,7 +920,12 @@ onUnmounted(() => {
   }
 
   .empty-title {
-    color: #f8fafc;
+    color: #f1f5f9;
+  }
+
+  .retry-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    box-shadow: 0 8rpx 16rpx rgba(37, 99, 235, 0.3);
   }
 }
 </style>

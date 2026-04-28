@@ -69,24 +69,24 @@ const securityItems = computed(() => [
   {
     key: 'phone',
     label: '手机号',
-    iconPath: '/static/me-icons/contact-page-primary.png',
+    iconPath: '/static/icon/phone.png',
     valueText: phoneMasked.value
   },
   {
     key: 'password',
     label: '修改密码',
-    iconPath: '/static/me-icons/tune-gray.png'
+    iconPath: '/static/icon/chage-pws.png'
   },
   {
     key: 'wechat',
     label: '微信绑定',
-    iconPath: '/static/me-icons/help-gray.png',
+    iconPath: '/static/icon/wechat-link.png',
     valueText: wechatBindText.value
   },
   {
     key: 'realname',
     label: '实名认证',
-    iconPath: '/static/me-icons/badge-primary.png',
+    iconPath: '/static/icon/certification.png',
     valueText: realnameStatusText.value,
     valueClass: realnameApproved.value ? 'row-value-primary' : ''
   }
@@ -166,12 +166,32 @@ const loadSecurityData = async () => {
   }
 }
 
+const confirmBindWechat = () => {
+  uni.showModal({
+    title: '绑定微信',
+    content: '绑定微信后，您可以使用微信一键登录，无需输入手机号和密码。确定要绑定当前微信账号吗？',
+    confirmText: '确定绑定',
+    cancelText: '取消',
+    success: (res) => {
+      if (res?.confirm) {
+        bindWechat()
+      }
+    }
+  })
+}
+
 const bindWechat = async () => {
   if (wechatBinding.value) {
     return
   }
 
   wechatBinding.value = true
+
+  uni.showLoading({
+    title: '绑定中...',
+    mask: true
+  })
+
   try {
     let code = ''
     // #ifdef MP-WEIXIN
@@ -187,14 +207,35 @@ const bindWechat = async () => {
     })
 
     wechatBound.value = true
-    showToast('微信绑定成功')
+    uni.hideLoading()
+
+    uni.showModal({
+      title: '绑定成功',
+      content: '微信账号已成功绑定，下次可以使用微信一键登录',
+      showCancel: false,
+      confirmText: '知道了'
+    })
   } catch (err) {
+    uni.hideLoading()
+
     if (err?.statusCode === 401) {
       uni.navigateTo({
         url: '/pages/auth/login/index'
       })
       return
     }
+
+    // 处理已绑定其他账号的情况
+    if (err?.message?.includes('已绑定') || err?.message?.includes('already bound')) {
+      uni.showModal({
+        title: '绑定失败',
+        content: '该微信账号已绑定其他手机号，一个微信账号只能绑定一个手机号',
+        showCancel: false,
+        confirmText: '知道了'
+      })
+      return
+    }
+
     showToast(err?.message || '微信绑定失败，请稍后重试')
   } finally {
     wechatBinding.value = false
@@ -232,7 +273,19 @@ const onRowTap = (item) => {
 
   if (item.key === 'password') {
     if (!phoneBound.value) {
-      showToast('手机号未绑定，无法修改密码')
+      uni.showModal({
+        title: '无法修改密码',
+        content: '请先绑定手机号，才能设置或修改密码',
+        confirmText: '去绑定',
+        cancelText: '取消',
+        success: (res) => {
+          if (res?.confirm) {
+            uni.navigateTo({
+              url: '/pages/me/security/phone/index'
+            })
+          }
+        }
+      })
       return
     }
     uni.navigateTo({
@@ -243,10 +296,15 @@ const onRowTap = (item) => {
 
   if (item.key === 'wechat') {
     if (wechatBound.value) {
-      showToast('微信已绑定')
+      uni.showModal({
+        title: '微信已绑定',
+        content: '您的账号已绑定微信，可以使用微信一键登录',
+        showCancel: false,
+        confirmText: '知道了'
+      })
       return
     }
-    bindWechat()
+    confirmBindWechat()
   }
 }
 
@@ -277,26 +335,26 @@ onShow(() => {
 }
 
 .section-wrap {
-  margin-top: 16px;
-  padding: 0 16px;
+  margin-top: 32rpx;
+  padding: 0 32rpx;
   box-sizing: border-box;
 }
 
 .first-section {
-  margin-top: 16px;
+  margin-top: 32rpx;
 }
 
 .section-card {
-  border-radius: 12px;
+  border-radius: 20rpx;
   overflow: hidden;
   background: #ffffff;
-  border: 1px solid #f1f5f9;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  border: 1rpx solid #f1f5f9;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
 }
 
 .security-row {
-  min-height: 56px;
-  padding: 12px 16px;
+  min-height: 112rpx;
+  padding: 20rpx 28rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -305,7 +363,7 @@ onShow(() => {
 }
 
 .security-row-border {
-  border-bottom: 1px solid #f8fafc;
+  border-bottom: 1rpx solid #f8fafc;
 }
 
 .security-row-active {
@@ -315,15 +373,15 @@ onShow(() => {
 .row-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 24rpx;
   min-width: 0;
   flex: 1;
 }
 
 .row-icon-box {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 16rpx;
   background: rgba(26, 87, 219, 0.1);
   display: flex;
   align-items: center;
@@ -332,72 +390,74 @@ onShow(() => {
 }
 
 .row-icon {
-  width: 22px;
-  height: 22px;
+  width: 32rpx;
+  height: 32rpx;
 }
 
 .row-label {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 28rpx;
+  font-weight: 600;
   color: #0f172a;
 }
 
 .row-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12rpx;
   flex-shrink: 0;
 }
 
 .row-value {
-  font-size: 14px;
+  font-size: 24rpx;
   color: #64748b;
+  font-weight: 500;
 }
 
 .row-value-primary {
   color: #1a57db;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .row-chevron {
-  width: 20px;
-  height: 20px;
+  width: 28rpx;
+  height: 28rpx;
+  opacity: 0.5;
 }
 
 .tip-wrap {
-  margin-top: 24px;
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(26, 87, 219, 0.1);
+  margin-top: 32rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(26, 87, 219, 0.1);
   background: rgba(26, 87, 219, 0.05);
 }
 
 .tip-title {
   display: block;
-  margin-bottom: 4px;
-  font-size: 14px;
-  font-weight: 600;
+  margin-bottom: 8rpx;
+  font-size: 24rpx;
+  font-weight: 700;
   color: #1a57db;
 }
 
 .tip-text {
   display: block;
-  font-size: 12px;
+  font-size: 22rpx;
   line-height: 1.6;
   color: #475569;
 }
 
 .footer-wrap {
   margin-top: auto;
-  padding: 32px 16px calc(24px + env(safe-area-inset-bottom));
+  padding: 64rpx 32rpx calc(48rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .close-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 16rpx 32rpx;
+  border-radius: 16rpx;
 }
 
 .close-btn-active {
@@ -405,17 +465,18 @@ onShow(() => {
 }
 
 .close-text {
-  font-size: 14px;
+  font-size: 24rpx;
   font-weight: 500;
   color: #94a3b8;
 }
 
 .brand-text {
-  margin-top: 16px;
-  font-size: 10px;
+  margin-top: 24rpx;
+  font-size: 18rpx;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: #cbd5e1;
+  opacity: 0.6;
 }
 
 @media (prefers-color-scheme: dark) {

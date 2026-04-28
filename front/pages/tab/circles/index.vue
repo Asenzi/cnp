@@ -31,9 +31,25 @@
         @refresherrestore="onRefresherRestore"
         @refresherabort="onRefresherRestore"
       >
-        <view v-if="loading && !hasAny" class="status-wrap">
-          <text class="status-text">{{ texts.loading }}</text>
-        </view>
+        <template v-if="loading && !hasAny">
+          <view v-for="i in 4" :key="`skeleton-${i}`" class="skeleton-card">
+            <view class="skeleton-header">
+              <view class="skeleton-avatar"></view>
+              <view class="skeleton-info">
+                <view class="skeleton-line skeleton-name"></view>
+                <view class="skeleton-line skeleton-desc"></view>
+              </view>
+            </view>
+            <view class="skeleton-stats">
+              <view class="skeleton-stat"></view>
+              <view class="skeleton-stat"></view>
+            </view>
+            <view class="skeleton-footer">
+              <view class="skeleton-tag"></view>
+              <view class="skeleton-tag"></view>
+            </view>
+          </view>
+        </template>
 
         <view v-else-if="loadError && !hasAny" class="status-wrap">
           <text class="status-text">{{ loadError }}</text>
@@ -43,13 +59,18 @@
         </view>
 
         <template v-else>
-          <view v-if="showEmpty" class="status-wrap">
-            <text class="status-text">{{ texts.empty }}</text>
+          <view v-if="showEmpty" class="status-wrap empty-state">
+            <view class="empty-icon-wrap">
+              <text class="empty-icon">🎯</text>
+            </view>
+            <text class="empty-title">{{ texts.empty }}</text>
+            <text class="empty-desc">试试调整筛选条件或搜索关键词</text>
           </view>
 
-          <DiscoverList :items="circles" />
+          <DiscoverList :items="circles" @interest="onToggleInterest" />
 
           <view v-if="loadingMore" class="load-more-wrap">
+            <view class="loading-spinner loading-spinner-small"></view>
             <text class="load-more-text">{{ texts.loading }}</text>
           </view>
           <view v-else-if="hasMore && hasAny" class="load-more-wrap">
@@ -78,6 +99,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import { getDiscoverCircles } from '../../../api/circle'
+import { toggleCircleInterest } from '../../../api/circle'
 import DiscoverList from './components/DiscoverList.vue'
 import NetworkFilterPanel from '../discover/components/NetworkFilterPanel.vue'
 import { buildCityQueryCandidates } from '../discover/modules/city-query'
@@ -103,21 +125,21 @@ const hasInitialLocationCache = Boolean(
 )
 
 const texts = {
-  searchPlaceholder: '\u641c\u7d22\u5708\u5b50\u540d\u79f0\u6216\u5173\u952e\u8bcd',
-  loading: '\u52a0\u8f7d\u4e2d...',
-  retry: '\u91cd\u65b0\u52a0\u8f7d',
-  empty: '\u6682\u65e0\u53ef\u63a8\u8350\u5708\u5b50',
-  loadMore: '\u4e0a\u62c9\u52a0\u8f7d\u66f4\u591a',
-  noMore: '\u6ca1\u6709\u66f4\u591a\u5708\u5b50\u4e86',
-  recommend: '\u63a8\u8350',
-  industry: '\u884c\u4e1a',
-  locating: '\u5b9a\u4f4d\u4e2d...',
-  defaultCity: '\u6df1\u5733',
-  nationwideCity: '\u5168\u56fd',
-  pleaseLogin: '\u8bf7\u5148\u767b\u5f55',
-  defaultDesc: '\u6b22\u8fce\u8fdb\u5165\u5708\u5b50\u8be6\u60c5\u4e86\u89e3\u66f4\u591a',
-  unnamedCircle: '\u672a\u547d\u540d\u5708\u5b50',
-  fetchError: '\u5708\u5b50\u63a8\u8350\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5'
+  searchPlaceholder: '搜索圈子名称或关键词',
+  loading: '加载中...',
+  retry: '重新加载',
+  empty: '暂无可推荐圈子',
+  loadMore: '上拉加载更多',
+  noMore: '没有更多圈子了',
+  recommend: '推荐',
+  industry: '行业',
+  locating: '定位中...',
+  defaultCity: '深圳',
+  nationwideCity: '全国',
+  pleaseLogin: '请先登录',
+  defaultDesc: '欢迎进入圈子详情了解更多',
+  unnamedCircle: '未命名圈子',
+  fetchError: '圈子推荐加载失败，请稍后重试'
 }
 
 const keyword = ref('')
@@ -142,6 +164,9 @@ const filters = ref({
 const filterOptions = ref({
   industries: DEFAULT_INDUSTRY_OPTIONS
 })
+const isPageAlive = ref(true) // 页面生命周期标记
+const loginRedirectTimer = ref(null) // 登录跳转定时器
+const currentRequestId = ref(0) // 请求ID，用于取消过期请求
 // 暂时隐藏城市定位筛选入口，但保留相关状态和逻辑，便于后续恢复
 const showLocationFilter = false
 let searchTimer = null
@@ -382,10 +407,21 @@ const ensureLoggedIn = () => {
   if (!hasPromptedLogin.value) {
     hasPromptedLogin.value = true
     showToast(texts.pleaseLogin)
-    setTimeout(() => {
-      uni.navigateTo({
-        url: '/pages/auth/login/index'
-      })
+
+    // 清除之前的定时器
+    if (loginRedirectTimer.value) {
+      clearTimeout(loginRedirectTimer.value)
+      loginRedirectTimer.value = null
+    }
+
+    // 设置新的定时器并保存引用
+    loginRedirectTimer.value = setTimeout(() => {
+      if (isPageAlive.value) {
+        uni.navigateTo({
+          url: '/pages/auth/login/index'
+        })
+      }
+      loginRedirectTimer.value = null
     }, 220)
   }
 
@@ -449,6 +485,9 @@ const fetchCircles = async (reset = false) => {
     return
   }
 
+  // 生成新的请求ID
+  const thisRequestId = ++currentRequestId.value
+
   if (reset) {
     loading.value = true
     loadError.value = ''
@@ -499,6 +538,11 @@ const fetchCircles = async (reset = false) => {
         exclude_circle_codes: excludeCircleCodes
       })
 
+      // 检查请求是否已过期
+      if (!isPageAlive.value || thisRequestId !== currentRequestId.value) {
+        return
+      }
+
       selectedQueryCity = candidateCityName
       const incomingItems = Array.isArray(payload?.items)
         ? payload.items.map((item, index2) => mapCircleCard(item, offset + index2))
@@ -506,6 +550,11 @@ const fetchCircles = async (reset = false) => {
       if (!reset || incomingItems.length > 0 || index === fallbackCandidates.length - 1) {
         break
       }
+    }
+
+    // 再次检查请求是否已过期
+    if (!isPageAlive.value || thisRequestId !== currentRequestId.value) {
+      return
     }
 
     if (isRecommendTab) {
@@ -532,8 +581,9 @@ const fetchCircles = async (reset = false) => {
     if (reset) {
       circles.value = incoming
     } else {
-      const existed = new Set(circles.value.map((item) => item.id))
-      const appended = incoming.filter((item) => !existed.has(item.id))
+      // 优化：使用 Map 提高去重性能
+      const existedMap = new Map(circles.value.map((item) => [item.id, true]))
+      const appended = incoming.filter((item) => !existedMap.has(item.id))
       circles.value = [...circles.value, ...appended]
     }
 
@@ -541,6 +591,11 @@ const fetchCircles = async (reset = false) => {
     loaded.value = true
     loadError.value = ''
   } catch (err) {
+    // 检查请求是否已过期
+    if (!isPageAlive.value || thisRequestId !== currentRequestId.value) {
+      return
+    }
+
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       uni.removeStorageSync('token')
@@ -557,8 +612,11 @@ const fetchCircles = async (reset = false) => {
     }
     showToast(message)
   } finally {
-    loading.value = false
-    loadingMore.value = false
+    // 只有当前请求才更新 loading 状态
+    if (thisRequestId === currentRequestId.value) {
+      loading.value = false
+      loadingMore.value = false
+    }
   }
 }
 
@@ -645,6 +703,58 @@ const onRetry = () => {
   fetchCircles(true)
 }
 
+const onToggleInterest = async (circle) => {
+  const circleCode = String(circle?.circleCode || '').trim()
+  if (!circleCode) {
+    return
+  }
+
+  const wasInterested = Boolean(
+    circle?.interested ||
+    circle?.isInterested ||
+    circle?.is_interested ||
+    circle?.followed ||
+    circle?.isFollowed ||
+    circle?.is_followed
+  )
+
+  // 乐观更新UI
+  const targetIndex = circles.value.findIndex((item) => item.circleCode === circleCode)
+  if (targetIndex >= 0) {
+    circles.value[targetIndex] = {
+      ...circles.value[targetIndex],
+      interested: !wasInterested,
+      isInterested: !wasInterested,
+      is_interested: !wasInterested
+    }
+  }
+
+  try {
+    await toggleCircleInterest(circleCode)
+
+    uni.showToast({
+      title: wasInterested ? '已取消感兴趣' : '已标记感兴趣',
+      icon: 'none'
+    })
+  } catch (err) {
+    // 失败时回滚
+    if (targetIndex >= 0) {
+      circles.value[targetIndex] = {
+        ...circles.value[targetIndex],
+        interested: wasInterested,
+        isInterested: wasInterested,
+        is_interested: wasInterested
+      }
+    }
+
+    const message = err?.message || '操作失败，请稍后重试'
+    uni.showToast({
+      title: message,
+      icon: 'none'
+    })
+  }
+}
+
 const onScrollToLower = () => {
   fetchCircles(false)
 }
@@ -655,9 +765,11 @@ const refreshCircleData = async () => {
 }
 
 const runRefreshCircleData = async () => {
+  // 防抖：如果正在刷新，忽略
   if (refreshing.value) {
     return
   }
+
   refreshing.value = true
   try {
     await refreshCircleData()
@@ -678,13 +790,18 @@ const onRefresherRestore = () => {
 watch(keyword, () => {
   if (searchTimer) {
     clearTimeout(searchTimer)
+    searchTimer = null
   }
   searchTimer = setTimeout(() => {
-    fetchCircles(true)
+    if (isPageAlive.value) {
+      fetchCircles(true)
+    }
+    searchTimer = null
   }, 280)
 })
 
 onMounted(async () => {
+  isPageAlive.value = true
   hasPromptedLogin.value = false
   firstPageHistoryByContext.value = loadStoredFirstPageHistory()
   if (!hasInitialLocationCache) {
@@ -694,6 +811,7 @@ onMounted(async () => {
 })
 
 onShow(() => {
+  isPageAlive.value = true
   if (!hasShownOnce) {
     hasShownOnce = true
     return
@@ -706,10 +824,21 @@ onPullDownRefresh(async () => {
 })
 
 onUnmounted(() => {
+  isPageAlive.value = false
+
+  // 清理所有定时器
   if (searchTimer) {
     clearTimeout(searchTimer)
     searchTimer = null
   }
+
+  if (loginRedirectTimer.value) {
+    clearTimeout(loginRedirectTimer.value)
+    loginRedirectTimer.value = null
+  }
+
+  // 取消所有进行中的请求
+  currentRequestId.value++
 })
 </script>
 
@@ -749,32 +878,192 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+/* 骨架屏样式 */
+.skeleton-card {
+  margin: 0 24rpx 16rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.skeleton-avatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeleton-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.skeleton-line {
+  height: 24rpx;
+  border-radius: 12rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-name {
+  width: 200rpx;
+}
+
+.skeleton-desc {
+  width: 280rpx;
+}
+
+.skeleton-stats {
+  display: flex;
+  gap: 32rpx;
+  margin-bottom: 24rpx;
+}
+
+.skeleton-stat {
+  width: 120rpx;
+  height: 32rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-footer {
+  display: flex;
+  gap: 12rpx;
+}
+
+.skeleton-tag {
+  width: 100rpx;
+  height: 48rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 加载动画 */
+.loading-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid #e2e8f0;
+  border-top-color: #1a57db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-spinner-small {
+  width: 32rpx;
+  height: 32rpx;
+  border-width: 3rpx;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .status-wrap,
 .load-more-wrap {
-  padding: 24rpx 32rpx;
+  padding: 32rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
+}
+
+.status-wrap {
+  margin: 24rpx 32rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  min-height: 280rpx;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+}
+
+/* 空状态样式 */
+.empty-state {
+  padding: 48rpx 32rpx;
+}
+
+.empty-icon-wrap {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 60rpx;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8rpx;
+}
+
+.empty-icon {
+  font-size: 64rpx;
+  line-height: 64rpx;
+}
+
+.empty-title {
+  color: #1e293b;
+  font-size: 32rpx;
+  line-height: 44rpx;
+  font-weight: 600;
+  margin-top: 8rpx;
+}
+
+.empty-desc {
+  color: #64748b;
+  font-size: 26rpx;
+  line-height: 36rpx;
+  text-align: center;
 }
 
 .status-text,
 .load-more-text {
-  color: #94a3b8;
-  font-size: 24rpx;
-  line-height: 32rpx;
+  color: #64748b;
+  font-size: 26rpx;
+  line-height: 36rpx;
+}
+
+.load-more-wrap {
+  flex-direction: row;
+  gap: 12rpx;
 }
 
 .retry-btn {
-  min-width: 200rpx;
-  height: 68rpx;
+  min-width: 240rpx;
+  height: 72rpx;
   border: 0;
-  border-radius: 14rpx;
-  background: #1a57db;
+  border-radius: 36rpx;
+  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
   color: #ffffff;
-  font-size: 24rpx;
-  line-height: 68rpx;
+  font-size: 28rpx;
+  line-height: 72rpx;
   font-weight: 700;
+  box-shadow: 0 8rpx 16rpx rgba(26, 87, 219, 0.2);
+  margin-top: 8rpx;
 }
 
 .retry-btn::after {
@@ -782,27 +1071,65 @@ onUnmounted(() => {
 }
 
 .retry-btn-active {
-  opacity: 0.86;
+  opacity: 0.85;
+  transform: scale(0.98);
 }
 
 @media (prefers-color-scheme: dark) {
   .discover-page {
-    background: #111621;
+    background: #0f172a;
     color: #f8fafc;
   }
 
   .page-shell {
-    background: #111621;
+    background: #0f172a;
     box-shadow: none;
   }
 
   .header-fixed {
-    background: #111621;
+    background: #0f172a;
   }
 
+  .skeleton-card {
+    background: #1e293b;
+    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+  }
+
+  .skeleton-avatar,
+  .skeleton-line,
+  .skeleton-stat,
+  .skeleton-tag {
+    background: linear-gradient(90deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+    background-size: 200% 100%;
+  }
+
+  .status-wrap {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+  }
+
+  .loading-spinner {
+    border-color: #334155;
+    border-top-color: #3b82f6;
+  }
+
+  .empty-icon-wrap {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  }
+
+  .empty-title {
+    color: #f1f5f9;
+  }
+
+  .empty-desc,
   .status-text,
   .load-more-text {
     color: #94a3b8;
+  }
+
+  .retry-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    box-shadow: 0 8rpx 16rpx rgba(37, 99, 235, 0.3);
   }
 }
 </style>

@@ -5,7 +5,7 @@
         <view class="back-btn" hover-class="back-btn-hover" @tap="goBack">
           <image class="back-icon" mode="aspectFit" src="/static/me-icons/arrow-back-dark.png" />
         </view>
-        <text class="nav-title">编辑个人资料</text>
+        <text class="nav-title">编辑资料</text>
         <view class="nav-placeholder"></view>
       </view>
 
@@ -17,11 +17,13 @@
               <image class="camera-icon" mode="aspectFit" src="/static/me-icons/camera-white.png" />
             </view>
           </view>
-          <text class="avatar-tip">{{ uploadingAvatar ? '头像上传中...' : '点击更换头像' }}</text>
+          <text class="avatar-tip">{{ uploadingAvatar ? '上传中...' : '点击更换头像' }}</text>
         </view>
       </view>
 
       <view class="form-wrap">
+        <view class="section-title">基本信息</view>
+
         <view class="field-group">
           <text class="field-label">昵称</text>
           <input
@@ -34,6 +36,19 @@
         </view>
 
         <view class="field-group">
+          <text class="field-label">个人简介</text>
+          <textarea
+            v-model="bio"
+            class="field-textarea"
+            maxlength="255"
+            placeholder="描述您的专业背景、成就或合作需求..."
+            placeholder-class="field-placeholder"
+          />
+        </view>
+
+        <view class="section-title">职业信息</view>
+
+        <view class="field-group">
           <text class="field-label">行业</text>
           <view class="picker-wrap">
             <picker
@@ -44,7 +59,9 @@
               :value="industryIndex"
               @change="onIndustryChange"
             >
-              <view class="picker-text">{{ industryOptions[industryIndex].label }}</view>
+              <view class="picker-text" :class="{ 'picker-text-placeholder': industryIndex === 0 }">
+                {{ industryOptions[industryIndex].label }}
+              </view>
             </picker>
             <image class="expand-icon" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
           </view>
@@ -73,16 +90,38 @@
         </view>
 
         <view class="field-group">
+          <text class="field-label">所在城市</text>
+          <view class="picker-wrap">
+            <picker
+              class="picker-control"
+              mode="multiSelector"
+              :range="cityPickerRange"
+              range-key="label"
+              :value="cityPickerValue"
+              @change="onCityChange"
+              @columnchange="onCityColumnChange"
+            >
+              <view class="picker-text" :class="{ 'picker-text-placeholder': !selectedCityCode }">
+                {{ cityDisplayText }}
+              </view>
+            </picker>
+            <image class="expand-icon" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+          </view>
+        </view>
+
+        <view class="section-title">联系方式</view>
+        <view class="section-desc">完善联系方式并完成实名认证后，开通会员或购买人群包，才可查看别人的联系方式</view>
+
+        <view class="field-group">
           <text class="field-label">展示手机号</text>
           <input
             v-model="displayPhone"
             class="field-input"
             type="number"
             maxlength="11"
-            placeholder="仅用于对外展示，不等同于绑定手机号"
+            placeholder="仅用于对外展示"
             placeholder-class="field-placeholder"
           />
-          <text class="field-tip">完善展示手机号、展示微信号，并完成实名认证后，开通会员或购买人群包，才可查看别人的联系方式。</text>
         </view>
 
         <view class="field-group">
@@ -97,36 +136,19 @@
         </view>
 
         <view class="field-group">
-          <text class="field-label">所在城市</text>
-          <view class="picker-wrap">
-            <picker
-              class="picker-control"
-              mode="multiSelector"
-              :range="cityPickerRange"
-              range-key="label"
-              :value="cityPickerValue"
-              @change="onCityChange"
-              @columnchange="onCityColumnChange"
-            >
-              <view class="picker-text">{{ cityDisplayText }}</view>
-            </picker>
-            <image class="expand-icon" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
-          </view>
-        </view>
-
-        <view class="field-group">
-          <text class="field-label">个人简介</text>
-          <textarea
-            v-model="bio"
-            class="field-textarea"
-            maxlength="255"
-            placeholder="描述您的专业背景、成就或合作需求..."
+          <text class="field-label">邮箱</text>
+          <input
+            v-model="email"
+            class="field-input"
+            type="text"
+            maxlength="100"
+            placeholder="请输入您的邮箱地址"
             placeholder-class="field-placeholder"
           />
         </view>
 
         <view class="save-wrap">
-          <view class="save-btn" hover-class="save-btn-hover" @tap="onSave">
+          <view class="save-btn" :class="{ 'save-btn-disabled': saving }" hover-class="save-btn-hover" @tap="onSave">
             <text class="save-text">{{ saving ? '保存中...' : '保存修改' }}</text>
           </view>
         </view>
@@ -162,7 +184,9 @@ const companyName = ref('')
 const jobTitle = ref('')
 const displayPhone = ref('')
 const displayWechat = ref('')
+const email = ref('')
 const DISPLAY_PHONE_REGEX = /^1\d{10}$/
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const industryOptions = [
   { value: '', label: '请选择行业' },
@@ -310,6 +334,7 @@ const applyProfile = (profile = {}) => {
   jobTitle.value = typeof profile?.job_title === 'string' ? profile.job_title : ''
   displayPhone.value = typeof profile?.display_phone === 'string' ? profile.display_phone : ''
   displayWechat.value = typeof profile?.display_wechat === 'string' ? profile.display_wechat : ''
+  email.value = typeof profile?.email === 'string' ? profile.email : ''
 
   const code = typeof profile?.industry_code === 'string' ? profile.industry_code.trim() : ''
   const label = typeof profile?.industry_label === 'string' ? profile.industry_label.trim() : ''
@@ -397,9 +422,17 @@ const onChangeAvatar = () => {
       try {
         const data = await uploadCurrentUserAvatar(filePath)
         if (typeof data?.avatar_url === 'string' && data.avatar_url.trim()) {
-          avatarUrl.value = data.avatar_url
+          // 上传API已经更新了后端的头像，直接更新本地显示
+          const uploadedUrl = data.avatar_url.trim()
+          avatarUrl.value = uploadedUrl
+
+          // 更新本地缓存
+          const userInfo = uni.getStorageSync('userInfo') || {}
+          userInfo.avatar_url = uploadedUrl
+          uni.setStorageSync('userInfo', userInfo)
+
+          showToast('头像已更新')
         }
-        showToast('头像已更新')
       } catch (err) {
         showToast(err?.message || '头像上传失败')
       } finally {
@@ -425,21 +458,37 @@ const onSave = async () => {
   const normalizedJobTitle = String(jobTitle.value || '').trim()
   const normalizedDisplayPhone = String(displayPhone.value || '').replace(/\D/g, '').slice(0, 11)
   const normalizedDisplayWechat = String(displayWechat.value || '').trim().replace(/\s+/g, '')
+  const normalizedEmail = String(email.value || '').trim()
   const selectedIndustry = industryOptions[industryIndex.value] || industryOptions[0]
   const selectedCity = currentSelectedCity.value
+
+  // 处理头像URL：如果是完整URL，去掉baseUrl；如果已经是相对路径，直接使用
   const baseUrl = getApiBaseUrl()
   const normalizedAvatarUrl = String(avatarUrl.value || DEFAULT_AVATAR).trim()
-  const avatarForSave = normalizedAvatarUrl.startsWith(`${baseUrl}/static/uploads/`)
-    ? normalizedAvatarUrl.replace(baseUrl, '')
-    : normalizedAvatarUrl
+  let avatarForSave = normalizedAvatarUrl
+
+  if (normalizedAvatarUrl.startsWith(baseUrl)) {
+    // 完整URL，去掉baseUrl部分
+    avatarForSave = normalizedAvatarUrl.replace(baseUrl, '')
+  } else if (normalizedAvatarUrl.startsWith('http://') || normalizedAvatarUrl.startsWith('https://')) {
+    // 其他域名的完整URL，保持不变
+    avatarForSave = normalizedAvatarUrl
+  }
+  // 否则已经是相对路径，直接使用
 
   if (normalizedDisplayPhone && !DISPLAY_PHONE_REGEX.test(normalizedDisplayPhone)) {
     showToast('请输入正确的展示手机号')
     return
   }
 
+  if (normalizedEmail && !EMAIL_REGEX.test(normalizedEmail)) {
+    showToast('请输入正确的邮箱地址')
+    return
+  }
+
   displayPhone.value = normalizedDisplayPhone
   displayWechat.value = normalizedDisplayWechat
+  email.value = normalizedEmail
 
   const payload = {
     nickname: normalizedNickname,
@@ -451,6 +500,7 @@ const onSave = async () => {
     job_title: normalizedJobTitle || null,
     display_phone: normalizedDisplayPhone || null,
     display_wechat: normalizedDisplayWechat || null,
+    email: normalizedEmail || null,
     city_code: selectedCity?.value || null,
     city_name: selectedCity?.label || null
   }
@@ -566,15 +616,14 @@ onShow(() => {
 }
 
 .avatar-section {
-  padding: 64rpx;
-  padding-bottom: 48rpx;
+  padding: 48rpx 64rpx 32rpx;
 }
 
 .avatar-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 .avatar-wrap {
@@ -582,21 +631,21 @@ onShow(() => {
 }
 
 .avatar {
-  width: 224rpx;
-  height: 224rpx;
+  width: 160rpx;
+  height: 160rpx;
   border-radius: 999rpx;
-  border: 8rpx solid #f8fafc;
-  box-shadow: 0 10rpx 24rpx rgba(15, 23, 42, 0.12);
+  border: 6rpx solid #f8fafc;
+  box-shadow: 0 8rpx 20rpx rgba(15, 23, 42, 0.1);
 }
 
 .camera-badge {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 64rpx;
-  height: 64rpx;
+  width: 48rpx;
+  height: 48rpx;
   border-radius: 999rpx;
-  border: 4rpx solid #ffffff;
+  border: 3rpx solid #ffffff;
   background: #1a57db;
   display: flex;
   align-items: center;
@@ -604,12 +653,12 @@ onShow(() => {
 }
 
 .camera-icon {
-  width: 30rpx;
-  height: 30rpx;
+  width: 24rpx;
+  height: 24rpx;
 }
 
 .avatar-tip {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #64748b;
   font-weight: 500;
 }
@@ -617,23 +666,46 @@ onShow(() => {
 .form-wrap {
   display: flex;
   flex-direction: column;
-  gap: 48rpx;
+  gap: 32rpx;
   padding-left: 32rpx;
   padding-right: 32rpx;
   padding-bottom: calc(96rpx + env(safe-area-inset-bottom));
 }
 
+.section-title {
+  margin-top: 16rpx;
+  margin-bottom: -8rpx;
+  margin-left: 8rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1a57db;
+  letter-spacing: 0.5rpx;
+}
+
+.section-desc {
+  margin-top: -16rpx;
+  margin-left: 8rpx;
+  margin-right: 8rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: rgba(26, 87, 219, 0.06);
+  border: 1rpx solid rgba(26, 87, 219, 0.12);
+  color: #475569;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 .field-label {
   margin-left: 8rpx;
   font-size: 26rpx;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 600;
+  color: #334155;
 }
 
 .field-tip {
@@ -646,30 +718,37 @@ onShow(() => {
 .field-input,
 .picker-wrap,
 .field-textarea {
-  border: 1rpx solid #e2e8f0;
-  border-radius: 24rpx;
-  background: #f8fafc;
+  border: 2rpx solid #e2e8f0;
+  border-radius: 20rpx;
+  background: #ffffff;
   color: #0f172a;
   transition: all 0.2s ease;
 }
 
+.field-input:focus,
+.field-textarea:focus {
+  border-color: #1a57db;
+  background: #ffffff;
+}
+
 .field-input {
-  height: 96rpx;
-  line-height: 96rpx;
-  padding: 0 32rpx;
-  font-size: 30rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 28rpx;
+  font-size: 28rpx;
 }
 
 .field-placeholder {
   color: #94a3b8;
+  font-size: 26rpx;
 }
 
 .picker-wrap {
   position: relative;
-  height: 96rpx;
+  height: 88rpx;
   display: flex;
   align-items: center;
-  padding-right: 84rpx;
+  padding-right: 80rpx;
 }
 
 .picker-control {
@@ -678,73 +757,88 @@ onShow(() => {
 }
 
 .picker-text {
-  height: 96rpx;
-  line-height: 96rpx;
-  padding-left: 32rpx;
-  font-size: 30rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding-left: 28rpx;
+  font-size: 28rpx;
   color: #0f172a;
+}
+
+.picker-text-placeholder {
+  color: #94a3b8;
+  font-size: 26rpx;
 }
 
 .expand-icon {
   position: absolute;
-  right: 24rpx;
+  right: 20rpx;
   top: 50%;
-  width: 36rpx;
-  height: 36rpx;
+  width: 32rpx;
+  height: 32rpx;
   transform: translateY(-50%);
+  opacity: 0.5;
 }
 
 .field-textarea {
-  min-height: 256rpx;
-  padding: 24rpx 32rpx;
-  font-size: 30rpx;
-  line-height: 1.7;
+  min-height: 200rpx;
+  padding: 20rpx 28rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
   width: 100%;
   box-sizing: border-box;
 }
 
 .save-wrap {
-  margin-top: -16rpx;
+  margin-top: 16rpx;
+  margin-bottom: 16rpx;
 }
 
 .save-btn {
   width: 100%;
-  height: 96rpx;
-  border-radius: 24rpx;
-  background: #1a57db;
+  height: 88rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12rpx 28rpx rgba(26, 87, 219, 0.25);
+  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.2);
+  transition: all 0.2s ease;
 }
 
 .save-btn-hover {
-  background: #1d4ed8;
+  transform: translateY(-2rpx);
+  box-shadow: 0 12rpx 24rpx rgba(26, 87, 219, 0.3);
+}
+
+.save-btn-disabled {
+  opacity: 0.6;
+  box-shadow: none;
 }
 
 .save-text {
-  font-size: 32rpx;
+  font-size: 30rpx;
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 1rpx;
 }
 
 @media (prefers-color-scheme: dark) {
   .edit-page {
-    background: #111621;
+    background: #0f172a;
   }
 
   .page-shell {
-    background: #111621;
+    background: #1e293b;
     box-shadow: none;
   }
 
   .top-nav {
-    background: #111621;
-    border-bottom-color: #1e293b;
+    background: #1e293b;
+    border-bottom-color: #334155;
   }
 
   .back-btn-hover {
-    background: #1e293b;
+    background: #334155;
   }
 
   .back-icon,
@@ -752,35 +846,70 @@ onShow(() => {
     filter: invert(90%) sepia(10%) saturate(272%) hue-rotate(177deg) brightness(107%) contrast(95%);
   }
 
-  .nav-title,
-  .field-label,
-  .picker-text {
+  .nav-title {
     color: #f1f5f9;
   }
 
   .avatar {
-    border-color: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.2);
   }
 
   .camera-badge {
-    border-color: #111621;
+    border-color: #1e293b;
   }
 
   .avatar-tip {
     color: #94a3b8;
   }
 
+  .section-title {
+    color: #60a5fa;
+  }
+
+  .section-desc {
+    background: rgba(96, 165, 250, 0.1);
+    border-color: rgba(96, 165, 250, 0.2);
+    color: #94a3b8;
+  }
+
+  .field-label {
+    color: #cbd5e1;
+  }
+
   .field-input,
   .picker-wrap,
   .field-textarea {
     background: #0f172a;
-    border-color: #1e293b;
+    border-color: #334155;
     color: #f1f5f9;
+  }
+
+  .field-input:focus,
+  .field-textarea:focus {
+    border-color: #3b82f6;
+    background: #0f172a;
   }
 
   .field-placeholder {
     color: #64748b;
   }
 
+  .picker-text {
+    color: #f1f5f9;
+  }
+
+  .picker-text-placeholder {
+    color: #64748b;
+  }
+
+  .save-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    box-shadow: 0 8rpx 20rpx rgba(37, 99, 235, 0.3);
+  }
+
+  .save-btn-hover {
+    box-shadow: 0 12rpx 24rpx rgba(37, 99, 235, 0.4);
+  }
 }
 </style>

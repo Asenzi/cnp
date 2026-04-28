@@ -31,9 +31,24 @@
         @refresherabort="onRefresherRestore"
       >
         <view class="list-container">
-          <view v-if="loading && !hasAny" class="status-wrap">
-            <text class="status-text">{{ uiText.loading }}</text>
-          </view>
+          <template v-if="loading && !hasAny">
+            <view v-for="i in 4" :key="`skeleton-${i}`" class="skeleton-card">
+              <view class="skeleton-header">
+                <view class="skeleton-avatar"></view>
+                <view class="skeleton-info">
+                  <view class="skeleton-line skeleton-name"></view>
+                  <view class="skeleton-line skeleton-detail"></view>
+                </view>
+              </view>
+              <view class="skeleton-tags">
+                <view class="skeleton-tag"></view>
+                <view class="skeleton-tag"></view>
+              </view>
+              <view class="skeleton-footer">
+                <view class="skeleton-line skeleton-active"></view>
+              </view>
+            </view>
+          </template>
 
           <view v-else-if="loadError && !hasAny" class="status-wrap">
             <text class="status-text">{{ loadError }}</text>
@@ -86,7 +101,8 @@ import {
   getNetworkFilterOptions,
   getNetworkRecommendations,
   reportNetworkFeedback,
-  reportNetworkImpressions
+  reportNetworkImpressions,
+  toggleUserInterest
 } from '../../../api/network'
 import { getApiBaseUrl } from '../../../utils/request'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
@@ -960,16 +976,30 @@ const onInterestMember = async (member) => {
     return
   }
 
-  if (member?.interested) {
-    showToast(uiText.interestMarked)
-    return
-  }
+  try {
+    // 调用后端API切换感兴趣状态
+    const response = await toggleUserInterest(targetUserId)
 
-  updateMemberInterestState(member.id, true)
-  await sendFeedback(member, 'apply_friend', {
-    source: 'discover_interest_icon'
-  })
-  showToast(uiText.interestMarked)
+    // 根据后端返回的状态更新前端
+    const newInterestState = Boolean(response?.is_interested)
+    updateMemberInterestState(member.id, newInterestState)
+
+    // 发送反馈事件用于推荐算法
+    if (newInterestState) {
+      await sendFeedback(member, 'apply_friend', {
+        source: 'discover_interest_icon'
+      })
+      showToast(uiText.interestMarked)
+    } else {
+      await sendFeedback(member, 'cancel_interest', {
+        source: 'discover_interest_icon'
+      })
+      showToast('已取消感兴趣')
+    }
+  } catch (error) {
+    console.error('Toggle interest failed:', error)
+    showToast('操作失败，请稍后重试')
+  }
 }
 
 const onGoVerify = () => {
@@ -1128,6 +1158,87 @@ onUnmounted(() => {
   gap: 12rpx;
 }
 
+/* 骨架屏样式 */
+.skeleton-card {
+  border-radius: 20rpx;
+  background: #ffffff;
+  padding: 28rpx;
+  box-shadow: 0 2rpx 12rpx rgba(15, 23, 42, 0.04);
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.skeleton-avatar {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 48rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeleton-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.skeleton-line {
+  height: 24rpx;
+  border-radius: 12rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-name {
+  width: 180rpx;
+}
+
+.skeleton-detail {
+  width: 240rpx;
+}
+
+.skeleton-tags {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.skeleton-tag {
+  width: 140rpx;
+  height: 44rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-footer {
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f1f5f9;
+}
+
+.skeleton-active {
+  width: 160rpx;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 .status-wrap {
   border-radius: 16rpx;
   border: 1rpx dashed #cbd5e1;
@@ -1190,6 +1301,22 @@ onUnmounted(() => {
   .member-scroll,
   .list-container {
     background: rgba(17, 22, 33, 0.6);
+  }
+
+  .skeleton-card {
+    background: #1e293b;
+    box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.3);
+  }
+
+  .skeleton-avatar,
+  .skeleton-line,
+  .skeleton-tag {
+    background: linear-gradient(90deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+    background-size: 200% 100%;
+  }
+
+  .skeleton-footer {
+    border-top-color: #334155;
   }
 
   .status-wrap {

@@ -44,6 +44,9 @@ class RealNameVerificationDetailData(BaseModel):
 class TencentRealNameStartRequest(BaseModel):
     real_name: str = Field(..., min_length=2, max_length=32)
     id_number: str = Field(..., min_length=15, max_length=18)
+    wechat_id: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=100)
+    phone_number: str | None = Field(default=None, max_length=11)
 
 
 class TencentRealNameStartData(BaseModel):

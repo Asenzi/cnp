@@ -57,14 +57,16 @@ const statusClass = computed(() => {
 
 <style scoped>
 .tx-item {
-  padding: 24rpx;
-  border-radius: 24rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 20rpx;
   background: #ffffff;
-  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
+  border: 1rpx solid #f1f5f9;
+  box-shadow: 0 2rpx 12rpx rgba(15, 23, 42, 0.04);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+  transition: all 0.2s ease;
 }
 
 .tx-left {
@@ -72,47 +74,59 @@ const statusClass = computed(() => {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: 20rpx;
 }
 
 .tx-icon-wrap {
-  width: 68rpx;
-  height: 68rpx;
-  border-radius: 16rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 18rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.tx-icon-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, transparent 100%);
+  opacity: 0.3;
 }
 
 .icon-bg-blue {
-  background: #eff6ff;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
 }
 
 .icon-bg-orange {
-  background: #fff7ed;
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
 }
 
 .icon-bg-slate {
-  background: #f1f5f9;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
 }
 
 .tx-icon {
-  width: 38rpx;
-  height: 38rpx;
+  width: 40rpx;
+  height: 40rpx;
+  position: relative;
+  z-index: 1;
 }
 
 .tx-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
+  gap: 6rpx;
 }
 
 .tx-title {
   color: #0f172a;
-  font-size: 26rpx;
-  font-weight: 700;
+  font-size: 28rpx;
+  font-weight: 600;
   line-height: 1.3;
 }
 
@@ -120,19 +134,21 @@ const statusClass = computed(() => {
   color: #64748b;
   font-size: 22rpx;
   line-height: 1.2;
+  font-weight: 500;
 }
 
 .tx-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4rpx;
+  gap: 6rpx;
 }
 
 .tx-amount {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 700;
   line-height: 1.2;
+  letter-spacing: 0.5rpx;
 }
 
 .tx-amount-income {
@@ -144,35 +160,77 @@ const statusClass = computed(() => {
 }
 
 .tx-status {
+  padding: 4rpx 12rpx;
+  border-radius: 12rpx;
   font-size: 18rpx;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5rpx;
 }
 
 .tx-status-income {
-  color: rgba(26, 87, 219, 0.6);
+  color: #1a57db;
+  background: rgba(26, 87, 219, 0.1);
 }
 
 .tx-status-expense {
-  color: rgba(225, 29, 72, 0.6);
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.1);
 }
 
 .tx-status-pending {
-  color: rgba(234, 88, 12, 0.72);
+  color: #ea580c;
+  background: rgba(234, 88, 12, 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
   .tx-item {
-    background: #0f172a;
-    box-shadow: none;
+    background: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.2);
+  }
+
+  .icon-bg-blue {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  }
+
+  .icon-bg-orange {
+    background: linear-gradient(135deg, #9a3412 0%, #c2410c 100%);
+  }
+
+  .icon-bg-slate {
+    background: linear-gradient(135deg, #334155 0%, #475569 100%);
   }
 
   .tx-title {
-    color: #e2e8f0;
+    color: #f1f5f9;
   }
 
   .tx-time {
     color: #94a3b8;
+  }
+
+  .tx-amount-income {
+    color: #60a5fa;
+  }
+
+  .tx-amount-expense {
+    color: #fb7185;
+  }
+
+  .tx-status-income {
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.15);
+  }
+
+  .tx-status-expense {
+    color: #fb7185;
+    background: rgba(251, 113, 133, 0.15);
+  }
+
+  .tx-status-pending {
+    color: #fb923c;
+    background: rgba(251, 146, 60, 0.15);
   }
 }
 </style>

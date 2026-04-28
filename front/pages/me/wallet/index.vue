@@ -5,35 +5,37 @@
         <WalletBalanceCard :balance-text="displayBalance" :wallet-id="walletId" />
 
         <view class="action-wrap">
-          <button class="recharge-btn" hover-class="recharge-btn-active" @tap="onTapRecharge" @click="onTapRecharge">
-            <image class="recharge-icon" mode="aspectFit" src="/static/icon/recharge.png" />
-            <text>充值</text>
-          </button>
+          <view class="recharge-btn" hover-class="recharge-btn-hover" @tap="onTapRecharge">
+            <view class="recharge-btn-inner">
+              <image class="recharge-icon" mode="aspectFit" src="/static/icon/recharge.png" />
+              <text class="recharge-text">充值</text>
+            </view>
+          </view>
         </view>
 
         <view class="section-head">
           <text class="section-title">收支明细</text>
 
           <view class="filter-row">
-            <button
+            <view
               class="filter-btn"
               :class="{ 'filter-btn-selected': selectedTimeFilter !== 'all' || showTimeFilterMenu }"
-              hover-class="filter-btn-active"
+              hover-class="filter-btn-hover"
               @tap.stop="onTapTimeFilter"
             >
-              <text>{{ timeFilterButtonText }}</text>
+              <text class="filter-text">{{ timeFilterButtonText }}</text>
               <image class="filter-icon" mode="aspectFit" src="/static/me-icons/tune-gray.png" />
-            </button>
+            </view>
 
-            <button
+            <view
               class="filter-btn"
               :class="{ 'filter-btn-selected': selectedTypeFilter !== 'all' || showTypeFilterMenu }"
-              hover-class="filter-btn-active"
+              hover-class="filter-btn-hover"
               @tap.stop="onTapTypeFilter"
             >
-              <text>{{ typeFilterButtonText }}</text>
+              <text class="filter-text">{{ typeFilterButtonText }}</text>
               <image class="filter-icon" mode="aspectFit" src="/static/me-icons/tune-gray.png" />
-            </button>
+            </view>
 
             <view v-if="showTimeFilterMenu" class="filter-dropdown time-filter-dropdown" @tap.stop>
               <view
@@ -41,9 +43,11 @@
                 :key="option.value"
                 class="filter-option"
                 :class="{ 'filter-option-active': selectedTimeFilter === option.value }"
+                hover-class="filter-option-hover"
                 @tap="onSelectTimeFilter(option.value)"
               >
                 <text class="filter-option-text">{{ option.label }}</text>
+                <view v-if="selectedTimeFilter === option.value" class="filter-check">✓</view>
               </view>
             </view>
 
@@ -53,9 +57,11 @@
                 :key="option.value"
                 class="filter-option"
                 :class="{ 'filter-option-active': selectedTypeFilter === option.value }"
+                hover-class="filter-option-hover"
                 @tap="onSelectTypeFilter(option.value)"
               >
                 <text class="filter-option-text">{{ option.label }}</text>
+                <view v-if="selectedTypeFilter === option.value" class="filter-check">✓</view>
               </view>
             </view>
           </view>
@@ -65,11 +71,16 @@
           <WalletTransactionItem v-for="item in displayRecords" :key="item.id" :item="item" />
         </view>
         <view v-else class="empty-wrap">
-          <image class="empty-icon" mode="aspectFit" src="/static/icon/block.png" />
+          <view class="empty-icon-wrap">
+            <image class="empty-icon" mode="aspectFit" src="/static/icon/block.png" />
+          </view>
           <text class="empty-text">{{ emptyTipText }}</text>
         </view>
 
-        <view v-if="loadingMore" class="load-tip">加载中...</view>
+        <view v-if="loadingMore" class="load-tip">
+          <view class="loading-spinner"></view>
+          <text>加载中...</text>
+        </view>
         <view v-else-if="!hasMore && displayRecords.length > 0" class="load-tip">没有更多了</view>
       </view>
     </scroll-view>
@@ -345,7 +356,7 @@ onReachBottom(async () => {
   min-height: 100vh;
   height: 100vh;
   position: relative;
-  background: #f6f6f8;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 .wallet-scroll {
@@ -353,30 +364,47 @@ onReachBottom(async () => {
 }
 
 .wallet-content {
-  padding: 24rpx 24rpx calc(48rpx + env(safe-area-inset-bottom));
+  padding: 32rpx 24rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
 .action-wrap {
-  margin-top: 32rpx;
+  margin-top: 24rpx;
 }
 
 .recharge-btn {
   height: 88rpx;
   border-radius: 20rpx;
-  border: 0;
-  background: #1a57db;
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 700;
+  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
+  box-shadow: 0 8rpx 24rpx rgba(26, 87, 219, 0.25);
+  overflow: hidden;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.recharge-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.recharge-btn-hover {
+  transform: translateY(-2rpx);
+  box-shadow: 0 12rpx 28rpx rgba(26, 87, 219, 0.35);
+}
+
+.recharge-btn-hover::before {
+  opacity: 1;
+}
+
+.recharge-btn-inner {
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10rpx;
-  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.18);
-}
-
-.recharge-btn::after {
-  border: 0;
+  gap: 12rpx;
 }
 
 .recharge-icon {
@@ -384,13 +412,16 @@ onReachBottom(async () => {
   height: 32rpx;
 }
 
-.recharge-btn-active {
-  opacity: 0.92;
+.recharge-text {
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
 }
 
 .section-head {
-  margin-top: 40rpx;
-  margin-bottom: 16rpx;
+  margin-top: 48rpx;
+  margin-bottom: 20rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -398,69 +429,78 @@ onReachBottom(async () => {
 
 .section-title {
   color: #0f172a;
-  font-size: 30rpx;
+  font-size: 32rpx;
   font-weight: 700;
+  letter-spacing: 0.5rpx;
 }
 
 .filter-row {
   display: flex;
   align-items: center;
-  gap: 10rpx;
+  gap: 12rpx;
   position: relative;
   z-index: 30;
 }
 
 .filter-btn {
-  margin: 0;
-  padding: 0 14rpx;
-  height: 50rpx;
-  border-radius: 16rpx;
-  border: 0;
-  background: rgba(26, 87, 219, 0.08);
-  color: #1a57db;
-  font-size: 24rpx;
-  font-weight: 700;
+  padding: 0 20rpx;
+  height: 56rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  border: 2rpx solid #e2e8f0;
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  gap: 8rpx;
+  transition: all 0.2s ease;
 }
 
 .filter-btn-selected {
-  background: rgba(26, 87, 219, 0.14);
+  background: rgba(26, 87, 219, 0.08);
+  border-color: rgba(26, 87, 219, 0.2);
 }
 
-.filter-btn::after {
-  border: 0;
+.filter-btn-hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.filter-text {
+  color: #475569;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.filter-btn-selected .filter-text {
+  color: #1a57db;
 }
 
 .filter-icon {
-  width: 22rpx;
-  height: 22rpx;
-}
-
-.filter-btn-active {
-  opacity: 0.82;
+  width: 20rpx;
+  height: 20rpx;
+  opacity: 0.6;
 }
 
 .filter-mask {
   position: fixed;
   inset: 0;
   z-index: 20;
-  background: transparent;
+  background: rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(2rpx);
 }
 
 .filter-dropdown {
   position: absolute;
-  top: calc(100% + 10rpx);
-  min-width: 160rpx;
-  padding: 10rpx;
+  top: calc(100% + 12rpx);
+  min-width: 180rpx;
+  padding: 8rpx;
   border-radius: 20rpx;
   background: #ffffff;
-  box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.12);
+  border: 1rpx solid #e2e8f0;
+  box-shadow: 0 16rpx 40rpx rgba(15, 23, 42, 0.12);
 }
 
 .time-filter-dropdown {
-  right: 90rpx;
+  right: 100rpx;
 }
 
 .type-filter-dropdown {
@@ -468,11 +508,18 @@ onReachBottom(async () => {
 }
 
 .filter-option {
-  min-height: 60rpx;
-  padding: 0 16rpx;
-  border-radius: 14rpx;
+  min-height: 64rpx;
+  padding: 0 20rpx;
+  border-radius: 16rpx;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  transition: all 0.15s ease;
+}
+
+.filter-option-hover {
+  background: #f8fafc;
 }
 
 .filter-option-active {
@@ -480,64 +527,159 @@ onReachBottom(async () => {
 }
 
 .filter-option-text {
-  color: #0f172a;
-  font-size: 24rpx;
+  color: #334155;
+  font-size: 26rpx;
   font-weight: 600;
+}
+
+.filter-option-active .filter-option-text {
+  color: #1a57db;
+}
+
+.filter-check {
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 14rpx;
+  background: #1a57db;
+  color: #ffffff;
+  font-size: 18rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tx-list {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 .empty-wrap {
-  padding: 80rpx 0 40rpx;
+  padding: 100rpx 0 60rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20rpx;
+  gap: 24rpx;
+}
+
+.empty-icon-wrap {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 80rpx;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .empty-icon {
-  width: 120rpx;
-  height: 120rpx;
+  width: 80rpx;
+  height: 80rpx;
   opacity: 0.4;
 }
 
 .empty-text {
   color: #94a3b8;
-  font-size: 24rpx;
+  font-size: 26rpx;
+  font-weight: 500;
 }
 
 .load-tip {
-  margin-top: 16rpx;
+  margin-top: 24rpx;
   margin-bottom: 20rpx;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
   color: #94a3b8;
-  font-size: 22rpx;
+  font-size: 24rpx;
+}
+
+.loading-spinner {
+  width: 28rpx;
+  height: 28rpx;
+  border: 3rpx solid #e2e8f0;
+  border-top-color: #1a57db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-color-scheme: dark) {
   .wallet-page {
-    background: #111621;
+    background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
   }
 
   .section-title {
-    color: #f8fafc;
+    color: #f1f5f9;
+  }
+
+  .filter-btn {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  .filter-btn-selected {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  .filter-btn-hover {
+    background: #334155;
+    border-color: #475569;
+  }
+
+  .filter-text {
+    color: #cbd5e1;
+  }
+
+  .filter-btn-selected .filter-text {
+    color: #60a5fa;
+  }
+
+  .filter-mask {
+    background: rgba(0, 0, 0, 0.3);
   }
 
   .filter-dropdown {
-    background: #0f172a;
-    box-shadow: 0 14rpx 36rpx rgba(15, 23, 42, 0.4);
+    background: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.4);
+  }
+
+  .filter-option-hover {
+    background: #334155;
   }
 
   .filter-option-active {
-    background: rgba(59, 130, 246, 0.18);
+    background: rgba(59, 130, 246, 0.2);
   }
 
   .filter-option-text {
-    color: #e2e8f0;
+    color: #cbd5e1;
+  }
+
+  .filter-option-active .filter-option-text {
+    color: #60a5fa;
+  }
+
+  .filter-check {
+    background: #3b82f6;
+  }
+
+  .empty-icon-wrap {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  }
+
+  .loading-spinner {
+    border-color: #334155;
+    border-top-color: #3b82f6;
   }
 }
 </style>

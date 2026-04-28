@@ -638,6 +638,27 @@ const onTapOpenSelectedPlan = async () => {
     return
   }
 
+  // 检查是否已实名认证
+  const userInfo = uni.getStorageSync('userInfo') || {}
+  const isVerified = Boolean(userInfo?.is_verified || userInfo?.real_name_verified)
+
+  if (!isVerified) {
+    uni.showModal({
+      title: '需要实名认证',
+      content: '购买会员或人群包需要先完成实名认证，是否前往认证？',
+      confirmText: '去认证',
+      cancelText: '取消',
+      success: (res) => {
+        if (res?.confirm) {
+          uni.navigateTo({
+            url: '/pages/me/auth/realname/index'
+          })
+        }
+      }
+    })
+    return
+  }
+
   const selected = selectedPlan.value
   const isContactPackage = selectedProductType.value === 'contact_package'
   const wasOpened = Boolean(memberStatus.value?.opened)

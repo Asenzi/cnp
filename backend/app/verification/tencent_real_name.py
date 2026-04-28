@@ -95,6 +95,9 @@ def start_tencent_real_name_verification(
     user: User,
     real_name: str,
     id_number: str,
+    wechat_id: str | None = None,
+    email: str | None = None,
+    phone_number: str | None = None,
 ) -> TencentRealNameStartData:
     normalized_name = _normalize_text(real_name, 32)
     normalized_id_number = _normalize_id_number(id_number)
@@ -113,6 +116,20 @@ def start_tencent_real_name_verification(
         raise BusinessException(message="身份证号码格式不正确", code=4302, status_code=400)
 
     _assert_real_name_id_number_available(db=db, user_pk=int(user.id), id_number_hash=id_number_hash)
+
+    # 保存联系方式到用户资料
+    normalized_wechat = _normalize_text(wechat_id, 64)
+    normalized_email = _normalize_text(email, 100)
+    normalized_phone = _normalize_text(phone_number, 11)
+
+    if normalized_wechat:
+        user.display_wechat = normalized_wechat
+    if normalized_email:
+        user.email = normalized_email
+    if normalized_phone:
+        user.display_phone = normalized_phone
+
+    db.flush()
 
     detect_result = create_detect_auth(real_name=normalized_name, id_number=normalized_id_number)
     submit_payload = {
