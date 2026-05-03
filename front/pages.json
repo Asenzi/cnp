@@ -271,6 +271,14 @@
       }
     },
     {
+      "path": "pages/resources/venue-detail/index",
+      "style": {
+        "navigationBarTitleText": "活动详情",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
       "path": "pages/circles/filter/index",
       "style": {
         "navigationBarTitleText": "筛选"

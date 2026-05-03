@@ -55,16 +55,28 @@
         </view>
 
         <template v-else>
-          <ProfilePostCard
-            v-for="(post, index) in feedCards"
-            :key="post.id"
-            :item="post"
-            :show-interest="true"
-            :style="{ animationDelay: `${index * 50}ms` }"
-            class="feed-card-enter"
-            @detail="onTapDetail"
-            @interest="onToggleInterest"
-          />
+          <template v-for="(post, index) in feedCards">
+            <VenueEventCard
+              v-if="post.type === 'venue'"
+              :key="post.id"
+              :item="post"
+              :show-interest="true"
+              :style="{ animationDelay: `${index * 50}ms` }"
+              class="feed-card-enter"
+              @detail="onTapDetail"
+              @interest="onToggleInterest"
+            />
+            <ProfilePostCard
+              v-else
+              :key="post.id"
+              :item="post"
+              :show-interest="true"
+              :style="{ animationDelay: `${index * 50}ms` }"
+              class="feed-card-enter"
+              @detail="onTapDetail"
+              @interest="onToggleInterest"
+            />
+          </template>
 
           <view v-if="showEmpty" class="empty-wrap">
             <view class="empty-icon-wrap">
@@ -95,6 +107,7 @@ import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getResourceFeed, getResourceFilters, toggleResourceInterest } from '../../../api/post'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import ProfilePostCard from '../../me/card/components/ProfilePostCard.vue'
+import VenueEventCard from './components/VenueEventCard.vue'
 import ResourcePublishFab from './components/ResourcePublishFab.vue'
 import { mapProfilePostItem } from '../../me/card/modules/profile-home-view-model'
 import { getLocationErrorMessage, resolveCurrentCityByGps, saveCurrentCity } from '../discover/modules/location'
@@ -490,9 +503,16 @@ const onTapDetail = (post) => {
     showToast(texts.missingPostCode)
     return
   }
-  uni.navigateTo({
-    url: `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode)}`
-  })
+
+  // 判断是否为活动类型
+  const type = String(post?.type || '').trim().toLowerCase()
+  const isVenue = type === 'venue'
+
+  const url = isVenue
+    ? `/pages/resources/venue-detail/index?postCode=${encodeURIComponent(postCode)}`
+    : `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode)}`
+
+  uni.navigateTo({ url })
 }
 
 const onTapPublish = () => {
