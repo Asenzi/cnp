@@ -64,11 +64,11 @@
               <view class="stats-top">
                 <view class="stats-left">
                   <view class="stat-item">
-                    <ProfileSymbol name="visibility" :size="16" color="#94a3b8" />
+                    <image class="stat-icon" src="/static/icon/see.png" mode="aspectFit" />
                     <text class="stat-text">{{ formatNumber(post.view_count) }}</text>
                   </view>
                   <view class="stat-item">
-                    <text class="stat-icon-heart">♥</text>
+                    <image class="stat-icon" src="/static/icon/like.png" mode="aspectFit" />
                     <text class="stat-text">{{ formatNumber(post.like_count) }}</text>
                   </view>
                 </view>
@@ -88,7 +88,8 @@
             </view>
           </view>
 
-          <view class="recommend-wrap">
+          <!-- 相关资源推荐 - 待后端接口实现 -->
+          <!-- <view class="recommend-wrap">
             <text class="recommend-title">相关资源推荐</text>
             <view class="recommend-card">
               <view class="recommend-icon">AI</view>
@@ -98,7 +99,7 @@
               </view>
               <text class="recommend-arrow">›</text>
             </view>
-          </view>
+          </view> -->
         </template>
       </view>
     </scroll-view>
@@ -108,13 +109,9 @@
         <image class="btn-icon-image" src="/static/icon/share.png" mode="aspectFit" />
         <text class="btn-label">分享</text>
       </button>
-      <button class="bottom-btn bottom-btn-plain" hover-class="bottom-btn-hover" @tap="onChat">
-        <image class="btn-icon-image" src="/static/icon/wechat-call.png" mode="aspectFit" />
-        <text class="btn-label">联系方式</text>
-      </button>
-      <button class="bottom-btn bottom-btn-primary" hover-class="bottom-btn-hover" @tap="onConnectNow">
+      <button class="bottom-btn bottom-btn-primary" hover-class="bottom-btn-hover" @tap="onChat">
         <image class="btn-icon-image btn-icon-image-primary" src="/static/icon/chat-he.png" mode="aspectFit" />
-        <text class="btn-label-primary">联系他</text>
+        <text class="btn-label-primary">联系方式</text>
       </button>
     </view>
   </view>
@@ -311,10 +308,6 @@ const onChat = () => {
   })
 }
 
-const onConnectNow = () => {
-  onChat()
-}
-
 onShareAppMessage(() => ({
   title: String(post.value?.title || '资源详情').trim(),
   path: `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode.value)}`,
@@ -353,22 +346,20 @@ onPullDownRefresh(async () => {
 }
 
 .detail-main {
-  padding: 16rpx 24rpx 32rpx;
+  padding: 24rpx 32rpx 32rpx;
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 24rpx;
 }
 
 .publisher-card {
   background: #ffffff;
-  border: 1rpx solid #f1f5f9;
-  border-radius: 24rpx;
-  padding: 20rpx;
-  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.04);
+  border-radius: 16rpx;
+  padding: 28rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 .publisher-left {
@@ -376,22 +367,22 @@ onPullDownRefresh(async () => {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14rpx;
+  gap: 16rpx;
 }
 
 .avatar-wrap {
   position: relative;
   width: 96rpx;
   height: 96rpx;
-  border-radius: 999rpx;
+  border-radius: 48rpx;
   flex-shrink: 0;
 }
 
 .avatar {
   width: 100%;
   height: 100%;
-  border-radius: 999rpx;
-  background: #e5e7eb;
+  border-radius: 48rpx;
+  background: #f3f6fa;
 }
 
 .publisher-main {
@@ -399,7 +390,7 @@ onPullDownRefresh(async () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
+  gap: 6rpx;
 }
 
 .name-row {
@@ -413,34 +404,34 @@ onPullDownRefresh(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #111827;
-  font-size: 30rpx;
-  line-height: 40rpx;
-  font-weight: 700;
+  color: #172033;
+  font-size: 28rpx;
+  line-height: 36rpx;
+  font-weight: 600;
 }
 
 .verified-dot {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 999rpx;
-  background: #3b82f6;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 6rpx;
+  background: #2563eb;
 }
 
 .publisher-role {
-  color: #6b7280;
-  font-size: 26rpx;
-  line-height: 36rpx;
+  color: #66758a;
+  font-size: 24rpx;
+  line-height: 32rpx;
 }
 
 .profile-btn {
   border: 0;
   background: transparent;
   color: #2563eb;
-  font-size: 22rpx;
-  line-height: 52rpx;
+  font-size: 24rpx;
+  line-height: 56rpx;
   font-weight: 600;
-  height: 52rpx;
-  padding: 0 10rpx;
+  height: 56rpx;
+  padding: 0 12rpx;
 }
 
 .profile-btn::after {
@@ -453,33 +444,31 @@ onPullDownRefresh(async () => {
 
 .content-card {
   background: #ffffff;
-  border: 1rpx solid #f1f5f9;
-  border-radius: 24rpx;
-  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.04);
+  border-radius: 16rpx;
   overflow: hidden;
 }
 
 .content-head {
-  padding: 24rpx;
+  padding: 32rpx;
   display: flex;
   flex-direction: column;
-  gap: 14rpx;
+  gap: 20rpx;
 }
 
 .tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8rpx;
+  gap: 12rpx;
 }
 
 .tag {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: #f3f6fa;
+  color: #66758a;
   font-size: 22rpx;
   line-height: 30rpx;
   font-weight: 600;
-  border-radius: 6rpx;
-  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  padding: 4rpx 12rpx;
 }
 
 .tag-primary {
@@ -488,53 +477,54 @@ onPullDownRefresh(async () => {
 }
 
 .detail-title {
-  color: #111827;
-  font-size: 42rpx;
-  line-height: 60rpx;
-  font-weight: 700;
+  color: #172033;
+  font-size: 34rpx;
+  line-height: 48rpx;
+  font-weight: 600;
 }
 
 .detail-body {
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
+  gap: 12rpx;
 }
 
 .detail-line {
-  color: #374151;
-  font-size: 30rpx;
-  line-height: 48rpx;
+  color: #66758a;
+  font-size: 28rpx;
+  line-height: 44rpx;
   white-space: pre-wrap;
 }
 
+/* 图片画廊 - 标准网格布局 */
 .gallery {
-  padding: 0 24rpx 24rpx;
+  padding: 0 32rpx 32rpx;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10rpx;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8rpx;
 }
 
 .gallery-image {
   width: 100%;
-  border-radius: 12rpx;
-  background: #e5e7eb;
+  height: 200rpx;
+  border-radius: 8rpx;
+  background: #f3f6fa;
 }
 
 .gallery-image-main {
-  grid-column: span 2;
-  height: 384rpx;
+  height: 200rpx;
 }
 
 .gallery-image-sub {
-  height: 256rpx;
+  height: 200rpx;
 }
 
 .stats-wrap {
-  border-top: 1rpx solid #eef2f7;
-  padding: 20rpx 24rpx 24rpx;
+  border-top: 1rpx solid #f3f6fa;
+  padding: 24rpx 32rpx 32rpx;
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 20rpx;
 }
 
 .stats-top {
@@ -549,7 +539,7 @@ onPullDownRefresh(async () => {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 26rpx;
+  gap: 32rpx;
 }
 
 .stat-item {
@@ -558,20 +548,16 @@ onPullDownRefresh(async () => {
   gap: 8rpx;
 }
 
+.stat-icon {
+  width: 32rpx;
+  height: 32rpx;
+  display: block;
+  flex-shrink: 0;
+}
+
 .stat-icon-clock {
   flex-shrink: 0;
   position: relative;
-}
-
-.stat-icon-heart {
-  color: #fb7185;
-  font-size: 26rpx;
-  line-height: 1;
-  font-weight: 700;
-  transform: translateY(-1rpx);
-}
-
-.stat-icon-clock {
   width: 22rpx;
   height: 22rpx;
 }
@@ -580,7 +566,7 @@ onPullDownRefresh(async () => {
   position: absolute;
   inset: 0;
   border-radius: 999rpx;
-  background: #4f7cff;
+  background: #2563eb;
 }
 
 .clock-hand-hour,
@@ -606,9 +592,9 @@ onPullDownRefresh(async () => {
 
 .stat-text,
 .publish-time {
-  color: #6b7280;
-  font-size: 26rpx;
-  line-height: 36rpx;
+  color: #66758a;
+  font-size: 24rpx;
+  line-height: 32rpx;
 }
 
 .publish-time {
@@ -617,57 +603,56 @@ onPullDownRefresh(async () => {
 }
 
 .expire-card {
-  border-radius: 18rpx;
-  background: linear-gradient(180deg, #f3f8ff 0%, #eef4ff 100%);
+  border-radius: 12rpx;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   padding: 16rpx 18rpx;
 }
 
 .expire-row {
   display: flex;
   align-items: center;
-  gap: 8rpx;
+  gap: 10rpx;
 }
 
 .expire-text {
-  color: #4f7cff;
-  font-size: 26rpx;
-  line-height: 36rpx;
+  color: #2563eb;
+  font-size: 24rpx;
+  line-height: 32rpx;
   font-weight: 600;
 }
 
 .recommend-wrap {
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
+  gap: 16rpx;
 }
 
 .recommend-title {
-  color: #111827;
-  font-size: 26rpx;
+  color: #172033;
+  font-size: 28rpx;
   line-height: 36rpx;
-  font-weight: 700;
-  padding-left: 2rpx;
+  font-weight: 600;
+  padding-left: 4rpx;
 }
 
 .recommend-card {
   background: #ffffff;
-  border: 1rpx solid #f1f5f9;
   border-radius: 16rpx;
-  padding: 16rpx;
+  padding: 24rpx;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 .recommend-icon {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 10rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 12rpx;
   background: #eff6ff;
   color: #2563eb;
   text-align: center;
-  font-size: 22rpx;
-  line-height: 64rpx;
+  font-size: 24rpx;
+  line-height: 72rpx;
   font-weight: 700;
 }
 
@@ -676,55 +661,55 @@ onPullDownRefresh(async () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
+  gap: 6rpx;
 }
 
 .recommend-name {
-  color: #111827;
+  color: #172033;
   font-size: 26rpx;
-  line-height: 38rpx;
-  font-weight: 700;
+  line-height: 36rpx;
+  font-weight: 600;
 }
 
 .recommend-from {
-  color: #9ca3af;
+  color: #94a3b8;
   font-size: 22rpx;
-  line-height: 32rpx;
+  line-height: 30rpx;
 }
 
 .recommend-arrow {
-  color: #d1d5db;
-  font-size: 34rpx;
-  line-height: 34rpx;
+  color: #cbd5e1;
+  font-size: 32rpx;
+  line-height: 32rpx;
 }
 
 .status-wrap {
   border-radius: 16rpx;
-  border: 1rpx dashed #cbd5e1;
   background: #ffffff;
-  min-height: 240rpx;
+  min-height: 280rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14rpx;
+  gap: 20rpx;
 }
 
 .status-text {
-  color: #64748b;
+  color: #66758a;
   font-size: 26rpx;
   line-height: 36rpx;
 }
 
 .retry-btn {
-  min-width: 180rpx;
-  height: 60rpx;
+  min-width: 200rpx;
+  height: 72rpx;
   border: 0;
-  border-radius: 999rpx;
+  border-radius: 36rpx;
   background: #2563eb;
   color: #ffffff;
   font-size: 26rpx;
-  line-height: 60rpx;
+  line-height: 72rpx;
+  font-weight: 600;
 }
 
 .retry-btn::after {
@@ -741,21 +726,18 @@ onPullDownRefresh(async () => {
   right: 0;
   bottom: 0;
   z-index: 20;
-  padding: 12rpx 20rpx calc(12rpx + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  border-top: 1rpx solid #e5e7eb;
-  border-top-left-radius: 24rpx;
-  border-top-right-radius: 24rpx;
-  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.05);
+  padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
+  background: #ffffff;
+  border-top: 1rpx solid #e7ecf3;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 .bottom-btn {
   border: 0;
   border-radius: 12rpx;
-  height: 80rpx;
+  height: 72rpx;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -767,9 +749,10 @@ onPullDownRefresh(async () => {
 }
 
 .bottom-btn-plain {
-  width: 146rpx;
-  background: #ffffff;
-  color: #4b5563;
+  min-width: 136rpx;
+  padding: 0 20rpx;
+  background: #f6f8fc;
+  color: #66758a;
 }
 
 .bottom-btn-primary {
@@ -779,13 +762,7 @@ onPullDownRefresh(async () => {
 }
 
 .bottom-btn-hover {
-  opacity: 0.86;
-}
-
-.btn-icon {
-  width: 20rpx;
-  height: 20rpx;
-  position: relative;
+  opacity: 0.8;
 }
 
 .btn-icon-image {
@@ -800,48 +777,79 @@ onPullDownRefresh(async () => {
   height: 34rpx;
 }
 
-.btn-icon-share {
-  border: 2rpx solid #6b7280;
-  border-radius: 4rpx;
-}
-
-.btn-icon-share::after {
-  content: '';
-  position: absolute;
-  right: -4rpx;
-  top: -4rpx;
-  width: 8rpx;
-  height: 8rpx;
-  border-top: 2rpx solid #6b7280;
-  border-right: 2rpx solid #6b7280;
-}
-
-.btn-icon-chat {
-  border: 2rpx solid #6b7280;
-  border-radius: 8rpx;
-}
-
-.btn-icon-chat::after {
-  content: '';
-  position: absolute;
-  left: 4rpx;
-  bottom: -4rpx;
-  width: 6rpx;
-  height: 6rpx;
-  border-left: 2rpx solid #6b7280;
-  border-bottom: 2rpx solid #6b7280;
-  transform: skewX(-20deg);
-}
-
 .btn-label {
-  font-size: 22rpx;
-  line-height: 30rpx;
-  font-weight: 600;
+  font-size: 24rpx;
+  line-height: 32rpx;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .btn-label-primary {
   font-size: 28rpx;
-  line-height: 38rpx;
-  font-weight: 700;
+  line-height: 36rpx;
+  font-weight: 600;
+  white-space: nowrap;
 }
+
+/* 深色模式 */
+@media (prefers-color-scheme: dark) {
+  .detail-page {
+    background: #0a0a0a;
+  }
+
+  .publisher-card,
+  .content-card,
+  .recommend-card,
+  .status-wrap {
+    background: #1a1a1a;
+  }
+
+  .publisher-name,
+  .detail-title,
+  .recommend-title,
+  .recommend-name {
+    color: #ffffff;
+  }
+
+  .publisher-role,
+  .detail-line,
+  .stat-text,
+  .publish-time,
+  .status-text {
+    color: #8a8a8a;
+  }
+
+  .avatar,
+  .gallery-image {
+    background: #2a2a2a;
+  }
+
+  .tag {
+    background: #2a2a2a;
+    color: #8a8a8a;
+  }
+
+  .stats-wrap {
+    border-top-color: #2a2a2a;
+  }
+
+  .recommend-from {
+    color: #666666;
+  }
+
+  .recommend-arrow {
+    color: #4a4a4a;
+  }
+
+  .bottom-nav {
+    background: #1a1a1a;
+    border-top-color: #2a2a2a;
+  }
+
+  .bottom-btn-plain {
+    background: #2a2a2a;
+    color: #8a8a8a;
+  }
+}
+
 </style>
