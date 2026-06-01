@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -8,6 +8,15 @@ from app.models.base import Base
 
 class ResourcePost(Base):
     __tablename__ = "resource_posts"
+    __table_args__ = (
+        Index(
+            "ix_resource_posts_status_industry_mode_created",
+            "status",
+            "industry_label",
+            "mode",
+            "created_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     post_code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)
@@ -62,6 +71,23 @@ class ResourcePost(Base):
         DateTime,
         nullable=True,
         index=True,
+    )
+    # 活动相关字段
+    event_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    event_time: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payment_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    price: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    contact: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    detail_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    participant_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

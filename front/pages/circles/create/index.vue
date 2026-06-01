@@ -30,9 +30,7 @@
 
         <CreateRulesCard
           :rules="form.rules"
-          :need-post-review="form.needPostReview"
           @update:rules="form.rules = $event"
-          @update:needPostReview="form.needPostReview = $event"
         />
       </view>
     </scroll-view>
@@ -67,7 +65,7 @@ const form = reactive({
   name: '',
   industry: '',
   description: '',
-  joinType: 'free',
+  joinType: 'paid',
   price: '',
   rules: '',
   needPostReview: false
@@ -133,6 +131,9 @@ const isLocalTempFilePath = (value) => {
   const normalized = String(value || '').trim()
   if (!normalized) {
     return false
+  }
+  if (/^https?:\/\/tmp\//i.test(normalized)) {
+    return true
   }
   if (/^https?:\/\//i.test(normalized)) {
     return false
@@ -235,6 +236,8 @@ const onSubmit = async () => {
     const circleCode = String(created?.circle_code || '').trim()
 
     showToast('圈子创建成功')
+
+    // 成功后不重置 submitting，防止重复提交
     setTimeout(() => {
       if (circleCode) {
         uni.navigateTo({
@@ -247,6 +250,9 @@ const onSubmit = async () => {
       })
     }, 260)
   } catch (err) {
+    // 只有失败时才重置 submitting
+    submitting.value = false
+
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       showToast('请先登录')
@@ -258,8 +264,6 @@ const onSubmit = async () => {
       return
     }
     showToast(err?.message || '创建圈子失败，请稍后重试')
-  } finally {
-    submitting.value = false
   }
 }
 </script>
@@ -275,18 +279,18 @@ const onSubmit = async () => {
 }
 
 .content-wrap {
-  padding: 24rpx 0 calc(132rpx + env(safe-area-inset-bottom));
+  padding: 16rpx 0 calc(120rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 16rpx;
 }
 
 .verify-notice-card {
-  margin: 0 24rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 20rpx;
-  background: linear-gradient(135deg, rgba(26, 87, 219, 0.08), rgba(26, 87, 219, 0.02));
-  border: 1rpx solid rgba(37, 99, 235, 0.12);
+  margin: 0 32rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: rgba(37, 99, 235, 0.04);
+  border: 1rpx solid rgba(37, 99, 235, 0.1);
   display: flex;
   flex-direction: column;
   gap: 6rpx;
@@ -294,14 +298,14 @@ const onSubmit = async () => {
 
 .verify-notice-title {
   font-size: 26rpx;
-  line-height: 1.5;
-  font-weight: 700;
-  color: #1e40af;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #2563eb;
 }
 
 .verify-notice-desc {
-  font-size: 24rpx;
-  line-height: 1.5;
+  font-size: 22rpx;
+  line-height: 1.4;
   color: #64748b;
 }
 
@@ -311,16 +315,16 @@ const onSubmit = async () => {
   }
 
   .verify-notice-card {
-    background: linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(96, 165, 250, 0.04));
-    border-color: rgba(96, 165, 250, 0.18);
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.15);
   }
 
   .verify-notice-title {
-    color: #93c5fd;
+    color: #60a5fa;
   }
 
   .verify-notice-desc {
-    color: #cbd5e1;
+    color: #94a3b8;
   }
 }
 </style>

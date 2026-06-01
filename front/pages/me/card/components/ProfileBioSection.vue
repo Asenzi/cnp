@@ -20,24 +20,25 @@ defineProps({
 <style scoped>
 .bio-wrap {
   background: #ffffff;
-  padding: 0 32rpx 24rpx;
+  padding: 0 32rpx 32rpx;
 }
 
 .bio-card {
-  background: #f6f6f8;
-  border-radius: 20rpx;
+  background: #f9fafb;
+  border-radius: 16rpx;
   padding: 24rpx;
+  border: 1rpx solid rgba(0, 0, 0, 0.04);
 }
 
 .bio-text {
-  color: #475569;
-  font-size: 24rpx;
-  line-height: 38rpx;
+  color: #6b7280;
+  font-size: 26rpx;
+  line-height: 40rpx;
 }
 
 .bio-title {
-  color: #0f172a;
-  font-weight: 700;
+  color: #111827;
+  font-weight: 600;
 }
 
 @media (prefers-color-scheme: dark) {

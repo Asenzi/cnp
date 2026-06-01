@@ -3,12 +3,15 @@ from decimal import Decimal
 from pathlib import Path
 from secrets import token_hex
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id
 from app.circle import list_circle_discover_recommendations
+from app.core.asset_urls import is_local_only_asset_url, normalize_persisted_asset_url, sanitize_public_asset_url
+from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
 from app.crud import (
@@ -18,9 +21,11 @@ from app.crud import (
     get_circle_by_code,
     get_user_by_business_user_id,
     get_user_by_id,
+    list_circle_members,
     list_user_joined_circles,
 )
 from app.models.circle import Circle
+from app.models.circle_interest import CircleInterest
 from app.models.user import User
 from app.post import list_circle_resource_posts, list_pending_circle_post_syncs, review_circle_post_sync
 from app.review import submit_circle_update_review
@@ -46,8 +51,6 @@ CONTENT_TYPE_EXTENSION_MAP = {
     'image/png': '.png',
     'image/webp': '.webp',
 }
-
-
 def _require_current_user(db: Session, current_user_pk: int):
     user = get_user_by_id(db=db, user_id=current_user_pk)
     if user is None:
@@ -73,15 +76,36 @@ def _to_public_file_url(file_url: str, request: Request) -> str:
     return file_url
 
 
+def _resolve_circle_asset_urls(cover_url: str | None, avatar_url: str | None, request: Request) -> tuple[str, str]:
+    default_asset_url = str(settings.DEFAULT_AVATAR_URL or '/static/logo.png').strip() or '/static/logo.png'
+    safe_cover_url = sanitize_public_asset_url(cover_url)
+    safe_avatar_url = sanitize_public_asset_url(avatar_url)
+    resolved_cover = safe_cover_url or safe_avatar_url or default_asset_url
+    resolved_avatar = safe_avatar_url or safe_cover_url or default_asset_url
+    return _to_public_file_url(resolved_cover, request), _to_public_file_url(resolved_avatar, request)
+
+
+def _to_public_circle_asset_url(asset_url: str | None, request: Request) -> str:
+    normalized = sanitize_public_asset_url(asset_url, '')
+    if not normalized or normalized == settings.DEFAULT_AVATAR_URL:
+        return ''
+    return _to_public_file_url(normalized, request)
+
+
+def _normalize_circle_asset_url(asset_url: str, *, request: Request, field_label: str) -> str:
+    return normalize_persisted_asset_url(asset_url, request=request, field_label=field_label)
+
+
 def _serialize_circle(circle, owner, request: Request, db: Session) -> dict:
     member_count = count_circle_members(db=db, circle_code=circle.circle_code)
+    cover_url, avatar_url = _resolve_circle_asset_urls(circle.cover_url, circle.avatar_url or circle.cover_url, request)
     payload = CircleData(
         circle_code=circle.circle_code,
         name=circle.name,
         industry_label=circle.industry_label,
         description=circle.description,
-        cover_url=_to_public_file_url(circle.cover_url, request),
-        avatar_url=_to_public_file_url(circle.avatar_url or circle.cover_url, request),
+        cover_url=cover_url,
+        avatar_url=avatar_url,
         join_type=circle.join_type,
         join_price=float(circle.join_price or 0),
         rules_text=circle.rules_text,
@@ -100,13 +124,14 @@ def _serialize_circle(circle, owner, request: Request, db: Session) -> dict:
 
 
 def _serialize_my_circle_item(circle, membership, request: Request) -> dict:
+    cover_url, avatar_url = _resolve_circle_asset_urls(circle.cover_url, circle.avatar_url or circle.cover_url, request)
     payload = MyCircleItem(
         circle_code=circle.circle_code,
         name=circle.name,
         industry_label=circle.industry_label,
         description=circle.description,
-        cover_url=_to_public_file_url(circle.cover_url, request),
-        avatar_url=_to_public_file_url(circle.avatar_url or circle.cover_url, request),
+        cover_url=cover_url,
+        avatar_url=avatar_url,
         join_type=circle.join_type,
         member_count=int(circle.member_count or 0),
         post_count=int(circle.post_count or 0),
@@ -182,6 +207,8 @@ def create_new_circle(
         join_price = Decimal(payload.join_price).quantize(Decimal('0.01'))
 
     normalized_rules = (payload.rules_text or '').strip() or None
+    cover_url = _normalize_circle_asset_url(payload.cover_url, request=request, field_label='圈子封面')
+    avatar_url = _normalize_circle_asset_url(payload.avatar_url, request=request, field_label='圈子头像')
 
     try:
         circle = create_circle(
@@ -190,8 +217,8 @@ def create_new_circle(
             name=payload.name.strip(),
             industry_label=payload.industry_label.strip(),
             description=payload.description.strip(),
-            cover_url=payload.cover_url.strip(),
-            avatar_url=payload.avatar_url.strip(),
+            cover_url=cover_url,
+            avatar_url=avatar_url,
             join_type=join_type,
             join_price=join_price,
             rules_text=normalized_rules,
@@ -233,9 +260,17 @@ def update_circle_info(
     if payload.description is not None:
         updates['description'] = payload.description.strip()
     if payload.cover_url is not None:
-        updates['cover_url'] = payload.cover_url.strip()
+        updates['cover_url'] = _normalize_circle_asset_url(
+            payload.cover_url,
+            request=request,
+            field_label='圈子封面',
+        )
     if payload.avatar_url is not None:
-        updates['avatar_url'] = payload.avatar_url.strip()
+        updates['avatar_url'] = _normalize_circle_asset_url(
+            payload.avatar_url,
+            request=request,
+            field_label='圈子头像',
+        )
     if payload.join_type is not None:
         updates['join_type'] = payload.join_type.strip().lower()
     if payload.join_price is not None:
@@ -322,6 +357,7 @@ def get_my_circles(
 
 @router.get('/discover', summary='List discover circles')
 def get_discover_circles(
+    request: Request,
     tab: str = 'recommend',
     offset: int = 0,
     limit: int = 20,
@@ -351,6 +387,17 @@ def get_discover_circles(
         request_id=request_id,
         exclude_circle_codes=normalized_exclude_circle_codes,
     )
+    items = payload.get('items') if isinstance(payload, dict) else None
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            raw_cover_url = str(item.get('cover_url') or '').strip()
+            raw_avatar_url = str(item.get('avatar_url') or '').strip()
+            raw_owner_avatar_url = str(item.get('owner_avatar_url') or '').strip()
+            item['cover_url'] = _to_public_circle_asset_url(raw_cover_url, request)
+            item['avatar_url'] = _to_public_circle_asset_url(raw_avatar_url, request)
+            item['owner_avatar_url'] = _to_public_file_url(raw_owner_avatar_url, request) if raw_owner_avatar_url else ''
     return success_response(data=payload)
 
 
@@ -405,6 +452,124 @@ def get_user_circles(
     return success_response(data=payload)
 
 
+def _parse_offset_cursor(cursor: str | None) -> int:
+    try:
+        return max(int(str(cursor or '').strip() or '0'), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _serialize_interested_circle(circle: Circle, owner: User | None, interest: CircleInterest, request: Request) -> dict:
+    cover_url, avatar_url = _resolve_circle_asset_urls(circle.cover_url, circle.avatar_url or circle.cover_url, request)
+    item = {
+        'circle_code': circle.circle_code,
+        'circleCode': circle.circle_code,
+        'id': circle.circle_code,
+        'name': circle.name,
+        'title': circle.name,
+        'industry_label': circle.industry_label,
+        'industryLabel': circle.industry_label,
+        'description': circle.description,
+        'cover_url': cover_url,
+        'coverImage': cover_url,
+        'avatar_url': avatar_url,
+        'join_type': circle.join_type,
+        'join_price': float(circle.join_price or 0),
+        'member_count': int(circle.member_count or 0),
+        'members': int(circle.member_count or 0),
+        'post_count': int(circle.post_count or 0),
+        'posts': int(circle.post_count or 0),
+        'owner_user_id': str(owner.user_id or '').strip() if owner else '',
+        'owner_nickname': str(owner.nickname or '').strip() if owner else '',
+        'owner_avatar_url': _to_public_file_url(str(owner.avatar_url or '/static/logo.png'), request) if owner else '',
+        'owner_city_name': str(owner.city_name or '').strip() if owner else '',
+        'owner_is_verified': bool(owner.is_verified) if owner else False,
+        'ownerVerified': bool(owner.is_verified) if owner else False,
+        'interested': True,
+        'is_interested': True,
+        'created_at': circle.created_at.isoformat() if circle.created_at else None,
+        'interested_at': interest.created_at.isoformat() if interest.created_at else None,
+    }
+    return item
+
+
+@router.get('/interests', summary='List interested circles')
+def get_circle_interests(
+    request: Request,
+    cursor: str | None = None,
+    limit: int = 20,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+    offset = _parse_offset_cursor(cursor)
+    safe_limit = min(max(int(limit or 20), 1), 50)
+    rows = db.execute(
+        select(CircleInterest, Circle, User)
+        .join(Circle, Circle.id == CircleInterest.circle_pk)
+        .outerjoin(User, User.id == Circle.owner_user_pk)
+        .where(
+            CircleInterest.user_pk == int(user_id),
+            Circle.status == 'active',
+        )
+        .order_by(CircleInterest.created_at.desc(), CircleInterest.id.desc())
+        .offset(offset)
+        .limit(safe_limit + 1)
+    ).all()
+    page_rows = rows[:safe_limit]
+    has_more = len(rows) > safe_limit
+    return success_response(
+        data={
+            'items': [
+                _serialize_interested_circle(circle=circle, owner=owner, interest=interest, request=request)
+                for interest, circle, owner in page_rows
+            ],
+            'next_cursor': str(offset + len(page_rows)) if has_more else '',
+            'has_more': has_more,
+        }
+    )
+
+
+@router.post('/{circle_code}/interest/toggle', summary='Toggle circle interest status')
+def toggle_circle_interest(
+    circle_code: str,
+    desired: bool | None = Query(default=None, description='Desired interest state'),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+    normalized_code = str(circle_code or '').strip()
+    circle = get_circle_by_code(db=db, circle_code=normalized_code)
+    if circle is None or str(circle.status or '') != 'active':
+        raise BusinessException(message='圈子不存在', code=4043, status_code=404)
+
+    existing = db.execute(
+        select(CircleInterest).where(
+            CircleInterest.user_pk == int(user_id),
+            CircleInterest.circle_pk == int(circle.id),
+        )
+    ).scalar_one_or_none()
+    should_interest = bool(desired) if desired is not None else existing is None
+    if should_interest:
+        if existing is None:
+            db.add(CircleInterest(user_pk=int(user_id), circle_pk=int(circle.id)))
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+        is_interested = True
+    else:
+        if existing is not None:
+            db.delete(existing)
+            db.commit()
+        is_interested = False
+
+    return success_response(
+        data={'is_interested': is_interested, 'interested': is_interested},
+        message='已标记感兴趣' if is_interested else '已取消感兴趣',
+    )
+
+
 @router.get('/{circle_code}', summary='Get circle detail')
 def get_circle_detail(
     circle_code: str,
@@ -454,6 +619,57 @@ def get_circle_posts(
                 'avatar_url': _to_public_file_url(str(author.get('avatar_url') or ''), request),
             }
     return success_response(data=payload)
+
+
+@router.get('/{circle_code}/members', summary='List circle members')
+def get_circle_members(
+    circle_code: str,
+    request: Request,
+    offset: int = 0,
+    limit: int = 20,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+
+    normalized_code = (circle_code or '').strip()
+    if not normalized_code:
+        raise BusinessException(message='圈子编号不能为空', code=4355, status_code=400)
+
+    circle = get_circle_by_code(db=db, circle_code=normalized_code)
+    if circle is None:
+        raise BusinessException(message='圈子不存在', code=4043, status_code=404)
+
+    safe_offset = max(offset, 0)
+    safe_limit = min(max(limit, 1), 50)
+
+    members = list_circle_members(
+        db=db,
+        circle_code=normalized_code,
+        offset=safe_offset,
+        limit=safe_limit,
+    )
+
+    total = count_circle_members(db=db, circle_code=normalized_code)
+
+    items = []
+    for user, membership in members:
+        items.append({
+            'user_id': user.user_id,
+            'nickname': user.nickname,
+            'avatar_url': _to_public_file_url(user.avatar_url or '', request),
+            'is_verified': bool(user.is_verified),
+            'company_name': user.company_name,
+            'job_title': user.job_title,
+            'joined_at': membership.created_at.isoformat() if membership.created_at else None,
+        })
+
+    return success_response(data={
+        'items': items,
+        'total': total,
+        'offset': safe_offset,
+        'limit': safe_limit,
+    })
 
 
 @router.get('/{circle_code}/post-syncs/pending', summary='List pending circle post sync requests')

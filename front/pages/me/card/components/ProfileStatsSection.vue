@@ -19,41 +19,40 @@ defineProps({
 <style scoped>
 .stats-wrap {
   background: #ffffff;
-  padding: 0 32rpx 24rpx;
+  padding: 0 32rpx 32rpx;
   display: flex;
   justify-content: flex-start;
   flex-wrap: nowrap;
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 .stat-card {
-  flex: 0 0 172rpx;
-  width: 172rpx;
-  border-radius: 18rpx;
-  padding: 16rpx 12rpx;
-  background: rgba(26, 87, 219, 0.05);
-  border: 1rpx solid rgba(26, 87, 219, 0.12);
+  flex: 0 0 168rpx;
+  width: 168rpx;
+  border-radius: 16rpx;
+  padding: 20rpx 16rpx;
+  background: rgba(26, 87, 219, 0.04);
+  border: 1rpx solid rgba(26, 87, 219, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4rpx;
-  min-height: 108rpx;
+  gap: 8rpx;
+  min-height: 104rpx;
   text-align: center;
 }
 
 .stat-value {
-  color: #0f172a;
+  color: #111827;
   font-size: 32rpx;
   line-height: 40rpx;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .stat-label {
-  color: #64748b;
-  font-size: 20rpx;
-  line-height: 28rpx;
-  font-weight: 500;
+  color: #6b7280;
+  font-size: 24rpx;
+  line-height: 32rpx;
 }
 
 @media (prefers-color-scheme: dark) {

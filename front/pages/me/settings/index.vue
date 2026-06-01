@@ -186,6 +186,20 @@ const onSettingTap = (item) => {
     return
   }
 
+  if (item.key === 'help') {
+    uni.navigateTo({
+      url: '/pages/me/help-feedback/index'
+    })
+    return
+  }
+
+  if (item.key === 'about') {
+    uni.navigateTo({
+      url: '/pages/me/about/index'
+    })
+    return
+  }
+
   showToast(item.label)
 }
 

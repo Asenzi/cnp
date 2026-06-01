@@ -3,12 +3,17 @@ from datetime import UTC, datetime
 import re
 from pathlib import Path
 from secrets import token_hex
+import time
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id
+from app.core.asset_urls import normalize_persisted_asset_url, sanitize_public_asset_url
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
@@ -41,6 +46,7 @@ router = APIRouter(prefix="/user", tags=["User"])
 STATIC_DIR = Path(__file__).resolve().parents[3] / "static"
 AVATAR_UPLOAD_DIR = STATIC_DIR / "uploads" / "avatars"
 CARD_UPLOAD_DIR = STATIC_DIR / "uploads" / "cards"
+MINIAPP_CODE_DIR = STATIC_DIR / "uploads" / "miniapp-codes"
 
 MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024
 MAX_CARD_FILE_SIZE_BYTES = 10 * 1024 * 1024
@@ -57,6 +63,7 @@ CONTENT_TYPE_EXTENSION_MAP = {
 VALID_FRIEND_REQUEST_SCOPES = {"all", "friends_of_friends", "nobody"}
 VALID_MESSAGE_SCOPES = {"friends_or_contacts", "all", "mutual_follow"}
 DISPLAY_PHONE_REGEX = re.compile(r"^1\d{10}$")
+_WECHAT_ACCESS_TOKEN_CACHE: dict[str, str | float] = {"token": "", "expires_at": 0.0}
 
 
 def _normalize_optional_text(value: str | None, max_len: int) -> str | None:
@@ -82,17 +89,20 @@ def _normalize_display_wechat(value: str | None) -> str | None:
 
 
 def _to_public_file_url(file_url: str, request: Request) -> str:
-    if file_url.startswith(("http://", "https://", "data:image/", "wxfile://")):
-        return file_url
+    normalized = sanitize_public_asset_url(file_url)
+    if not normalized:
+        return normalized
+    if normalized.startswith(("http://", "https://")):
+        return normalized
 
-    if file_url.startswith("/static/uploads/"):
-        return f"{str(request.base_url).rstrip('/')}{file_url}"
+    if normalized.startswith("/static/uploads/"):
+        return f"{str(request.base_url).rstrip('/')}{normalized}"
 
-    return file_url
+    return normalized
 
 
 def _to_public_avatar_url(avatar_url: str | None, request: Request) -> str:
-    final_avatar_url = avatar_url or settings.DEFAULT_AVATAR_URL
+    final_avatar_url = sanitize_public_asset_url(avatar_url, settings.DEFAULT_AVATAR_URL)
     return _to_public_file_url(final_avatar_url, request)
 
 
@@ -131,6 +141,114 @@ def _parse_card_files(card_files_json: str | None, request: Request) -> list[dic
         )
 
     return result
+
+
+def _to_public_static_url(path: Path, request: Request) -> str:
+    relative = path.relative_to(STATIC_DIR).as_posix()
+    return f"{str(request.base_url).rstrip('/')}/static/{relative}"
+
+
+def _request_json(url: str, *, data: bytes | None = None) -> dict:
+    req = UrlRequest(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"} if data is not None else {},
+        method="POST" if data is not None else "GET",
+    )
+    with urlopen(req, timeout=10) as resp:  # noqa: S310 - trusted WeChat API URL from settings/code.
+        body = resp.read()
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _get_wechat_access_token() -> str:
+    app_id = str(settings.WECHAT_MINI_APP_ID or "").strip()
+    app_secret = str(settings.WECHAT_MINI_APP_SECRET or "").strip()
+    if not app_id or not app_secret:
+        return ""
+
+    now = time.time()
+    cached_token = str(_WECHAT_ACCESS_TOKEN_CACHE.get("token") or "")
+    cached_expires_at = float(_WECHAT_ACCESS_TOKEN_CACHE.get("expires_at") or 0)
+    if cached_token and cached_expires_at > now + 60:
+        return cached_token
+
+    query = urlencode(
+        {
+            "grant_type": "client_credential",
+            "appid": app_id,
+            "secret": app_secret,
+        }
+    )
+    payload = _request_json(f"https://api.weixin.qq.com/cgi-bin/token?{query}")
+    token = str(payload.get("access_token") or "").strip()
+    if not token:
+        logger.warning(f"Failed to get WeChat access_token: {payload}")
+        return ""
+
+    expires_in = int(payload.get("expires_in") or 7200)
+    _WECHAT_ACCESS_TOKEN_CACHE["token"] = token
+    _WECHAT_ACCESS_TOKEN_CACHE["expires_at"] = now + max(expires_in - 120, 300)
+    return token
+
+
+def _download_profile_miniapp_code(*, target_user_id: str, output_path: Path) -> bool:
+    token = _get_wechat_access_token()
+    if not token:
+        return False
+
+    payload = {
+        "scene": target_user_id,
+        "page": "pages/me/card/index",
+        "check_path": False,
+        "env_version": "release",
+    }
+    request_url = f"https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token={token}"
+    req = UrlRequest(
+        request_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(req, timeout=15) as resp:  # noqa: S310 - trusted WeChat API URL from settings/code.
+            body = resp.read()
+            content_type = str(resp.headers.get("Content-Type") or "").lower()
+    except URLError as exc:
+        logger.warning(f"Failed to download WeChat miniapp code. target={target_user_id}, error={exc}")
+        return False
+
+    if "json" in content_type or body.startswith(b"{"):
+        try:
+            error_payload = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            error_payload = {"raw": body[:200].decode("utf-8", errors="ignore")}
+        logger.warning(f"WeChat miniapp code API returned error. target={target_user_id}, payload={error_payload}")
+        return False
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(body)
+    return True
+
+
+def _get_profile_miniapp_code_url(*, target_user_id: str, request: Request) -> str:
+    safe_target_user_id = re.sub(r"[^A-Za-z0-9_-]", "", target_user_id)[:32]
+    if not safe_target_user_id:
+        return ""
+
+    output_path = MINIAPP_CODE_DIR / f"profile_{safe_target_user_id}.png"
+    if output_path.exists() and output_path.stat().st_size > 0:
+        return _to_public_static_url(output_path, request)
+
+    if _download_profile_miniapp_code(target_user_id=safe_target_user_id, output_path=output_path):
+        return _to_public_static_url(output_path, request)
+
+    return ""
+
 
 def _resolve_user_stats(db: Session, user) -> dict:
     fallback_stats = {
@@ -218,7 +336,9 @@ def _resolve_contact_view_state(
     viewer_display_wechat = _normalize_optional_text(viewer_user.display_wechat, 64)
     viewer_real_name_verified = _has_approved_real_name_verification(db=db, user=viewer_user)
     viewer_member_snapshot = resolve_member_snapshot(db=db, user_pk=int(viewer_user.id))
-    viewer_is_member = bool(viewer_member_snapshot["is_member"])
+    viewer_is_yearly_member = bool(viewer_member_snapshot["is_member"]) and str(
+        viewer_member_snapshot.get("member_plan_id") or viewer_member_snapshot.get("plan_id") or ""
+    ).strip() == "yearly"
     viewer_contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=int(viewer_user.id))
     viewer_has_contact_package = bool(viewer_contact_package_snapshot["has_remaining_views"])
 
@@ -231,18 +351,14 @@ def _resolve_contact_view_state(
         locked_reason = "请先完善自己的展示手机号和微信号"
     elif not viewer_real_name_verified:
         locked_reason = "完成实名认证后可查看对方联系方式"
-    elif not viewer_is_member and not viewer_has_contact_package:
-        locked_reason = "开通会员或购买人群包后可查看对方联系方式"
+    elif viewer_is_yearly_member:
+        locked_reason = None
+    elif viewer_has_contact_package:
+        locked_reason = "消耗1人脉值可查看该用户联系方式"
+    else:
+        locked_reason = "开通年度会员或购买人群包后可查看对方联系方式"
 
     contact_visible = locked_reason is None
-    viewer_contact_package_used_for_view = False
-    if contact_visible and not viewer_is_member:
-        viewer_contact_package_snapshot = consume_contact_package_view(
-            db=db,
-            user_pk=int(viewer_user.id),
-            commit=True,
-        )
-        viewer_contact_package_used_for_view = True
     return {
         "display_phone": target_display_phone if contact_visible else None,
         "display_wechat": target_display_wechat if contact_visible else None,
@@ -251,7 +367,74 @@ def _resolve_contact_view_state(
         "target_has_contact": target_has_contact,
         "target_contact_enabled": target_contact_enabled,
         "viewer_contact_package_remaining_views": int(viewer_contact_package_snapshot["remaining_views"]),
-        "viewer_contact_package_used_for_view": viewer_contact_package_used_for_view,
+        "viewer_contact_package_used_for_view": False,
+    }
+
+
+def _unlock_contact_with_package(
+    db: Session,
+    *,
+    viewer_user,
+    target_user,
+) -> dict:
+    target_display_phone = _normalize_optional_text(target_user.display_phone, 20)
+    target_display_wechat = _normalize_optional_text(target_user.display_wechat, 64)
+    target_has_contact = bool(target_display_phone or target_display_wechat)
+    target_contact_enabled = bool(target_user.show_contact)
+
+    if int(viewer_user.id) == int(target_user.id):
+        return {
+            "display_phone": target_display_phone,
+            "display_wechat": target_display_wechat,
+            "contact_visible": bool(target_has_contact),
+            "contact_locked_reason": None if target_has_contact else "你还未完善展示手机号或微信号",
+            "target_has_contact": target_has_contact,
+            "target_contact_enabled": target_contact_enabled,
+            "viewer_contact_package_remaining_views": 0,
+            "viewer_contact_package_used_for_view": False,
+        }
+
+    if not target_contact_enabled:
+        raise BusinessException(message="对方暂未开启联系方式展示", code=4561, status_code=403)
+    if not target_has_contact:
+        raise BusinessException(message="对方暂未填写展示联系方式", code=4562, status_code=403)
+
+    viewer_display_phone = _normalize_optional_text(viewer_user.display_phone, 20)
+    viewer_display_wechat = _normalize_optional_text(viewer_user.display_wechat, 64)
+    if not (viewer_display_phone and viewer_display_wechat):
+        raise BusinessException(message="请先完善自己的展示手机号和微信号", code=4563, status_code=403)
+
+    if not _has_approved_real_name_verification(db=db, user=viewer_user):
+        raise BusinessException(message="完成实名认证后可查看对方联系方式", code=4564, status_code=403)
+
+    viewer_member_snapshot = resolve_member_snapshot(db=db, user_pk=int(viewer_user.id))
+    viewer_is_yearly_member = bool(viewer_member_snapshot["is_member"]) and str(
+        viewer_member_snapshot.get("member_plan_id") or viewer_member_snapshot.get("plan_id") or ""
+    ).strip() == "yearly"
+
+    if viewer_is_yearly_member:
+        viewer_contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=int(viewer_user.id))
+        used_for_view = False
+    else:
+        current_contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=int(viewer_user.id))
+        if not bool(current_contact_package_snapshot["has_remaining_views"]):
+            raise BusinessException(message="人群包剩余次数不足", code=4565, status_code=403)
+        viewer_contact_package_snapshot = consume_contact_package_view(
+            db=db,
+            user_pk=int(viewer_user.id),
+            commit=True,
+        )
+        used_for_view = True
+
+    return {
+        "display_phone": target_display_phone,
+        "display_wechat": target_display_wechat,
+        "contact_visible": True,
+        "contact_locked_reason": None,
+        "target_has_contact": target_has_contact,
+        "target_contact_enabled": target_contact_enabled,
+        "viewer_contact_package_remaining_views": int(viewer_contact_package_snapshot["remaining_views"]),
+        "viewer_contact_package_used_for_view": used_for_view,
     }
 
 
@@ -262,6 +445,7 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
     real_name_verified = _has_approved_real_name_verification(db=db, user=user)
     display_phone = _normalize_optional_text(user.display_phone, 20)
     display_wechat = _normalize_optional_text(user.display_wechat, 64)
+    email = _normalize_optional_text(user.email, 100)
 
     return {
         "userId": user.user_id,
@@ -269,10 +453,13 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
         "phone": user.phone,
         "display_phone": display_phone,
         "display_wechat": display_wechat,
+        "email": email,
+        "display_email": email,
         "wechat_bound": bool(user.wechat_openid),
         "wechat_bound_at": user.wechat_bound_at.isoformat() if user.wechat_bound_at else None,
         "nickname": user.nickname,
         "avatar_url": _to_public_avatar_url(user.avatar_url, request),
+        "miniapp_code_url": _get_profile_miniapp_code_url(target_user_id=user.user_id, request=request),
         "is_verified": bool(user.is_verified),
         "intro": user.intro,
         "industry_code": user.industry_code,
@@ -415,6 +602,58 @@ def get_public_user_profile(
     )
 
 
+@router.post("/profiles/{target_user_id}/contact-unlock", summary="Unlock public profile contact with contact package")
+def unlock_public_user_profile_contact(
+    target_user_id: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    viewer = _require_current_user(db=db, current_user_pk=user_id)
+
+    normalized_target_user_id = str(target_user_id or "").strip()
+    if len(normalized_target_user_id) != 8:
+        raise BusinessException(message="目标用户ID格式无效", code=4233, status_code=400)
+
+    target_user = get_user_by_business_user_id(db=db, business_user_id=normalized_target_user_id)
+    if target_user is None or not bool(target_user.is_active):
+        raise BusinessException(message="目标用户不存在", code=4042, status_code=404)
+
+    return success_response(
+        data=_unlock_contact_with_package(
+            db=db,
+            viewer_user=viewer,
+            target_user=target_user,
+        )
+    )
+
+
+@router.get("/profiles/{target_user_id}/miniapp-code", summary="Get profile miniapp code")
+def get_profile_miniapp_code(
+    target_user_id: str,
+    request: Request,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+
+    normalized_target_user_id = str(target_user_id or "").strip()
+    if len(normalized_target_user_id) != 8:
+        raise BusinessException(message="目标用户ID格式无效", code=4233, status_code=400)
+
+    target_user = get_user_by_business_user_id(db=db, business_user_id=normalized_target_user_id)
+    if target_user is None or not bool(target_user.is_active):
+        raise BusinessException(message="目标用户不存在", code=4042, status_code=404)
+
+    return success_response(
+        data={
+            "miniapp_code_url": _get_profile_miniapp_code_url(
+                target_user_id=normalized_target_user_id,
+                request=request,
+            )
+        }
+    )
+
+
 @router.patch("/me", summary="Update current user profile")
 def update_current_user_profile(
     payload: UpdateCurrentUserProfileRequest,
@@ -433,7 +672,12 @@ def update_current_user_profile(
         updates["nickname"] = normalized_nickname[:64]
 
     if payload.avatar_url is not None:
-        normalized_avatar = payload.avatar_url.strip()
+        normalized_avatar = normalize_persisted_asset_url(
+            payload.avatar_url,
+            request=request,
+            field_label="头像",
+            allow_empty=True,
+        )
         updates["avatar_url"] = normalized_avatar[:255] if normalized_avatar else settings.DEFAULT_AVATAR_URL
 
     if payload.intro is not None:
@@ -457,6 +701,9 @@ def update_current_user_profile(
     if payload.display_wechat is not None:
         updates["display_wechat"] = _normalize_display_wechat(payload.display_wechat)
 
+    if payload.email is not None:
+        updates["email"] = _normalize_optional_text(payload.email, 100)
+
     if payload.city_code is not None:
         updates["city_code"] = _normalize_optional_text(payload.city_code, 16)
 
@@ -467,7 +714,11 @@ def update_current_user_profile(
         normalized_files = []
         for item in payload.card_files[:10]:
             file_name = item.name.strip()
-            file_url = item.url.strip()
+            file_url = normalize_persisted_asset_url(
+                item.url,
+                request=request,
+                field_label="名片附件",
+            )
             if not file_name or not file_url:
                 continue
             normalized_files.append(

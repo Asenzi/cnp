@@ -8,6 +8,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.asset_urls import normalize_persisted_asset_url
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
@@ -102,8 +103,14 @@ def _validate_payload(verify_type: VerificationType, payload: dict) -> dict:
     if verify_type == VerificationType.REAL_NAME:
         real_name = _normalize_text(payload.get("real_name"), 32)
         id_number = _normalize_text(payload.get("id_number"), 18)
-        id_front_url = _normalize_text(payload.get("id_front_url"), 255)
-        id_back_url = _normalize_text(payload.get("id_back_url"), 255)
+        id_front_url = normalize_persisted_asset_url(
+            _normalize_text(payload.get("id_front_url"), 255),
+            field_label="身份证人像面",
+        )
+        id_back_url = normalize_persisted_asset_url(
+            _normalize_text(payload.get("id_back_url"), 255),
+            field_label="身份证国徽面",
+        )
         if not real_name:
             raise BusinessException(message="请输入真实姓名", code=4301, status_code=400)
         if not id_number or not ID_NUMBER_PATTERN.match(id_number):
@@ -122,7 +129,10 @@ def _validate_payload(verify_type: VerificationType, payload: dict) -> dict:
     if verify_type == VerificationType.ENTERPRISE:
         company_name = _normalize_text(payload.get("company_name"), 128)
         job_title = _normalize_text(payload.get("job_title"), 64)
-        license_file_url = _normalize_text(payload.get("license_file_url"), 255)
+        license_file_url = normalize_persisted_asset_url(
+            _normalize_text(payload.get("license_file_url"), 255),
+            field_label="营业执照",
+        )
         credit_code = _normalize_text(payload.get("credit_code"), 18)
 
         if not company_name:
@@ -143,7 +153,10 @@ def _validate_payload(verify_type: VerificationType, payload: dict) -> dict:
         card_holder_name = _normalize_text(payload.get("card_holder_name"), 32)
         company_name = _normalize_text(payload.get("company_name"), 128)
         card_title = _normalize_text(payload.get("card_title"), 64)
-        card_file_url = _normalize_text(payload.get("card_file_url"), 255)
+        card_file_url = normalize_persisted_asset_url(
+            _normalize_text(payload.get("card_file_url"), 255),
+            field_label="名片文件",
+        )
         if not card_holder_name:
             raise BusinessException(message="请输入名片姓名", code=4321, status_code=400)
         if not card_file_url:

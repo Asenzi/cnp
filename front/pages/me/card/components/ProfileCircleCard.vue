@@ -29,27 +29,30 @@ defineEmits(['enter'])
 .circle-card {
   display: flex;
   align-items: center;
-  gap: 18rpx;
-  border-radius: 20rpx;
-  border: 1rpx solid #f1f5f9;
+  gap: 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(0, 0, 0, 0.06);
   background: #ffffff;
-  padding: 18rpx;
+  padding: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04), 0 1rpx 2rpx rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
 }
 
 .circle-card-active {
-  opacity: 0.9;
+  transform: scale(0.98);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.06);
 }
 
 .cover {
-  width: 110rpx;
-  height: 110rpx;
-  border-radius: 16rpx;
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 12rpx;
   background: linear-gradient(135deg, #1a57db 0%, #60a5fa 100%);
   flex-shrink: 0;
 }
 
 .cover-image {
-  background: #e2e8f0;
+  background: #f3f4f6;
 }
 
 .meta {
@@ -58,14 +61,14 @@ defineEmits(['enter'])
 }
 
 .name {
-  color: #0f172a;
+  color: #111827;
   font-size: 28rpx;
   line-height: 36rpx;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sub-row {
-  margin-top: 6rpx;
+  margin-top: 8rpx;
   display: flex;
   align-items: center;
   gap: 8rpx;
@@ -73,17 +76,17 @@ defineEmits(['enter'])
 
 .sub-text,
 .dot {
-  color: #64748b;
-  font-size: 22rpx;
-  line-height: 30rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+  line-height: 32rpx;
 }
 
 .industry-text {
   margin-top: 4rpx;
   display: block;
-  color: #94a3b8;
-  font-size: 20rpx;
-  line-height: 28rpx;
+  color: #9ca3af;
+  font-size: 22rpx;
+  line-height: 30rpx;
 }
 
 @media (prefers-color-scheme: dark) {

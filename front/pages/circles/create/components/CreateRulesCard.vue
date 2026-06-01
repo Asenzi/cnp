@@ -10,15 +10,6 @@
       placeholder-class="rules-placeholder"
       @input="emit('update:rules', $event?.detail?.value || '')"
     />
-
-    <view class="switch-row">
-      <text class="switch-label">成员发布内容需审核</text>
-      <switch
-        :checked="needPostReview"
-        color="#1a57db"
-        @change="emit('update:needPostReview', Boolean($event?.detail?.value))"
-      />
-    </view>
   </view>
 </template>
 
@@ -27,32 +18,26 @@ defineProps({
   rules: {
     type: String,
     default: ''
-  },
-  needPostReview: {
-    type: Boolean,
-    default: false
   }
 })
 
-const emit = defineEmits(['update:rules', 'update:needPostReview'])
+const emit = defineEmits(['update:rules'])
 </script>
 
 <style scoped>
 .card {
-  margin: 0 24rpx;
+  margin: 0;
   background: #ffffff;
-  border-radius: 20rpx;
-  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
-  padding: 20rpx;
+  padding: 24rpx 32rpx;
 }
 
 .card-title {
   display: block;
   color: #0f172a;
-  font-size: 30rpx;
-  line-height: 38rpx;
-  font-weight: 700;
-  margin-bottom: 12rpx;
+  font-size: 28rpx;
+  line-height: 1.3;
+  font-weight: 600;
+  margin-bottom: 16rpx;
 }
 
 .rules-textarea {
@@ -60,53 +45,35 @@ const emit = defineEmits(['update:rules', 'update:needPostReview'])
   box-sizing: border-box;
   min-height: 180rpx;
   border-radius: 12rpx;
-  border: 1rpx solid #e2e8f0;
+  border: 1rpx solid rgba(15, 23, 42, 0.08);
   background: #f8fafc;
-  padding: 14rpx 18rpx;
+  padding: 16rpx 20rpx;
   color: #0f172a;
-  font-size: 24rpx;
-  line-height: 34rpx;
+  font-size: 26rpx;
+  line-height: 1.5;
 }
 
 .rules-placeholder {
   color: #94a3b8;
 }
 
-.switch-row {
-  margin-top: 14rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.switch-label {
-  color: #334155;
-  font-size: 24rpx;
-  line-height: 32rpx;
-}
-
 @media (prefers-color-scheme: dark) {
   .card {
     background: #0f172a;
-    box-shadow: none;
   }
 
   .card-title {
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .rules-textarea {
-    border-color: #334155;
+    border-color: rgba(255, 255, 255, 0.08);
     background: #1e293b;
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .rules-placeholder {
     color: #64748b;
-  }
-
-  .switch-label {
-    color: #cbd5e1;
   }
 }
 </style>

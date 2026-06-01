@@ -32,7 +32,11 @@
     <view class="guest-stats-row">
       <view class="guest-stat-card guest-stat-card-click" hover-class="guest-stat-card-active" @tap="$emit('open-circles')">
         <text class="guest-stat-value">--</text>
-        <text class="guest-stat-label">我的圈子</text>
+        <text class="guest-stat-label">圈子</text>
+      </view>
+      <view class="guest-stat-card">
+        <text class="guest-stat-value">--</text>
+        <text class="guest-stat-label">关注收藏</text>
       </view>
       <!-- 积分功能暂时隐藏
       <view class="guest-stat-card guest-stat-card-click" hover-class="guest-stat-card-active" @tap="$emit('open-points')">
@@ -42,7 +46,7 @@
       -->
       <view class="guest-stat-card">
         <text class="guest-stat-value">--</text>
-        <text class="guest-stat-label">账户余额</text>
+        <text class="guest-stat-label">余额</text>
       </view>
     </view>
   </view>
@@ -183,7 +187,7 @@ defineEmits(['login', 'open-circles'])
 
 .guest-stats-row {
   display: flex;
-  gap: 24rpx;
+  gap: 12rpx;
   margin-bottom: 64rpx;
 }
 
@@ -193,8 +197,8 @@ defineEmits(['login', 'open-circles'])
   flex-direction: column;
   align-items: center;
   gap: 8rpx;
-  padding: 24rpx 12rpx;
-  border-radius: 24rpx;
+  padding: 20rpx 8rpx;
+  border-radius: 20rpx;
   border: 1rpx solid #f1f5f9;
   background: #ffffff;
   box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.04);
@@ -209,16 +213,17 @@ defineEmits(['login', 'open-circles'])
 }
 
 .guest-stat-value {
-  font-size: 40rpx;
+  font-size: 32rpx;
   font-weight: 700;
   color: #94a3b8;
   line-height: 1.2;
 }
 
 .guest-stat-label {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #64748b;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 @media (prefers-color-scheme: dark) {

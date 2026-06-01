@@ -1,11 +1,16 @@
 <template>
   <view class="benefit-grid">
-    <view v-for="item in items" :key="item.key" class="benefit-item" :class="{ 'benefit-item-wide': item.wide }">
-      <view class="benefit-icon-wrap">
-        <image v-if="item.iconPath" class="benefit-icon-img" mode="aspectFit" :src="item.iconPath" />
-        <text v-else class="benefit-icon-text">{{ item.iconText || '会' }}</text>
+    <view
+      v-for="item in items"
+      :key="item.key"
+      class="benefit-card"
+      :class="{ 'is-wide': item.wide }"
+    >
+      <view class="benefit-icon">
+        <image v-if="item.iconPath" class="icon-img" mode="aspectFit" :src="item.iconPath" />
+        <text v-else class="icon-text">{{ item.iconText || '会' }}</text>
       </view>
-      <view class="benefit-main">
+      <view class="benefit-content">
         <text class="benefit-title">{{ item.title }}</text>
         <text class="benefit-desc">{{ item.desc }}</text>
       </view>
@@ -25,93 +30,74 @@ defineProps({
 <style scoped>
 .benefit-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24rpx;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16rpx;
 }
 
-.benefit-item {
-  border-radius: 24rpx;
-  border: 1rpx solid #e2e8f0;
+.benefit-card {
   background: #ffffff;
-  padding: 32rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  padding: 28rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
-  font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
+  gap: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04), 0 1rpx 2rpx rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
 }
 
-.benefit-item-wide {
-  grid-column: span 2 / span 2;
+.benefit-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.06);
+}
+
+.is-wide {
+  grid-column: span 2;
   flex-direction: row;
   align-items: center;
-  gap: 28rpx;
 }
 
-.benefit-icon-wrap {
+.benefit-icon {
   width: 72rpx;
   height: 72rpx;
-  border-radius: 20rpx;
-  background: rgba(26, 87, 219, 0.1);
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-radius: 14rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 2rpx 8rpx rgba(59, 130, 246, 0.15), inset 0 1rpx 0 rgba(255, 255, 255, 0.5);
 }
 
-.benefit-icon-img {
+.icon-img {
   width: 40rpx;
   height: 40rpx;
 }
 
-.benefit-icon-text {
+.icon-text {
   color: #1a57db;
   font-size: 28rpx;
-  line-height: 1;
   font-weight: 700;
 }
 
-.benefit-main {
+.benefit-content {
   flex: 1;
   min-width: 0;
 }
 
 .benefit-title {
   display: block;
-  color: #0f172a;
+  color: #111827;
   font-size: 28rpx;
-  line-height: 40rpx;
-  font-weight: 700;
+  line-height: 36rpx;
+  font-weight: 600;
+  margin-bottom: 6rpx;
 }
 
 .benefit-desc {
   display: block;
-  margin-top: 8rpx;
-  color: #64748b;
+  color: #6b7280;
   font-size: 24rpx;
-  line-height: 36rpx;
-}
-
-@media (prefers-color-scheme: dark) {
-  .benefit-item {
-    background: #0f172a;
-    border-color: #1e293b;
-  }
-
-  .benefit-title {
-    color: #e2e8f0;
-  }
-
-  .benefit-desc {
-    color: #94a3b8;
-  }
-
-  .benefit-icon-wrap {
-    background: rgba(26, 87, 219, 0.25);
-  }
-
-  .benefit-icon-text {
-    color: #93c5fd;
-  }
+  line-height: 32rpx;
 }
 </style>

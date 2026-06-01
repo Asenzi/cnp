@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -9,6 +9,15 @@ from app.models.base import Base
 
 class Circle(Base):
     __tablename__ = "circles"
+    __table_args__ = (
+        Index(
+            "ix_circles_status_industry_active_created",
+            "status",
+            "industry_label",
+            "last_active_at",
+            "created_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     circle_code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)

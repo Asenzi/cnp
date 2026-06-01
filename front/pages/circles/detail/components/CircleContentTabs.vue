@@ -29,10 +29,9 @@ const emit = defineEmits(['change'])
 
 <style scoped>
 .tabs-wrap {
-  margin-top: 24rpx;
   padding: 0 32rpx;
-  border-bottom: 1rpx solid #e2e8f0;
-  background: #f6f6f8;
+  border-bottom: 1rpx solid #f3f4f6;
+  background: #ffffff;
   position: sticky;
   top: 0;
   z-index: 20;
@@ -41,37 +40,43 @@ const emit = defineEmits(['change'])
 }
 
 .tab-item {
-  height: 74rpx;
+  height: 88rpx;
   display: inline-flex;
   align-items: center;
-  border-bottom: 4rpx solid transparent;
+  border-bottom: 2rpx solid transparent;
 }
 
 .tab-item-active {
-  border-bottom-color: #1a57db;
+  border-bottom-color: #2563eb;
 }
 
 .tab-text {
-  color: #64748b;
-  font-size: 24rpx;
-  line-height: 32rpx;
-  font-weight: 500;
+  color: #6b7280;
+  font-size: 28rpx;
+  line-height: 36rpx;
 }
 
 .tab-text-active {
-  color: #1a57db;
-  font-weight: 700;
+  color: #111827;
+  font-weight: 500;
 }
 
 @media (prefers-color-scheme: dark) {
   .tabs-wrap {
-    background: #111621;
-    border-bottom-color: #1e293b;
+    background: #111827;
+    border-bottom-color: #1f2937;
   }
 
   .tab-text {
-    color: #94a3b8;
+    color: #9ca3af;
+  }
+
+  .tab-text-active {
+    color: #f9fafb;
+  }
+
+  .tab-item-active {
+    border-bottom-color: #3b82f6;
   }
 }
 </style>
-

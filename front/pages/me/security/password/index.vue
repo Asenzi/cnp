@@ -85,7 +85,7 @@ const countdown = ref(0)
 let countdownTimer = null
 
 const normalizeCode = (value) => String(value || '').replace(/\D/g, '').slice(0, 8)
-watch(code, (value) => {
+const stopCodeWatch = watch(code, (value) => {
   const nextValue = normalizeCode(value)
   if (nextValue !== value) {
     code.value = nextValue
@@ -234,6 +234,11 @@ onShow(async () => {
 })
 
 onUnmounted(() => {
+  // 停止 watch
+  if (stopCodeWatch) {
+    stopCodeWatch()
+  }
+
   if (countdownTimer) {
     clearInterval(countdownTimer)
     countdownTimer = null

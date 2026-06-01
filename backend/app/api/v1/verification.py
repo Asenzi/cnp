@@ -232,6 +232,9 @@ def start_tencent_real_name_flow(
         user=user,
         real_name=payload.real_name,
         id_number=payload.id_number,
+        wechat_id=payload.wechat_id,
+        email=payload.email,
+        phone_number=payload.phone_number,
     )
     return success_response(data=data.model_dump(mode='json'), message='实名认证会话已创建')
 

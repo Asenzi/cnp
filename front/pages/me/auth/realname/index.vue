@@ -42,6 +42,20 @@
             </view>
 
             <view class="field-item">
+              <text class="field-label">邮箱</text>
+              <input
+                v-model="email"
+                class="field-input"
+                type="text"
+                maxlength="100"
+                :disabled="hasContactInfo || loading"
+                placeholder="请输入您的邮箱地址"
+                placeholder-class="field-placeholder"
+              />
+              <text v-if="hasContactInfo" class="field-hint">联系方式提交后不可修改</text>
+            </view>
+
+            <view class="field-item">
               <text class="field-label">手机号</text>
               <input
                 v-model="phoneNumber"
@@ -146,6 +160,7 @@ const verifiedSource = ref('')
 const realName = ref('')
 const idNumber = ref('')
 const wechatId = ref('')
+const email = ref('')
 const phoneNumber = ref('')
 const maskedIdNumber = ref('')
 const pendingBizToken = ref('')
@@ -155,6 +170,7 @@ const isApproved = computed(() => currentStatus.value === VERIFICATION_STATUS.AP
 const hasContactInfo = computed(() => {
   return Boolean(
     (wechatId.value && String(wechatId.value).trim()) ||
+    (email.value && String(email.value).trim()) ||
     (phoneNumber.value && String(phoneNumber.value).trim())
   ) && currentStatus.value !== VERIFICATION_STATUS.NOT_SUBMITTED
 })
@@ -283,6 +299,13 @@ const validateIdentityInput = () => {
   if (!normalizedWechat) {
     return '请输入微信号'
   }
+  const normalizedEmail = String(email.value || '').trim()
+  if (!normalizedEmail) {
+    return '请输入邮箱地址'
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return '邮箱格式不正确'
+  }
   const normalizedPhone = String(phoneNumber.value || '').trim()
   if (!normalizedPhone) {
     return '请输入手机号'
@@ -311,6 +334,7 @@ const loadRealNameDetail = async () => {
       ? maskedIdNumber.value
       : String(detail?.id_number || '').trim()
     wechatId.value = String(detail?.wechat_id || '').trim()
+    email.value = String(detail?.email || '').trim()
     phoneNumber.value = String(detail?.phone_number || '').trim()
 
     if (isApproved.value) {
@@ -347,6 +371,7 @@ const startVerification = async () => {
       real_name: String(realName.value || '').trim(),
       id_number: String(idNumber.value || '').trim().toUpperCase(),
       wechat_id: String(wechatId.value || '').trim(),
+      email: String(email.value || '').trim(),
       phone_number: String(phoneNumber.value || '').trim()
     })
 

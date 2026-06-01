@@ -3,6 +3,7 @@ from typing import Any
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.circle import Circle
@@ -12,6 +13,7 @@ from app.models.user import User
 from app.models.user_block import UserBlock
 from app.models.user_circle_membership import UserCircleMembership
 from app.models.user_connection import UserConnection
+from app.models.user_interest import UserInterest
 
 
 def list_candidate_users(
@@ -637,6 +639,30 @@ def create_reco_impressions(
     if not target_user_pks:
         return 0
 
+    deduped_target_user_pks = set(target_user_pks)
+    normalized_request_id = str(request_id or "").strip()
+    if normalized_request_id:
+        existing_stmt = select(NetworkRecoImpression.target_user_pk).where(
+            NetworkRecoImpression.viewer_user_pk == viewer_user_pk,
+            NetworkRecoImpression.scene == scene,
+            NetworkRecoImpression.tab_key == tab_key,
+            NetworkRecoImpression.request_id == normalized_request_id,
+            NetworkRecoImpression.target_user_pk.in_(deduped_target_user_pks),
+        )
+        existing_target_user_pks = {
+            int(value)
+            for value in db.execute(existing_stmt).scalars().all()
+            if value
+        }
+        deduped_target_user_pks = {
+            int(target_user_pk)
+            for target_user_pk in deduped_target_user_pks
+            if int(target_user_pk) not in existing_target_user_pks
+        }
+
+    if not deduped_target_user_pks:
+        return 0
+
     rows = [
         NetworkRecoImpression(
             viewer_user_pk=viewer_user_pk,
@@ -645,11 +671,51 @@ def create_reco_impressions(
             tab_key=tab_key,
             request_id=request_id,
         )
-        for target_user_pk in target_user_pks
+        for target_user_pk in deduped_target_user_pks
     ]
     db.add_all(rows)
-    db.commit()
-    return len(rows)
+    try:
+        db.commit()
+        return len(rows)
+    except IntegrityError:
+        db.rollback()
+        if not normalized_request_id:
+            raise
+
+    existing_stmt = select(NetworkRecoImpression.target_user_pk).where(
+        NetworkRecoImpression.viewer_user_pk == viewer_user_pk,
+        NetworkRecoImpression.scene == scene,
+        NetworkRecoImpression.tab_key == tab_key,
+        NetworkRecoImpression.request_id == normalized_request_id,
+        NetworkRecoImpression.target_user_pk.in_(deduped_target_user_pks),
+    )
+    existing_target_user_pks = {
+        int(value)
+        for value in db.execute(existing_stmt).scalars().all()
+        if value
+    }
+    remaining_target_user_pks = [
+        int(target_user_pk)
+        for target_user_pk in deduped_target_user_pks
+        if int(target_user_pk) not in existing_target_user_pks
+    ]
+
+    inserted_count = 0
+    for target_user_pk in remaining_target_user_pks:
+        row = NetworkRecoImpression(
+            viewer_user_pk=viewer_user_pk,
+            target_user_pk=target_user_pk,
+            scene=scene,
+            tab_key=tab_key,
+            request_id=request_id,
+        )
+        db.add(row)
+        try:
+            db.commit()
+            inserted_count += 1
+        except IntegrityError:
+            db.rollback()
+    return inserted_count
 
 
 def create_reco_feedback(
@@ -662,7 +728,21 @@ def create_reco_feedback(
     request_id: str | None,
     event_type: str,
     ext_json: str | None,
-) -> None:
+) -> bool:
+    normalized_request_id = str(request_id or "").strip()
+    if normalized_request_id:
+        existing_stmt = select(NetworkRecoFeedback.id).where(
+            NetworkRecoFeedback.viewer_user_pk == viewer_user_pk,
+            NetworkRecoFeedback.target_user_pk == target_user_pk,
+            NetworkRecoFeedback.scene == scene,
+            NetworkRecoFeedback.tab_key == tab_key,
+            NetworkRecoFeedback.request_id == normalized_request_id,
+            NetworkRecoFeedback.event_type == event_type,
+        ).limit(1)
+        existing_id = db.execute(existing_stmt).scalar_one_or_none()
+        if existing_id is not None:
+            return False
+
     row = NetworkRecoFeedback(
         viewer_user_pk=viewer_user_pk,
         target_user_pk=target_user_pk,
@@ -673,4 +753,89 @@ def create_reco_feedback(
         ext_json=ext_json,
     )
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+        return True
+    except IntegrityError:
+        db.rollback()
+        return False
+
+
+
+def toggle_user_interest(
+    db: Session,
+    *,
+    user_pk: int,
+    target_user_pk: int,
+    desired_state: bool | None = None,
+) -> bool:
+    """切换或设置用户感兴趣状态，返回最新状态。"""
+    if user_pk == target_user_pk:
+        return False
+
+    stmt = select(UserInterest).where(
+        UserInterest.user_pk == user_pk,
+        UserInterest.target_user_pk == target_user_pk,
+    )
+
+    normalized_desired = desired_state if isinstance(desired_state, bool) else None
+
+    if normalized_desired is False:
+        existing = db.execute(stmt).scalar_one_or_none()
+        if existing is None:
+            return False
+        db.delete(existing)
+        db.commit()
+        return False
+
+    if normalized_desired is True:
+        existing = db.execute(stmt).scalar_one_or_none()
+        if existing is not None:
+            return True
+        interest = UserInterest(
+            user_pk=user_pk,
+            target_user_pk=target_user_pk,
+        )
+        db.add(interest)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        return True
+
+    existing = db.execute(stmt).scalar_one_or_none()
+    if existing is not None:
+        db.delete(existing)
+        db.commit()
+        return False
+
+    interest = UserInterest(
+        user_pk=user_pk,
+        target_user_pk=target_user_pk,
+    )
+    db.add(interest)
+    try:
+        db.commit()
+        return True
+    except IntegrityError:
+        db.rollback()
+        return True
+
+
+def get_user_interests(
+    db: Session,
+    *,
+    user_pk: int,
+    target_user_pks: set[int],
+) -> dict[int, bool]:
+    """批量查询用户对目标用户的感兴趣状态"""
+    if not target_user_pks:
+        return {}
+    
+    stmt = select(UserInterest.target_user_pk).where(
+        UserInterest.user_pk == user_pk,
+        UserInterest.target_user_pk.in_(target_user_pks),
+    )
+    interested_pks = {row[0] for row in db.execute(stmt).all()}
+    
+    return {pk: (pk in interested_pks) for pk in target_user_pks}

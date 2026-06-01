@@ -1,6 +1,7 @@
 from .base import Base
 from .admin_user import AdminUser
 from .circle import Circle
+from .circle_interest import CircleInterest
 from .content_review import ContentReview
 from .member_order import MemberOrder
 from .network_reco_feedback import NetworkRecoFeedback
@@ -14,7 +15,9 @@ from .user_block import UserBlock
 from .user_circle_membership import UserCircleMembership
 from .user_connection import UserConnection
 from .user_contact_package_balance import UserContactPackageBalance
+from .user_feedback import UserFeedback
 from .user_friend_request import UserFriendRequest
+from .user_interest import UserInterest
 from .user_membership import UserMembership
 from .user_message import UserMessage
 from .user_points_account import UserPointsAccount
@@ -29,6 +32,7 @@ __all__ = [
     "Base",
     "AdminUser",
     "Circle",
+    "CircleInterest",
     "ContentReview",
     "MemberOrder",
     "NetworkRecoFeedback",
@@ -43,7 +47,9 @@ __all__ = [
     "UserCircleMembership",
     "UserConnection",
     "UserContactPackageBalance",
+    "UserFeedback",
     "UserFriendRequest",
+    "UserInterest",
     "UserMembership",
     "UserMessage",
     "UserPointsAccount",

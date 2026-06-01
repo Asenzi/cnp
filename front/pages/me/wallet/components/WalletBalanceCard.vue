@@ -1,23 +1,24 @@
 <template>
   <view class="wallet-card">
-    <view class="wallet-glow wallet-glow-right"></view>
-    <view class="wallet-glow wallet-glow-left"></view>
+    <view class="card-shine"></view>
+    <view class="card-pattern"></view>
 
     <view class="wallet-inner">
-      <text class="wallet-caption">账户总余额</text>
+      <view class="card-header">
+        <text class="wallet-caption">账户余额</text>
+        <view class="card-chip"></view>
+      </view>
 
       <view class="wallet-amount-row">
         <text class="wallet-yuan">¥</text>
         <text class="wallet-amount">{{ balanceText }}</text>
       </view>
 
-      <view class="wallet-footer">
-        <view class="wallet-id-wrap">
-          <text class="wallet-id-label">钱包ID</text>
-          <text class="wallet-id-value">{{ walletId }}</text>
-        </view>
-        <view class="wallet-icon-wrap">
-          <image class="wallet-icon" mode="aspectFit" src="/static/icon/wallet.png" />
+      <view class="card-footer">
+        <text class="wallet-id-label">{{ walletId }}</text>
+        <view class="card-logo">
+          <view class="logo-circle"></view>
+          <view class="logo-circle logo-circle-right"></view>
         </view>
       </view>
     </view>
@@ -39,126 +40,130 @@ defineProps({
 
 <style scoped>
 .wallet-card {
+  border-radius: 20rpx;
+  padding: 32rpx 36rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 12rpx 32rpx rgba(102, 126, 234, 0.3);
   position: relative;
   overflow: hidden;
-  border-radius: 28rpx;
-  padding: 56rpx 44rpx;
-  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
-  box-shadow: 0 16rpx 40rpx rgba(26, 87, 219, 0.3);
+  height: 320rpx;
 }
 
-.wallet-card::before {
-  content: '';
+.card-shine {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-  opacity: 0.5;
-}
-
-.wallet-glow {
-  position: absolute;
-  border-radius: 999rpx;
+  top: -50%;
+  right: -30%;
+  width: 300rpx;
+  height: 300rpx;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
   pointer-events: none;
 }
 
-.wallet-glow-right {
-  width: 500rpx;
-  height: 500rpx;
-  right: -180rpx;
-  top: -180rpx;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
-  filter: blur(30rpx);
-}
-
-.wallet-glow-left {
-  width: 400rpx;
-  height: 400rpx;
-  left: -140rpx;
-  bottom: -180rpx;
-  background: radial-gradient(circle, rgba(96, 165, 250, 0.25) 0%, transparent 70%);
-  filter: blur(35rpx);
+.card-pattern {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.05;
+  background-image:
+    repeating-linear-gradient(45deg, transparent, transparent 35rpx, rgba(255, 255, 255, 0.3) 35rpx, rgba(255, 255, 255, 0.3) 70rpx);
+  pointer-events: none;
 }
 
 .wallet-inner {
   position: relative;
   z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
 }
 
 .wallet-caption {
-  display: block;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 24rpx;
-  font-weight: 600;
-  letter-spacing: 0.5rpx;
-  text-transform: uppercase;
+  font-weight: 400;
+  letter-spacing: 1rpx;
+}
+
+.card-chip {
+  width: 48rpx;
+  height: 38rpx;
+  border-radius: 6rpx;
+  background: linear-gradient(135deg, #f0e68c 0%, #daa520 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-chip::before {
+  content: '';
+  position: absolute;
+  top: 6rpx;
+  left: 6rpx;
+  right: 6rpx;
+  bottom: 6rpx;
+  border: 2rpx solid rgba(0, 0, 0, 0.1);
+  border-radius: 3rpx;
 }
 
 .wallet-amount-row {
-  margin-top: 16rpx;
   display: flex;
   align-items: baseline;
-  gap: 8rpx;
+  gap: 4rpx;
+  margin-bottom: auto;
 }
 
 .wallet-yuan {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 40rpx;
-  font-weight: 700;
+  color: #ffffff;
+  font-size: 36rpx;
+  font-weight: 500;
 }
 
 .wallet-amount {
   color: #ffffff;
-  font-size: 72rpx;
+  font-size: 64rpx;
   line-height: 1;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 2rpx;
-  text-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.15);
 }
 
-.wallet-footer {
-  margin-top: 56rpx;
-  padding-top: 24rpx;
-  border-top: 1rpx solid rgba(255, 255, 255, 0.2);
+.card-footer {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
 }
 
-.wallet-id-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
 .wallet-id-label {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 20rpx;
-  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 22rpx;
+  font-weight: 400;
+  font-family: 'Courier New', monospace;
   letter-spacing: 2rpx;
-  text-transform: uppercase;
 }
 
-.wallet-id-value {
-  color: #ffffff;
-  font-size: 26rpx;
-  font-weight: 600;
-  letter-spacing: 1rpx;
-}
-
-.wallet-icon-wrap {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 18rpx;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10rpx);
+.card-logo {
   display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  gap: -16rpx;
+  position: relative;
 }
 
-.wallet-icon {
-  width: 36rpx;
-  height: 36rpx;
+.logo-circle {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  border: 2rpx solid rgba(255, 255, 255, 0.5);
+}
+
+.logo-circle-right {
+  margin-left: -16rpx;
 }
 </style>

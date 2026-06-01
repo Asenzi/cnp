@@ -1,154 +1,176 @@
-﻿<template>
-  <view class="edit-page">
-    <view class="page-shell">
-      <view class="top-nav" :style="navStyle">
-        <view class="back-btn" hover-class="back-btn-hover" @tap="goBack">
-          <image class="back-icon" mode="aspectFit" src="/static/me-icons/arrow-back-dark.png" />
+<template>
+  <view class="page">
+    <view class="header" :style="{ paddingTop: statusBarHeight + 'px' }">
+      <view class="back-btn" @tap="goBack">
+        <image class="back-icon" mode="aspectFit" src="/static/me-icons/arrow-back-dark.png" />
+      </view>
+      <text class="title">编辑资料</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <view class="main">
+      <!-- 头像区域 -->
+      <view class="avatar-section">
+        <view class="avatar-wrap" @tap="onChangeAvatar">
+          <image class="avatar" mode="aspectFill" :src="avatarUrl" />
+          <view class="camera-badge">
+            <image class="camera-icon" mode="aspectFit" src="/static/me-icons/camera-white.png" />
+          </view>
         </view>
-        <text class="nav-title">编辑资料</text>
-        <view class="nav-placeholder"></view>
+        <text class="avatar-tip">{{ uploadingAvatar ? '上传中...' : '点击更换头像' }}</text>
       </view>
 
-      <view class="avatar-section">
-        <view class="avatar-stack" hover-class="avatar-stack-hover" @tap="onChangeAvatar">
-          <view class="avatar-wrap">
-            <image class="avatar" mode="aspectFill" :src="avatarUrl" />
-            <view class="camera-badge">
-              <image class="camera-icon" mode="aspectFit" src="/static/me-icons/camera-white.png" />
+      <!-- 表单区域 -->
+      <view class="form">
+        <!-- 基本信息 -->
+        <view class="section">
+          <view class="section-header">
+            <view class="section-line"></view>
+            <text class="section-title">基本信息</text>
+          </view>
+
+          <view class="field">
+            <text class="label">昵称</text>
+            <input
+              v-model="nickname"
+              class="input"
+              maxlength="64"
+              placeholder="请输入您的昵称"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <view class="field">
+            <text class="label">个人简介</text>
+            <textarea
+              v-model="bio"
+              class="textarea"
+              maxlength="255"
+              placeholder="描述您的专业背景、成就或合作需求..."
+              placeholder-class="placeholder"
+            />
+          </view>
+        </view>
+
+        <!-- 职业信息 -->
+        <view class="section">
+          <view class="section-header">
+            <view class="section-line"></view>
+            <text class="section-title">职业信息</text>
+          </view>
+
+          <view class="field">
+            <text class="label">行业</text>
+            <view class="picker-field">
+              <picker
+                class="picker"
+                mode="selector"
+                :range="industryOptions"
+                range-key="label"
+                :value="industryIndex"
+                @change="onIndustryChange"
+              >
+                <view class="picker-value" :class="{ 'picker-placeholder': industryIndex === 0 }">
+                  {{ industryOptions[industryIndex].label }}
+                </view>
+              </picker>
+              <image class="arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
             </view>
           </view>
-          <text class="avatar-tip">{{ uploadingAvatar ? '上传中...' : '点击更换头像' }}</text>
-        </view>
-      </view>
 
-      <view class="form-wrap">
-        <view class="section-title">基本信息</view>
+          <view class="field">
+            <text class="label">公司</text>
+            <input
+              v-model="companyName"
+              class="input"
+              maxlength="128"
+              placeholder="请输入您的公司名称"
+              placeholder-class="placeholder"
+            />
+          </view>
 
-        <view class="field-group">
-          <text class="field-label">昵称</text>
-          <input
-            v-model="nickname"
-            class="field-input"
-            maxlength="64"
-            placeholder="请输入您的昵称"
-            placeholder-class="field-placeholder"
-          />
-        </view>
+          <view class="field">
+            <text class="label">职位</text>
+            <input
+              v-model="jobTitle"
+              class="input"
+              maxlength="64"
+              placeholder="请输入您的职位"
+              placeholder-class="placeholder"
+            />
+          </view>
 
-        <view class="field-group">
-          <text class="field-label">个人简介</text>
-          <textarea
-            v-model="bio"
-            class="field-textarea"
-            maxlength="255"
-            placeholder="描述您的专业背景、成就或合作需求..."
-            placeholder-class="field-placeholder"
-          />
-        </view>
-
-        <view class="section-title">职业信息</view>
-
-        <view class="field-group">
-          <text class="field-label">行业</text>
-          <view class="picker-wrap">
-            <picker
-              class="picker-control"
-              mode="selector"
-              :range="industryOptions"
-              range-key="label"
-              :value="industryIndex"
-              @change="onIndustryChange"
-            >
-              <view class="picker-text" :class="{ 'picker-text-placeholder': industryIndex === 0 }">
-                {{ industryOptions[industryIndex].label }}
-              </view>
-            </picker>
-            <image class="expand-icon" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+          <view class="field">
+            <text class="label">所在城市</text>
+            <view class="picker-field">
+              <picker
+                class="picker"
+                mode="multiSelector"
+                :range="cityPickerRange"
+                range-key="label"
+                :value="cityPickerValue"
+                @change="onCityChange"
+                @columnchange="onCityColumnChange"
+              >
+                <view class="picker-value" :class="{ 'picker-placeholder': !selectedCityCode }">
+                  {{ cityDisplayText }}
+                </view>
+              </picker>
+              <image class="arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+            </view>
           </view>
         </view>
 
-        <view class="field-group">
-          <text class="field-label">公司</text>
-          <input
-            v-model="companyName"
-            class="field-input"
-            maxlength="128"
-            placeholder="请输入您的公司名称"
-            placeholder-class="field-placeholder"
-          />
-        </view>
+        <!-- 联系方式 -->
+        <view class="section">
+          <view class="section-header">
+            <view class="section-line"></view>
+            <text class="section-title">联系方式</text>
+          </view>
 
-        <view class="field-group">
-          <text class="field-label">职位</text>
-          <input
-            v-model="jobTitle"
-            class="field-input"
-            maxlength="64"
-            placeholder="请输入您的职位"
-            placeholder-class="field-placeholder"
-          />
-        </view>
+          <view class="notice">
+            <text class="notice-text">完善联系方式并完成实名认证后,开通会员或购买人群包,才可查看别人的联系方式</text>
+          </view>
 
-        <view class="field-group">
-          <text class="field-label">所在城市</text>
-          <view class="picker-wrap">
-            <picker
-              class="picker-control"
-              mode="multiSelector"
-              :range="cityPickerRange"
-              range-key="label"
-              :value="cityPickerValue"
-              @change="onCityChange"
-              @columnchange="onCityColumnChange"
-            >
-              <view class="picker-text" :class="{ 'picker-text-placeholder': !selectedCityCode }">
-                {{ cityDisplayText }}
-              </view>
-            </picker>
-            <image class="expand-icon" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+          <view class="field">
+            <text class="label">展示手机号</text>
+            <input
+              v-model="displayPhone"
+              class="input"
+              type="number"
+              maxlength="11"
+              placeholder="仅用于对外展示"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <view class="field">
+            <text class="label">展示微信号</text>
+            <input
+              v-model="displayWechat"
+              class="input"
+              maxlength="64"
+              placeholder="请输入对外展示的微信号"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <view class="field">
+            <text class="label">邮箱</text>
+            <input
+              v-model="email"
+              class="input"
+              type="text"
+              maxlength="100"
+              placeholder="请输入您的邮箱地址"
+              placeholder-class="placeholder"
+            />
           </view>
         </view>
 
-        <view class="section-title">联系方式</view>
-        <view class="section-desc">完善联系方式并完成实名认证后，开通会员或购买人群包，才可查看别人的联系方式</view>
-
-        <view class="field-group">
-          <text class="field-label">展示手机号</text>
-          <input
-            v-model="displayPhone"
-            class="field-input"
-            type="number"
-            maxlength="11"
-            placeholder="仅用于对外展示"
-            placeholder-class="field-placeholder"
-          />
-        </view>
-
-        <view class="field-group">
-          <text class="field-label">展示微信号</text>
-          <input
-            v-model="displayWechat"
-            class="field-input"
-            maxlength="64"
-            placeholder="请输入对外展示的微信号"
-            placeholder-class="field-placeholder"
-          />
-        </view>
-
-        <view class="field-group">
-          <text class="field-label">邮箱</text>
-          <input
-            v-model="email"
-            class="field-input"
-            type="text"
-            maxlength="100"
-            placeholder="请输入您的邮箱地址"
-            placeholder-class="field-placeholder"
-          />
-        </view>
-
+        <!-- 保存按钮 -->
         <view class="save-wrap">
-          <view class="save-btn" :class="{ 'save-btn-disabled': saving }" hover-class="save-btn-hover" @tap="onSave">
+          <view class="save-btn" :class="{ 'save-btn-disabled': saving }" @tap="onSave">
             <text class="save-text">{{ saving ? '保存中...' : '保存修改' }}</text>
           </view>
         </view>
@@ -171,7 +193,6 @@ import { PROVINCE_CITY_OPTIONS } from './modules/city-picker-data'
 const DEFAULT_AVATAR = '/static/logo.png'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
-const navStyle = `padding-top:${statusBarHeight}px;`
 
 const loading = ref(false)
 const saving = ref(false)
@@ -422,11 +443,9 @@ const onChangeAvatar = () => {
       try {
         const data = await uploadCurrentUserAvatar(filePath)
         if (typeof data?.avatar_url === 'string' && data.avatar_url.trim()) {
-          // 上传API已经更新了后端的头像，直接更新本地显示
           const uploadedUrl = data.avatar_url.trim()
           avatarUrl.value = uploadedUrl
 
-          // 更新本地缓存
           const userInfo = uni.getStorageSync('userInfo') || {}
           userInfo.avatar_url = uploadedUrl
           uni.setStorageSync('userInfo', userInfo)
@@ -462,19 +481,15 @@ const onSave = async () => {
   const selectedIndustry = industryOptions[industryIndex.value] || industryOptions[0]
   const selectedCity = currentSelectedCity.value
 
-  // 处理头像URL：如果是完整URL，去掉baseUrl；如果已经是相对路径，直接使用
   const baseUrl = getApiBaseUrl()
   const normalizedAvatarUrl = String(avatarUrl.value || DEFAULT_AVATAR).trim()
   let avatarForSave = normalizedAvatarUrl
 
   if (normalizedAvatarUrl.startsWith(baseUrl)) {
-    // 完整URL，去掉baseUrl部分
     avatarForSave = normalizedAvatarUrl.replace(baseUrl, '')
   } else if (normalizedAvatarUrl.startsWith('http://') || normalizedAvatarUrl.startsWith('https://')) {
-    // 其他域名的完整URL，保持不变
     avatarForSave = normalizedAvatarUrl
   }
-  // 否则已经是相对路径，直接使用
 
   if (normalizedDisplayPhone && !DISPLAY_PHONE_REGEX.test(normalizedDisplayPhone)) {
     showToast('请输入正确的展示手机号')
@@ -556,74 +571,58 @@ onShow(() => {
 </script>
 
 <style scoped>
-.edit-page {
+.page {
   min-height: 100vh;
   background: #f6f6f8;
 }
 
-.page-shell {
-  min-height: 100vh;
-  max-width: 750rpx;
-  margin: 0 auto;
-  background: #ffffff;
-  box-shadow: 0 8rpx 28rpx rgba(15, 23, 42, 0.08);
-}
-
-.top-nav {
+.header {
   position: sticky;
   top: 0;
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding-left: 32rpx;
-  padding-right: 32rpx;
-  border-bottom: 1rpx solid #f1f5f9;
   background: #ffffff;
+  border-bottom: 1rpx solid #e7ecf3;
 }
 
 .back-btn {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 999rpx;
+  width: 88rpx;
+  height: 88rpx;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.back-btn-hover {
-  background: #f1f5f9;
-}
-
 .back-icon {
-  width: 44rpx;
-  height: 44rpx;
+  width: 40rpx;
+  height: 40rpx;
 }
 
-.nav-title {
+.title {
   flex: 1;
-  height: 88rpx;
-  line-height: 88rpx;
   text-align: center;
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #172033;
 }
 
-.nav-placeholder {
-  width: 80rpx;
-  height: 80rpx;
+.placeholder {
+  width: 88rpx;
 }
 
+.main {
+  padding: 24rpx 32rpx;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+}
+
+/* 头像区域 */
 .avatar-section {
-  padding: 48rpx 64rpx 32rpx;
-}
-
-.avatar-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12rpx;
+  padding: 32rpx 0 40rpx;
 }
 
 .avatar-wrap {
@@ -631,285 +630,180 @@ onShow(() => {
 }
 
 .avatar {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 999rpx;
-  border: 6rpx solid #f8fafc;
-  box-shadow: 0 8rpx 20rpx rgba(15, 23, 42, 0.1);
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 64rpx;
+  background: #f3f6fa;
 }
 
 .camera-badge {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 999rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 20rpx;
+  background: #2563eb;
   border: 3rpx solid #ffffff;
-  background: #1a57db;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .camera-icon {
-  width: 24rpx;
-  height: 24rpx;
+  width: 20rpx;
+  height: 20rpx;
 }
 
 .avatar-tip {
   font-size: 24rpx;
-  color: #64748b;
-  font-weight: 500;
+  color: #66758a;
 }
 
-.form-wrap {
+/* 表单 */
+.form {
   display: flex;
   flex-direction: column;
-  gap: 32rpx;
-  padding-left: 32rpx;
-  padding-right: 32rpx;
-  padding-bottom: calc(96rpx + env(safe-area-inset-bottom));
+  gap: 40rpx;
+}
+
+.section {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 32rpx;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 28rpx;
+}
+
+.section-line {
+  width: 6rpx;
+  height: 28rpx;
+  background: #2563eb;
+  border-radius: 3rpx;
 }
 
 .section-title {
-  margin-top: 16rpx;
-  margin-bottom: -8rpx;
-  margin-left: 8rpx;
   font-size: 28rpx;
-  font-weight: 700;
-  color: #1a57db;
-  letter-spacing: 0.5rpx;
+  font-weight: 600;
+  color: #172033;
 }
 
-.section-desc {
-  margin-top: -16rpx;
-  margin-left: 8rpx;
-  margin-right: 8rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 16rpx;
-  background: rgba(26, 87, 219, 0.06);
-  border: 1rpx solid rgba(26, 87, 219, 0.12);
-  color: #475569;
+.notice {
+  padding: 20rpx;
+  background: #f6f8fc;
+  border-radius: 12rpx;
+  margin-bottom: 24rpx;
+}
+
+.notice-text {
   font-size: 24rpx;
+  line-height: 36rpx;
+  color: #66758a;
+}
+
+.field {
+  margin-bottom: 24rpx;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.label {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #172033;
+  margin-bottom: 12rpx;
+}
+
+.input,
+.textarea,
+.picker-field {
+  width: 100%;
+  background: #f6f8fc;
+  border: 1rpx solid #e7ecf3;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #172033;
+  box-sizing: border-box;
+}
+
+.input {
+  height: 88rpx;
+  padding: 0 24rpx;
+}
+
+.textarea {
+  min-height: 160rpx;
+  padding: 20rpx 24rpx;
   line-height: 1.6;
 }
 
-.field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
+.placeholder {
+  color: #98a5b8;
 }
 
-.field-label {
-  margin-left: 8rpx;
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #334155;
-}
-
-.field-tip {
-  margin-left: 8rpx;
-  color: #64748b;
-  font-size: 22rpx;
-  line-height: 34rpx;
-}
-
-.field-input,
-.picker-wrap,
-.field-textarea {
-  border: 2rpx solid #e2e8f0;
-  border-radius: 20rpx;
-  background: #ffffff;
-  color: #0f172a;
-  transition: all 0.2s ease;
-}
-
-.field-input:focus,
-.field-textarea:focus {
-  border-color: #1a57db;
-  background: #ffffff;
-}
-
-.field-input {
-  height: 88rpx;
-  line-height: 88rpx;
-  padding: 0 28rpx;
-  font-size: 28rpx;
-}
-
-.field-placeholder {
-  color: #94a3b8;
-  font-size: 26rpx;
-}
-
-.picker-wrap {
+.picker-field {
   position: relative;
   height: 88rpx;
   display: flex;
   align-items: center;
-  padding-right: 80rpx;
+  padding-right: 60rpx;
 }
 
-.picker-control {
+.picker {
   flex: 1;
   height: 100%;
 }
 
-.picker-text {
+.picker-value {
   height: 88rpx;
   line-height: 88rpx;
-  padding-left: 28rpx;
+  padding-left: 24rpx;
   font-size: 28rpx;
-  color: #0f172a;
+  color: #172033;
 }
 
-.picker-text-placeholder {
-  color: #94a3b8;
-  font-size: 26rpx;
+.picker-placeholder {
+  color: #98a5b8;
 }
 
-.expand-icon {
+.arrow {
   position: absolute;
   right: 20rpx;
-  top: 50%;
-  width: 32rpx;
-  height: 32rpx;
-  transform: translateY(-50%);
-  opacity: 0.5;
+  width: 28rpx;
+  height: 28rpx;
+  opacity: 0.4;
 }
 
-.field-textarea {
-  min-height: 200rpx;
-  padding: 20rpx 28rpx;
-  font-size: 28rpx;
-  line-height: 1.6;
-  width: 100%;
-  box-sizing: border-box;
-}
-
+/* 保存按钮 */
 .save-wrap {
-  margin-top: 16rpx;
-  margin-bottom: 16rpx;
+  margin-top: 8rpx;
 }
 
 .save-btn {
   width: 100%;
   height: 88rpx;
-  border-radius: 20rpx;
-  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
+  background: #2563eb;
+  border-radius: 44rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.2);
-  transition: all 0.2s ease;
-}
-
-.save-btn-hover {
-  transform: translateY(-2rpx);
-  box-shadow: 0 12rpx 24rpx rgba(26, 87, 219, 0.3);
 }
 
 .save-btn-disabled {
   opacity: 0.6;
-  box-shadow: none;
 }
 
 .save-text {
   font-size: 30rpx;
+  font-weight: 500;
   color: #ffffff;
-  font-weight: 600;
-  letter-spacing: 1rpx;
-}
-
-@media (prefers-color-scheme: dark) {
-  .edit-page {
-    background: #0f172a;
-  }
-
-  .page-shell {
-    background: #1e293b;
-    box-shadow: none;
-  }
-
-  .top-nav {
-    background: #1e293b;
-    border-bottom-color: #334155;
-  }
-
-  .back-btn-hover {
-    background: #334155;
-  }
-
-  .back-icon,
-  .expand-icon {
-    filter: invert(90%) sepia(10%) saturate(272%) hue-rotate(177deg) brightness(107%) contrast(95%);
-  }
-
-  .nav-title {
-    color: #f1f5f9;
-  }
-
-  .avatar {
-    border-color: #334155;
-    box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.2);
-  }
-
-  .camera-badge {
-    border-color: #1e293b;
-  }
-
-  .avatar-tip {
-    color: #94a3b8;
-  }
-
-  .section-title {
-    color: #60a5fa;
-  }
-
-  .section-desc {
-    background: rgba(96, 165, 250, 0.1);
-    border-color: rgba(96, 165, 250, 0.2);
-    color: #94a3b8;
-  }
-
-  .field-label {
-    color: #cbd5e1;
-  }
-
-  .field-input,
-  .picker-wrap,
-  .field-textarea {
-    background: #0f172a;
-    border-color: #334155;
-    color: #f1f5f9;
-  }
-
-  .field-input:focus,
-  .field-textarea:focus {
-    border-color: #3b82f6;
-    background: #0f172a;
-  }
-
-  .field-placeholder {
-    color: #64748b;
-  }
-
-  .picker-text {
-    color: #f1f5f9;
-  }
-
-  .picker-text-placeholder {
-    color: #64748b;
-  }
-
-  .save-btn {
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-    box-shadow: 0 8rpx 20rpx rgba(37, 99, 235, 0.3);
-  }
-
-  .save-btn-hover {
-    box-shadow: 0 12rpx 24rpx rgba(37, 99, 235, 0.4);
-  }
 }
 </style>

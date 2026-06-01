@@ -21,6 +21,14 @@ front/unpackage/
 
 # Scratch / temp folders in this workspace
 tmp-*/
+.playwright-mcp/
+
+# Runtime uploads / local generated assets
+backend/static/uploads/
+
+# Local backup files
+*.backup*
+* - 副本/
 
 # OS/editor noise
 .DS_Store

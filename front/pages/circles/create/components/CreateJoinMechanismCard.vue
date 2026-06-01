@@ -57,19 +57,17 @@ const emit = defineEmits(['update:joinType', 'update:price'])
 
 <style scoped>
 .card {
-  margin: 0 24rpx;
+  margin: 0;
   background: #ffffff;
-  border-radius: 20rpx;
-  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
-  padding: 20rpx;
+  padding: 24rpx 32rpx;
 }
 
 .card-title {
   display: block;
   color: #0f172a;
-  font-size: 30rpx;
-  line-height: 38rpx;
-  font-weight: 700;
+  font-size: 28rpx;
+  line-height: 1.3;
+  font-weight: 600;
   margin-bottom: 16rpx;
 }
 
@@ -81,21 +79,22 @@ const emit = defineEmits(['update:joinType', 'update:price'])
 
 .option-row {
   border-radius: 12rpx;
-  border: 1rpx solid #e2e8f0;
-  padding: 16rpx;
+  border: 1rpx solid rgba(15, 23, 42, 0.08);
+  background: #f8fafc;
+  padding: 16rpx 20rpx;
   display: flex;
   align-items: center;
   gap: 12rpx;
 }
 
 .option-row-active {
-  border-color: rgba(26, 87, 219, 0.55);
-  background: rgba(26, 87, 219, 0.04);
+  border-color: rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.04);
 }
 
 .radio {
-  width: 30rpx;
-  height: 30rpx;
+  width: 32rpx;
+  height: 32rpx;
   border-radius: 999rpx;
   border: 2rpx solid #cbd5e1;
   display: flex;
@@ -104,11 +103,15 @@ const emit = defineEmits(['update:joinType', 'update:price'])
   flex-shrink: 0;
 }
 
+.option-row-active .radio {
+  border-color: #2563eb;
+}
+
 .radio-dot {
   width: 16rpx;
   height: 16rpx;
   border-radius: 999rpx;
-  background: #1a57db;
+  background: #2563eb;
 }
 
 .option-main {
@@ -119,42 +122,43 @@ const emit = defineEmits(['update:joinType', 'update:price'])
 .option-title {
   display: block;
   color: #0f172a;
-  font-size: 24rpx;
-  line-height: 32rpx;
-  font-weight: 600;
+  font-size: 26rpx;
+  line-height: 1.3;
+  font-weight: 500;
 }
 
 .option-desc {
   display: block;
   margin-top: 4rpx;
   color: #64748b;
-  font-size: 20rpx;
-  line-height: 28rpx;
+  font-size: 22rpx;
+  line-height: 1.3;
 }
 
 .price-wrap {
   flex-shrink: 0;
-  border-radius: 10rpx;
-  background: #f1f5f9;
-  padding: 8rpx 10rpx;
+  border-radius: 8rpx;
+  background: rgba(15, 23, 42, 0.04);
+  padding: 8rpx 12rpx;
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  gap: 4rpx;
 }
 
 .price-symbol {
   color: #64748b;
-  font-size: 20rpx;
+  font-size: 22rpx;
+  font-weight: 500;
 }
 
 .price-input {
   width: 92rpx;
-  height: 32rpx;
+  height: 36rpx;
   border: 0;
   background: transparent;
-  color: #1a57db;
-  font-size: 22rpx;
-  font-weight: 700;
+  color: #2563eb;
+  font-size: 24rpx;
+  font-weight: 600;
 }
 
 .price-placeholder {
@@ -164,21 +168,21 @@ const emit = defineEmits(['update:joinType', 'update:price'])
 @media (prefers-color-scheme: dark) {
   .card {
     background: #0f172a;
-    box-shadow: none;
   }
 
   .card-title,
   .option-title {
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .option-row {
-    border-color: #334155;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: #1e293b;
   }
 
   .option-row-active {
-    border-color: rgba(59, 130, 246, 0.65);
-    background: rgba(26, 87, 219, 0.15);
+    border-color: rgba(59, 130, 246, 0.25);
+    background: rgba(59, 130, 246, 0.08);
   }
 
   .option-desc {
@@ -189,12 +193,24 @@ const emit = defineEmits(['update:joinType', 'update:price'])
     border-color: #475569;
   }
 
+  .option-row-active .radio {
+    border-color: #60a5fa;
+  }
+
+  .radio-dot {
+    background: #60a5fa;
+  }
+
   .price-wrap {
-    background: #1e293b;
+    background: rgba(255, 255, 255, 0.04);
   }
 
   .price-symbol {
     color: #94a3b8;
+  }
+
+  .price-input {
+    color: #60a5fa;
   }
 }
 </style>

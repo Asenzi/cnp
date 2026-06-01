@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view
     class="member-card"
     :class="{ 'member-card-faded': member.faded }"
@@ -61,6 +61,7 @@
         v-if="showInterest"
         class="interest-btn"
         :class="{ 'interest-btn-liked': isInterested(member) }"
+        :disabled="interestPending"
         hover-class="interest-btn-active"
         @tap.stop="$emit('interest', member)"
       >
@@ -94,6 +95,10 @@ defineProps({
   showInterest: {
     type: Boolean,
     default: true
+  },
+  interestPending: {
+    type: Boolean,
+    default: false
   }
 })
 

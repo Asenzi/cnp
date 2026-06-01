@@ -42,23 +42,23 @@ const chooseAvatar = () => {
 
 <style scoped>
 .section-wrap {
-  padding: 0 24rpx;
+  padding: 24rpx 32rpx;
+  background: #ffffff;
 }
 
 .section-title {
   display: block;
   color: #0f172a;
-  font-size: 30rpx;
-  line-height: 38rpx;
-  font-weight: 700;
-  margin-bottom: 12rpx;
+  font-size: 28rpx;
+  line-height: 1.3;
+  font-weight: 600;
+  margin-bottom: 16rpx;
 }
 
 .avatar-card {
-  border-radius: 20rpx;
-  background: #ffffff;
-  border: 1rpx solid #e2e8f0;
-  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
+  border-radius: 12rpx;
+  background: #f8fafc;
+  border: 1rpx solid rgba(15, 23, 42, 0.08);
   padding: 16rpx;
   display: flex;
   align-items: center;
@@ -85,14 +85,14 @@ const chooseAvatar = () => {
 .avatar-label {
   color: #0f172a;
   font-size: 26rpx;
-  line-height: 32rpx;
-  font-weight: 600;
+  line-height: 1.3;
+  font-weight: 500;
 }
 
 .avatar-tip {
   color: #64748b;
   font-size: 22rpx;
-  line-height: 28rpx;
+  line-height: 1.3;
 }
 
 .avatar-btn {
@@ -101,8 +101,8 @@ const chooseAvatar = () => {
   height: 52rpx;
   border-radius: 999rpx;
   padding: 0 18rpx;
-  background: #e8f0ff;
-  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
   font-size: 24rpx;
   line-height: 52rpx;
   text-align: center;
@@ -110,14 +110,17 @@ const chooseAvatar = () => {
 }
 
 @media (prefers-color-scheme: dark) {
+  .section-wrap {
+    background: #0f172a;
+  }
+
   .section-title {
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .avatar-card {
-    background: #0f172a;
-    border-color: #334155;
-    box-shadow: none;
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   .avatar-image {
@@ -126,7 +129,7 @@ const chooseAvatar = () => {
   }
 
   .avatar-label {
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .avatar-tip {
@@ -134,8 +137,8 @@ const chooseAvatar = () => {
   }
 
   .avatar-btn {
-    background: rgba(37, 99, 235, 0.2);
-    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
   }
 }
 </style>

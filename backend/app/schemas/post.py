@@ -13,6 +13,17 @@ class ResourcePostCreateRequest(BaseModel):
     industry_label: str | None = Field(default=None, max_length=64)
     images: list[str] = Field(default_factory=list, max_length=9)
     sync_circle_codes: list[str] = Field(default_factory=list, max_length=5)
+    # 活动相关字段
+    event_date: str | None = Field(default=None, max_length=32)
+    event_time: str | None = Field(default=None, max_length=32)
+    duration: int | None = Field(default=None, ge=1)
+    capacity: int | None = Field(default=None, ge=0)
+    location: str | None = Field(default=None, max_length=255)
+    address: str | None = Field(default=None, max_length=1000)
+    payment_type: str | None = Field(default=None, max_length=16)
+    price: str | None = Field(default=None, max_length=32)
+    contact: str | None = Field(default=None, max_length=64)
+    detail_content: str | None = Field(default=None, max_length=10000)
 
     @field_validator("images", mode="before")
     @classmethod

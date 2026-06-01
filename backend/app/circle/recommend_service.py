@@ -7,10 +7,21 @@ from secrets import token_hex
 
 from sqlalchemy.orm import Session
 
-from app.crud import list_discover_circles, list_joined_circle_codes
+from app.core.asset_urls import sanitize_public_asset_url
+from app.core.config import settings
+from app.crud import count_discover_circles, list_discover_circles, list_joined_circle_codes, list_latest_discover_circles_page
 from app.schemas.circle import CircleDiscoverItem, CircleDiscoverListData
 
 SUPPORTED_TABS = {"recommend", "nearby", "latest"}
+
+
+def _candidate_pool_limit(*, offset: int, limit: int, tab: str, has_keyword: bool) -> int:
+    base = max(limit * 6, 60)
+    if tab == "nearby":
+        base = max(limit * 5, 50)
+    if has_keyword:
+        base = max(base, limit * 8)
+    return min(max(offset + base, limit), 300)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -19,6 +30,13 @@ def _normalize_text(value: str | None) -> str:
 
 def _normalize_lower(value: str | None) -> str:
     return _normalize_text(value).lower()
+
+
+def _sanitize_circle_asset_url(value: str | None) -> str:
+    normalized = sanitize_public_asset_url(value, "")
+    if normalized == settings.DEFAULT_AVATAR_URL:
+        return ""
+    return normalized
 
 
 def _clamp_score(value: float) -> float:
@@ -187,13 +205,105 @@ def list_circle_discover_recommendations(
         fetch_order_by = "nearby"
     elif normalized_tab == "latest":
         fetch_order_by = "latest"
-    
+
+    if normalized_tab == "latest":
+        total = count_discover_circles(
+            db=db,
+            keyword=keyword,
+            city_name=fetch_city_name,
+            industry_label=industry_label,
+        )
+        page_rows = list_latest_discover_circles_page(
+            db=db,
+            offset=safe_offset,
+            limit=safe_limit,
+            joined_circle_codes=joined_circle_codes,
+            keyword=keyword,
+            city_name=fetch_city_name,
+            industry_label=industry_label,
+        )
+        now = datetime.now(UTC).replace(tzinfo=None)
+        items = []
+        for circle, owner in page_rows:
+            member_count = int(circle.member_count or 0)
+            post_count = int(circle.post_count or 0)
+            created_days = _days_since(circle.created_at, now=now)
+            active_days = _days_since(circle.last_active_at, now=now)
+            popularity_score = _clamp_score((log1p(member_count) / 6.0) + (log1p(post_count) / 7.0))
+            activity_score = _clamp_score((1 - min(active_days, 30.0) / 30.0) + min(post_count / 20.0, 0.25))
+            freshness_score = _clamp_score(1 - min(created_days, 30.0) / 30.0)
+            same_industry = bool(viewer_industry) and _normalize_lower(circle.industry_label) == viewer_industry
+            same_city = bool(viewer_city) and _normalize_lower(owner.city_name) == viewer_city
+            owner_verified = bool(owner.is_verified)
+            is_joined = _normalize_text(circle.circle_code) in joined_circle_codes
+            keyword_score = _keyword_bonus(circle, owner, keyword)
+            score = (
+                0.42 * freshness_score
+                + 0.24 * activity_score
+                + 0.16 * popularity_score
+                + 0.10 * float(owner_verified)
+                + 0.08 * float(same_city)
+                + keyword_score
+                - (0.38 if is_joined else 0.0)
+            )
+            items.append(
+                CircleDiscoverItem(
+                    circle_code=_normalize_text(circle.circle_code),
+                    name=_normalize_text(circle.name),
+                    industry_label=_normalize_text(circle.industry_label),
+                    description=_normalize_text(circle.description),
+                    cover_url=_sanitize_circle_asset_url(circle.cover_url),
+                    avatar_url=_sanitize_circle_asset_url(circle.avatar_url or circle.cover_url),
+                    join_type=_normalize_text(circle.join_type) or "free",
+                    join_price=float(circle.join_price or 0),
+                    member_count=member_count,
+                    post_count=post_count,
+                    owner_user_id=_normalize_text(owner.user_id),
+                    owner_nickname=_normalize_text(owner.nickname),
+                    owner_avatar_url=_normalize_text(owner.avatar_url),
+                    owner_city_name=_normalize_text(owner.city_name) or None,
+                    owner_is_verified=owner_verified,
+                    is_joined=is_joined,
+                    reason_tags=_build_reason_tags(
+                        same_industry=same_industry,
+                        same_city=same_city,
+                        owner_verified=owner_verified,
+                        is_joined=is_joined,
+                        member_count=member_count,
+                        post_count=post_count,
+                    ),
+                    score=round(score, 4),
+                    last_active_at=circle.last_active_at,
+                    created_at=circle.created_at,
+                ).model_dump(mode="json")
+            )
+
+        payload = CircleDiscoverListData(
+            items=items,
+            total=total,
+            offset=safe_offset,
+            limit=safe_limit,
+            has_more=(safe_offset + len(items)) < total,
+            tab=normalized_tab,
+            city_name=effective_city_name or None,
+            request_id=None,
+        )
+        return payload.model_dump(mode="json")
+
+    candidate_limit = _candidate_pool_limit(
+        offset=safe_offset,
+        limit=safe_limit,
+        tab=normalized_tab,
+        has_keyword=bool(_normalize_text(keyword)),
+    )
+
     rows = list_discover_circles(
         db=db, 
         keyword=keyword,
         city_name=fetch_city_name,
         industry_label=industry_label,
-        order_by=fetch_order_by
+        order_by=fetch_order_by,
+        candidate_limit=candidate_limit,
     )
 
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -300,7 +410,12 @@ def list_circle_discover_recommendations(
             window_size=min(max(safe_limit * 2, 10), len(scored_rows)),
         )
 
-    total = len(scored_rows)
+    total = count_discover_circles(
+        db=db,
+        keyword=keyword,
+        city_name=fetch_city_name,
+        industry_label=industry_label,
+    )
     page_rows = scored_rows[safe_offset : safe_offset + safe_limit]
 
     items = [
@@ -309,8 +424,8 @@ def list_circle_discover_recommendations(
             name=_normalize_text(circle.name),
             industry_label=_normalize_text(circle.industry_label),
             description=_normalize_text(circle.description),
-            cover_url=_normalize_text(circle.cover_url),
-            avatar_url=_normalize_text(circle.avatar_url or circle.cover_url),
+            cover_url=_sanitize_circle_asset_url(circle.cover_url),
+            avatar_url=_sanitize_circle_asset_url(circle.avatar_url or circle.cover_url),
             join_type=_normalize_text(circle.join_type) or "free",
             join_price=float(circle.join_price or 0),
             member_count=member_count,

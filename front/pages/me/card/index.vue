@@ -70,6 +70,9 @@
 
       </view>
     </view>
+
+    <!-- 隐藏的Canvas用于生成分享图 -->
+    <canvas canvas-id="shareCanvas" style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 900px;"></canvas>
   </view>
 </template>
 
@@ -79,6 +82,7 @@ import { onLoad, onPullDownRefresh, onReachBottom, onShareAppMessage, onShow } f
 import { getMyCircles, getUserCircles } from '../../../api/circle'
 import { getMyResourceFeed, getUserResourceFeed } from '../../../api/post'
 import { getCurrentUserProfile, getUserProfileById } from '../../../api/user'
+import { generateProfileShareImage } from '../../../utils/profile-share-image'
 import ProfileBioSection from './components/ProfileBioSection.vue'
 import ProfileCircleCard from './components/ProfileCircleCard.vue'
 import ProfileContactSection from './components/ProfileContactSection.vue'
@@ -100,6 +104,7 @@ const pageData = ref(resolveProfileHomeData({}, { posts: [], circles: [] }))
 const activeTab = ref('feed')
 const targetUserId = ref('')
 const rawProfile = ref({})
+const shareImageUrl = ref('') // 缓存分享图片
 
 const feedPosts = ref([])
 const feedTotal = ref(0)
@@ -169,12 +174,18 @@ const hasCircleAny = computed(() => joinedCircles.value.length > 0)
 const contactSectionData = computed(() => {
   const displayPhone = String(rawProfile.value?.display_phone || '').trim()
   const displayWechat = String(rawProfile.value?.display_wechat || '').trim()
+  const displayEmail = String(rawProfile.value?.display_email || rawProfile.value?.email || '').trim()
   const isSelf = Boolean(isSelfProfile.value)
   const selfHasContact = Boolean(displayPhone || displayWechat)
 
   return {
+    name: String(rawProfile.value?.nickname || '').trim(),
+    industryLabel: String(rawProfile.value?.industry_label || '').trim(),
+    avatarUrl: String(rawProfile.value?.avatar_url || '').trim(),
+    miniappCodeUrl: String(rawProfile.value?.miniapp_code_url || '').trim(),
     displayPhone,
     displayWechat,
+    displayEmail,
     contactVisible: isSelf ? selfHasContact : Boolean(rawProfile.value?.contact_visible),
     contactLockedReason: isSelf
       ? (selfHasContact ? '' : '你还未完善展示手机号或微信号')
@@ -261,7 +272,11 @@ const fetchProfileFeed = async (reset = false) => {
         limit: PAGE_SIZE
       })
 
-    const incoming = Array.isArray(payload?.items) ? payload.items.map((item) => mapProfilePostItem(item)) : []
+    const incoming = Array.isArray(payload?.items)
+      ? payload.items
+          .map((item) => mapProfilePostItem(item))
+          .filter((item) => item.type !== 'venue') // 过滤掉活动类型 - 第二版上线
+      : []
     if (reset) {
       feedPosts.value = incoming
     } else {
@@ -432,6 +447,53 @@ onLoad((query = {}) => {
 
 onShow(() => {
   loadAllData()
+})
+
+onShareAppMessage(async () => {
+  const target = String(rawProfile.value?.user_id || rawProfile.value?.userId || targetUserId.value || '').trim()
+  const nickname = String(rawProfile.value?.nickname || pageData.value?.profile?.name || '好友名片').trim() || '好友名片'
+  const avatarUrl = String(rawProfile.value?.avatar_url || pageData.value?.profile?.avatarUrl || '').trim()
+
+  // 如果已有缓存的分享图，直接使用
+  if (shareImageUrl.value) {
+    return {
+      title: `${nickname}的个人名片`,
+      path: `/pages/me/card/index?userId=${encodeURIComponent(target)}`,
+      imageUrl: shareImageUrl.value
+    }
+  }
+
+  // 生成自定义分享图
+  try {
+    const userData = {
+      nickname: nickname,
+      avatarUrl: avatarUrl,
+      bio: String(rawProfile.value?.intro || pageData.value?.profile?.bio || '').trim(),
+      company: String(rawProfile.value?.company_name || '').trim(),
+      jobTitle: String(rawProfile.value?.job_title || '').trim(),
+      industry: String(rawProfile.value?.industry_label || '').trim(),
+      isVerified: Boolean(rawProfile.value?.is_verified)
+    }
+
+    console.log('生成分享图数据:', userData)
+
+    const imagePath = await generateProfileShareImage(userData)
+    shareImageUrl.value = imagePath
+
+    return {
+      title: `${nickname}的个人名片`,
+      path: `/pages/me/card/index?userId=${encodeURIComponent(target)}`,
+      imageUrl: imagePath
+    }
+  } catch (err) {
+    console.error('生成分享图失败:', err)
+    // 降级方案：使用头像
+    return {
+      title: `${nickname}的个人名片`,
+      path: `/pages/me/card/index?userId=${encodeURIComponent(target)}`,
+      imageUrl: avatarUrl || undefined
+    }
+  }
 })
 
 onPullDownRefresh(async () => {

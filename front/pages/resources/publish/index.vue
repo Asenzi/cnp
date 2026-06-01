@@ -263,8 +263,8 @@ import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
 
 const modeOptions = [
   { key: 'cooperate', title: '找合作' },
-  { key: 'resource', title: '找资源' },
-  { key: 'venue', title: '发布活动' }
+  { key: 'resource', title: '找资源' }
+  // { key: 'venue', title: '发布活动' } // 第二版上线
 ]
 
 const validityOptions = [ 

@@ -38,39 +38,40 @@ const emit = defineEmits(['submit'])
   right: 0;
   bottom: 0;
   z-index: 30;
-  background: rgba(255, 255, 255, 0.84);
-  border-top: 1rpx solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12rpx);
-  padding: 12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
+  padding: 12rpx 32rpx calc(12rpx + env(safe-area-inset-bottom));
 }
 
 .create-btn {
   width: 100%;
   height: 88rpx;
-  border-radius: 20rpx;
+  border-radius: 12rpx;
   border: 0;
-  background: #1a57db;
+  background: #2563eb;
   color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 700;
-  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.18);
+  font-size: 28rpx;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .create-btn-active {
-  opacity: 0.88;
+  opacity: 0.85;
 }
 
 .create-btn-disabled {
-  opacity: 0.75;
+  opacity: 0.6;
 }
 
 @media (prefers-color-scheme: dark) {
   .bottom-wrap {
-    background: rgba(17, 22, 33, 0.88);
-    border-top-color: #1e293b;
+    background: rgba(15, 23, 42, 0.92);
+  }
+
+  .create-btn {
+    background: #3b82f6;
   }
 }
 </style>

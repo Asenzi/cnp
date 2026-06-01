@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from random import randint
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
@@ -23,6 +23,34 @@ def count_circle_members(db: Session, circle_code: str) -> int:
     )
     count_value = db.execute(stmt).scalar_one_or_none()
     return int(count_value or 0)
+
+
+def list_circle_members(
+    db: Session,
+    *,
+    circle_code: str,
+    offset: int,
+    limit: int,
+) -> list[tuple[User, UserCircleMembership]]:
+    stmt = (
+        select(User, UserCircleMembership)
+        .join(
+            UserCircleMembership,
+            UserCircleMembership.user_pk == User.id,
+        )
+        .where(
+            UserCircleMembership.circle_code == circle_code,
+            UserCircleMembership.is_active.is_(True),
+            User.is_active.is_(True),
+        )
+        .order_by(
+            UserCircleMembership.created_at.desc(),
+            User.id.desc(),
+        )
+        .offset(max(offset, 0))
+        .limit(max(limit, 1))
+    )
+    return list(db.execute(stmt).all())
 
 
 def list_joined_circle_codes(db: Session, *, user_pk: int) -> set[str]:
@@ -51,6 +79,34 @@ def _apply_circle_keyword_filter(stmt, keyword: str | None):
             Circle.description.like(pattern),
         )
     )
+
+
+def _build_discover_circles_stmt(
+    *,
+    keyword: str | None = None,
+    city_name: str | None = None,
+    industry_label: str | None = None,
+):
+    owner_user = aliased(User)
+    stmt = (
+        select(Circle, owner_user)
+        .join(owner_user, owner_user.id == Circle.owner_user_pk)
+        .where(
+            Circle.status == "active",
+            owner_user.is_active.is_(True),
+        )
+    )
+
+    normalized_city = str(city_name or "").strip()
+    if normalized_city:
+        stmt = stmt.where(owner_user.city_name == normalized_city)
+
+    normalized_industry_label = str(industry_label or "").strip()
+    if normalized_industry_label:
+        stmt = stmt.where(Circle.industry_label == normalized_industry_label)
+
+    stmt = _apply_circle_keyword_filter(stmt, keyword=keyword)
+    return stmt
 
 
 def list_user_joined_circles(
@@ -112,31 +168,14 @@ def list_discover_circles(
     city_name: str | None = None,
     industry_label: str | None = None,
     order_by: str = "default",
+    candidate_limit: int | None = None,
 ) -> list[tuple[Circle, User]]:
-    owner_user = aliased(User)
-    stmt = (
-        select(Circle, owner_user)
-        .join(owner_user, owner_user.id == Circle.owner_user_pk)
-        .where(
-            Circle.status == "active",
-            owner_user.is_active.is_(True),
-        )
+    stmt = _build_discover_circles_stmt(
+        keyword=keyword,
+        city_name=city_name,
+        industry_label=industry_label,
     )
-    
-    # Apply city filter if provided
-    if city_name:
-        normalized_city = str(city_name or "").strip()
-        if normalized_city:
-            stmt = stmt.where(owner_user.city_name == normalized_city)
 
-    normalized_industry_label = str(industry_label or "").strip()
-    if normalized_industry_label:
-        stmt = stmt.where(Circle.industry_label == normalized_industry_label)
-    
-    # Apply keyword filter
-    stmt = _apply_circle_keyword_filter(stmt, keyword=keyword)
-    
-    # Determine order based on order_by parameter
     if order_by == "latest":
         stmt = stmt.order_by(
             Circle.created_at.desc(),
@@ -159,7 +198,58 @@ def list_discover_circles(
             Circle.created_at.desc(),
             Circle.id.desc(),
         )
-    
+
+    if candidate_limit is not None:
+        stmt = stmt.limit(max(int(candidate_limit), 1))
+
+    return list(db.execute(stmt).all())
+
+
+def count_discover_circles(
+    db: Session,
+    *,
+    keyword: str | None = None,
+    city_name: str | None = None,
+    industry_label: str | None = None,
+) -> int:
+    stmt = _build_discover_circles_stmt(
+        keyword=keyword,
+        city_name=city_name,
+        industry_label=industry_label,
+    )
+    count_stmt = select(func.count()).select_from(stmt.with_only_columns(Circle.id).order_by(None).subquery())
+    value = db.execute(count_stmt).scalar_one_or_none()
+    return int(value or 0)
+
+
+def list_latest_discover_circles_page(
+    db: Session,
+    *,
+    offset: int,
+    limit: int,
+    joined_circle_codes: set[str],
+    keyword: str | None = None,
+    city_name: str | None = None,
+    industry_label: str | None = None,
+) -> list[tuple[Circle, User]]:
+    stmt = _build_discover_circles_stmt(
+        keyword=keyword,
+        city_name=city_name,
+        industry_label=industry_label,
+    )
+    if joined_circle_codes:
+        stmt = stmt.order_by(
+            case((Circle.circle_code.in_(sorted(joined_circle_codes)), 1), else_=0),
+            Circle.created_at.desc(),
+            Circle.id.desc(),
+        )
+    else:
+        stmt = stmt.order_by(
+            Circle.created_at.desc(),
+            Circle.id.desc(),
+        )
+
+    stmt = stmt.offset(max(offset, 0)).limit(max(limit, 1))
     return list(db.execute(stmt).all())
 
 

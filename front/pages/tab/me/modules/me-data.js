@@ -29,8 +29,7 @@
 ]
 
 export const settingList = [
-  { key: 'general', iconPath: '/static/me-icons/tune-gray.png', label: '通用设置' },
-  { key: 'bind-phone', iconPath: '/static/me-icons/shield-person-primary.png', label: '绑定手机' },
+  { key: 'account-security', iconPath: '/static/me-icons/shield-person-primary.png', label: '账号与安全' },
   { key: 'help', iconPath: '/static/me-icons/help-gray.png', label: '帮助与反馈' },
   { key: 'about', iconPath: '/static/me-icons/info-gray.png', label: '关于我们' }
 ]

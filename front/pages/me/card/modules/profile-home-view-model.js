@@ -167,8 +167,8 @@ export function resolveProfileHomeData(profile = {}, options = {}) {
       circleCount: options.circleCount
     }),
     tabs: [
-      { key: 'feed', label: '动态 / 资源' },
-      { key: 'circles', label: '加入的圈子' }
+      { key: 'feed', label: '资源' },
+      { key: 'circles', label: '圈子' }
     ],
     posts,
     circles

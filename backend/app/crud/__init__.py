@@ -3,7 +3,10 @@ from .user_stats import ensure_user_wallet, get_user_realtime_stats
 from .user_points import ensure_user_points_account, get_user_points_account
 from .circle import (
     count_circle_members,
+    count_discover_circles,
+    list_circle_members,
     list_joined_circle_codes,
+    list_latest_discover_circles_page,
     count_user_joined_circles,
     create_circle,
     get_circle_by_code,
@@ -99,8 +102,11 @@ __all__ = [
     "create_circle",
     "get_circle_by_code",
     "count_circle_members",
+    "count_discover_circles",
+    "list_circle_members",
     "list_joined_circle_codes",
     "list_discover_circles",
+    "list_latest_discover_circles_page",
     "list_user_joined_circles",
     "count_user_joined_circles",
     "list_candidate_users",

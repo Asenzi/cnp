@@ -1,18 +1,17 @@
-﻿<template>
+<template>
   <view>
     <view class="profile-row">
       <view class="avatar-wrap">
         <image class="avatar" mode="aspectFill" :src="displayAvatar" />
-        <view v-if="isVerified" class="verified-badge">
-          <image class="verified-icon-img" mode="aspectFit" src="/static/me-icons/verified-white.png" />
-        </view>
       </view>
 
       <view class="profile-info">
         <view class="name-row">
-          <text class="name">{{ displayName }}</text>
-          <view class="edit-btn" @tap="$emit('edit')">
-            <image class="edit-icon-img" mode="aspectFit" src="/static/icon/edit.png" />
+          <view class="name-with-badge">
+            <text class="name">{{ displayName }}</text>
+            <view v-if="isVerified" class="verified-badge-inline">
+              <image class="verified-icon-img" mode="aspectFit" src="/static/icon/certification.png" />
+            </view>
           </view>
         </view>
 
@@ -24,6 +23,10 @@
           <text class="meta-text">{{ displayMetaLine }}</text>
         </view>
       </view>
+
+      <view class="edit-btn" @tap="$emit('edit')">
+        <image class="edit-icon-img" mode="aspectFit" src="/static/icon/edit.png" />
+      </view>
     </view>
 
     <view class="intro-card">
@@ -33,19 +36,17 @@
     <view class="stats-row" :class="{ 'stats-row-compact': withMemberCard }">
       <view class="stat-card stat-card-click" hover-class="stat-card-active" @tap="$emit('open-circles')">
         <text class="stat-value" :class="{ 'stat-value-muted': displayCircleCount === '--' }">{{ displayCircleCount }}</text>
-        <text class="stat-label">我的圈子</text>
+        <text class="stat-label">圈子</text>
       </view>
-      <!-- 积分功能暂时隐藏
-      <view class="stat-card stat-card-click" hover-class="stat-card-active" @tap="$emit('open-points')">
-        <text class="stat-value" :class="{ 'stat-value-muted': displayPoints === '--' }">{{ displayPoints }}</text>
-        <text class="stat-label">积分</text>
+      <view class="stat-card stat-card-click" hover-class="stat-card-active" @tap="$emit('open-interests')">
+        <text class="stat-value" :class="{ 'stat-value-muted': displayFollowFavoriteCount === '--' }">{{ displayFollowFavoriteCount }}</text>
+        <text class="stat-label">感兴趣</text>
       </view>
-      -->
       <view class="stat-card stat-card-click" hover-class="stat-card-active" @tap="$emit('open-wallet')">
         <text class="stat-value stat-value-primary" :class="{ 'stat-value-muted': displayBalance === '--' }">
           {{ displayBalance }}
         </text>
-        <text class="stat-label">账户余额</text>
+        <text class="stat-label">余额</text>
       </view>
     </view>
   </view>
@@ -65,7 +66,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['edit', 'open-circles', 'open-wallet'])
+defineEmits(['edit', 'open-circles', 'open-wallet', 'open-interests'])
 
 const DEFAULT_AVATAR = '/static/logo.png'
 
@@ -144,7 +145,7 @@ const displayMetaLine = computed(() => {
 
 const formatCount = (value) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
-    return value.toLocaleString('zh-CN')
+    return String(Math.floor(value))
   }
   if (typeof value === 'string') {
     const normalized = value.trim()
@@ -153,28 +154,29 @@ const formatCount = (value) => {
     }
     const parsed = Number(normalized)
     if (Number.isFinite(parsed)) {
-      return parsed.toLocaleString('zh-CN')
+      return String(Math.floor(parsed))
     }
   }
   return '--'
 }
 
 const displayCircleCount = computed(() => formatCount(props.userInfo?.circle_count))
-// 积分功能暂时隐藏
-// const displayPoints = computed(() => {
-//   const sourceValue =
-//     props.userInfo?.points
-//     ?? props.userInfo?.point_count
-//     ?? props.userInfo?.score
-//     ?? props.userInfo?.integral
-//     ?? props.userInfo?.network_count
-//   return formatCount(sourceValue)
-// })
+
+const displayFollowFavoriteCount = computed(() => {
+  const sourceValue =
+    props.userInfo?.follow_favorite_count
+    ?? props.userInfo?.favorite_count
+    ?? props.userInfo?.collect_count
+    ?? props.userInfo?.interest_count
+    ?? props.userInfo?.network_count
+    ?? 0
+  return formatCount(sourceValue)
+})
 
 const displayBalance = computed(() => {
   const value = props.userInfo?.balance
   if (typeof value === 'number' && Number.isFinite(value)) {
-    return `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+    return `¥${value.toFixed(2)}`
   }
   if (typeof value === 'string') {
     const normalized = value.trim()
@@ -183,7 +185,7 @@ const displayBalance = computed(() => {
     }
     const parsed = Number(normalized.replace(/^¥/, ''))
     if (Number.isFinite(parsed)) {
-      return `¥${parsed.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+      return `¥${parsed.toFixed(2)}`
     }
   }
   return '--'
@@ -192,6 +194,7 @@ const displayBalance = computed(() => {
 
 <style scoped>
 .profile-row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 24rpx;
@@ -210,18 +213,30 @@ const displayBalance = computed(() => {
   background: #e2e8f0;
 }
 
-.verified-badge {
+.edit-btn {
   position: absolute;
-  right: -4rpx;
-  bottom: -4rpx;
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 999rpx;
-  border: 4rpx solid #ffffff;
-  background: #1a57db;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 56rpx;
+  height: 56rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.edit-icon-img {
+  width: 48rpx;
+  height: 48rpx;
+}
+
+.verified-badge-inline {
+  width: 28rpx;
+  height: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .verified-icon-img {
@@ -242,23 +257,18 @@ const displayBalance = computed(() => {
   gap: 12rpx;
 }
 
+.name-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: 1;
+  min-width: 0;
+}
+
 .name {
   font-size: 36rpx;
   font-weight: 700;
   line-height: 1.2;
-}
-
-.edit-btn {
-  width: 40rpx;
-  height: 40rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.edit-icon-img {
-  width: 36rpx;
-  height: 36rpx;
 }
 
 .id-row {
@@ -301,7 +311,7 @@ const displayBalance = computed(() => {
 
 .stats-row {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   margin-bottom: 48rpx;
 }
 
@@ -315,8 +325,8 @@ const displayBalance = computed(() => {
   flex-direction: column;
   align-items: center;
   gap: 8rpx;
-  padding: 20rpx 12rpx;
-  border-radius: 20rpx;
+  padding: 18rpx 8rpx;
+  border-radius: 18rpx;
   border: 1rpx solid #f1f5f9;
   background: #ffffff;
   box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
@@ -331,7 +341,7 @@ const displayBalance = computed(() => {
 }
 
 .stat-value {
-  font-size: 36rpx;
+  font-size: 32rpx;
   font-weight: 700;
   color: #0f172a;
   line-height: 1.2;
@@ -346,19 +356,16 @@ const displayBalance = computed(() => {
 }
 
 .stat-label {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #64748b;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 @media (prefers-color-scheme: dark) {
   .avatar {
     border-color: #1e293b;
     background: #334155;
-  }
-
-  .verified-badge {
-    border-color: #1e293b;
   }
 
   .name,
@@ -394,4 +401,3 @@ const displayBalance = computed(() => {
   }
 }
 </style>
-

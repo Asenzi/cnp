@@ -1,47 +1,49 @@
-﻿<template>
+<template>
   <view class="detail-page">
     <view class="content-wrap">
       <CircleDetailHero :detail="detail" />
-      <CircleOwnerCard :owner="detail.owner" @dm="onPrivateMessage" />
+      <view class="section-gap">
+        <CircleNoticeCard :notice="detail.notice" @more="onMoreNotice" />
+      </view>
+      <CircleOwnerCard :owner="detail.owner" />
+
       <view v-if="isOwner" class="owner-action-wrap">
         <button class="owner-edit-btn" hover-class="owner-edit-btn-active" @tap="onEditCircle">
           编辑圈子资料
         </button>
       </view>
-      <CircleNoticeCard :notice="detail.notice" @more="onMoreNotice" />
 
       <CircleContentTabs :tabs="tabs" :active-index="activeTabIndex" @change="onTabChange" />
 
       <view class="list-wrap">
-        <template v-if="activeTabKey === 'resource'">
-          <view v-if="isOwner && pendingSyncs.length" class="review-section">
-            <view class="review-section-head">
-              <text class="review-section-title">待审核同步资源</text>
-              <text class="review-section-sub">{{ pendingSyncs.length }} 条待处理</text>
-            </view>
-            <view v-for="item in pendingSyncs" :key="item.sync_id" class="review-card">
-              <text class="review-card-title">{{ item.title }}</text>
-              <text class="review-card-meta">{{ item.author?.nickname || '匿名用户' }} · {{ item.author?.company_name || item.author?.job_title || '资源发布者' }}</text>
-              <text class="review-card-desc">{{ item.description }}</text>
-              <view class="review-card-actions">
-                <button class="review-btn review-btn-reject" hover-class="review-btn-reject-active" @tap="onReviewSync(item, 'reject')">
-                  拒绝
-                </button>
-                <button class="review-btn review-btn-approve" hover-class="review-btn-approve-active" @tap="onReviewSync(item, 'approve')">
-                  通过
-                </button>
-              </view>
-            </view>
+        <template v-if="activeTabKey === 'event'">
+          <view class="event-list">
+            <VenueEventCard
+              v-for="post in posts"
+              :key="post.id"
+              :item="post"
+              @detail="onPostDetail"
+            />
           </view>
-          <CircleResourceCard v-for="post in posts" :key="post.post_code || post.id" :post="post" @detail="onPostDetail" />
-          <view v-if="!posts.length && !pendingSyncs.length" class="empty-wrap">
-            <text class="empty-title">暂无圈子资源</text>
-            <text class="empty-sub">资源同步通过后会展示在这里</text>
+          <view v-if="!posts.length" class="empty-wrap">
+            <text class="empty-text">暂无圈子活动</text>
+          </view>
+        </template>
+        <template v-else-if="activeTabKey === 'member'">
+          <view class="member-list">
+            <CircleMemberCard
+              v-for="member in members"
+              :key="member.user_id || member.id"
+              :member="member"
+              @detail="onMemberDetail"
+            />
+          </view>
+          <view v-if="!members.length" class="empty-wrap">
+            <text class="empty-text">暂无圈子成员</text>
           </view>
         </template>
         <view v-else class="empty-wrap">
-          <text class="empty-title">{{ activeTabLabel }}模块开发中</text>
-          <text class="empty-sub">后续会接入真实业务数据</text>
+          <text class="empty-text">{{ activeTabLabel }}模块开发中</text>
         </view>
       </view>
     </view>
@@ -52,27 +54,41 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
-import { getCircleDetail, getCirclePosts, getPendingCirclePostSyncs, reviewCirclePostSync } from '../../../api/circle'
+import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { getCircleDetail, getCirclePosts, getCircleMembers } from '../../../api/circle'
 import CircleBottomBar from './components/CircleBottomBar.vue'
 import CircleContentTabs from './components/CircleContentTabs.vue'
 import CircleDetailHero from './components/CircleDetailHero.vue'
 import CircleNoticeCard from './components/CircleNoticeCard.vue'
 import CircleOwnerCard from './components/CircleOwnerCard.vue'
-import CircleResourceCard from './components/CircleResourceCard.vue'
+import CircleMemberCard from './components/CircleMemberCard.vue'
+import VenueEventCard from '../../tab/resources/components/VenueEventCard.vue'
+import { mapProfilePostItem } from '../../me/card/modules/profile-home-view-model'
 import { circleDetailData, detailTabs } from './modules/detail-data'
 
 const detail = ref(circleDetailData)
 const tabs = detailTabs
-const posts = ref([])
-const pendingSyncs = ref([])
+const allPosts = ref([])
+const members = ref([])
 const circleCode = ref('')
 const currentUserId = ref('')
 const shouldRefreshOnShow = ref(false)
 
 const activeTabIndex = ref(0)
 
-const activeTab = computed(() => tabs[activeTabIndex.value] || tabs[0] || { key: 'resource', label: '资源' })
+const posts = computed(() => {
+  if (activeTabKey.value === 'event') {
+    return allPosts.value
+      .filter((post) => {
+        const mode = String(post?.mode || '').trim()
+        return mode === 'venue'
+      })
+      .map((post) => mapProfilePostItem(post))
+  }
+  return []
+})
+
+const activeTab = computed(() => tabs[activeTabIndex.value] || tabs[0] || { key: 'event', label: '活动' })
 const activeTabKey = computed(() => activeTab.value.key)
 const activeTabLabel = computed(() => activeTab.value.label)
 const isOwner = computed(() => {
@@ -117,6 +133,21 @@ const resolveCurrentUserId = () => {
   return String(userInfo?.user_id || userInfo?.userId || '').trim()
 }
 
+const sanitizeCircleImage = (value) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return '/static/logo.png'
+  }
+  if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
+    return '/static/logo.png'
+  }
+  return normalized
+}
+
+const resolveShareImageUrl = () => {
+  return String(detail.value?.logoImage || detail.value?.bannerImage || '').trim()
+}
+
 const applyServerDetail = (serverDetail) => {
   if (!serverDetail || typeof serverDetail !== 'object') {
     return
@@ -128,8 +159,8 @@ const applyServerDetail = (serverDetail) => {
   detail.value = {
     ...detail.value,
     id: serverDetail.circle_code || detail.value.id,
-    bannerImage: serverDetail.cover_url || detail.value.bannerImage,
-    logoImage: serverDetail.avatar_url || serverDetail.cover_url || detail.value.logoImage,
+    bannerImage: sanitizeCircleImage(serverDetail.cover_url || detail.value.bannerImage),
+    logoImage: sanitizeCircleImage(serverDetail.avatar_url || serverDetail.cover_url || detail.value.logoImage),
     title: serverDetail.name || detail.value.title,
     levelTag: mapJoinTypeTag(serverDetail.join_type),
     membersText: memberCountText,
@@ -155,7 +186,6 @@ const loadCircleDetail = async (circleCode) => {
   try {
     const serverDetail = await getCircleDetail(circleCode)
     applyServerDetail(serverDetail)
-    loadPendingSyncs(circleCode)
   } catch (err) {
     showToast(err?.message || '圈子详情加载失败')
   }
@@ -164,32 +194,21 @@ const loadCircleDetail = async (circleCode) => {
 const loadCirclePosts = async (circleCode) => {
   try {
     const payload = await getCirclePosts(circleCode, { limit: 50 })
-    posts.value = Array.isArray(payload?.items) ? payload.items : []
+    allPosts.value = Array.isArray(payload?.items) ? payload.items : []
   } catch (err) {
-    posts.value = []
+    allPosts.value = []
     showToast(err?.message || '圈子资源加载失败')
   }
 }
 
-const loadPendingSyncs = async (circleCode) => {
-  if (!isOwner.value) {
-    pendingSyncs.value = []
-    return
-  }
+const loadCircleMembers = async (circleCode) => {
   try {
-    const payload = await getPendingCirclePostSyncs(circleCode)
-    pendingSyncs.value = Array.isArray(payload?.items) ? payload.items : []
-  } catch {
-    pendingSyncs.value = []
+    const payload = await getCircleMembers(circleCode, { offset: 0, limit: 50 })
+    members.value = Array.isArray(payload?.items) ? payload.items : []
+  } catch (err) {
+    members.value = []
+    showToast(err?.message || '成员列表加载失败')
   }
-}
-
-const loadCircleResourceContext = async (code) => {
-  if (!code) {
-    return
-  }
-  await loadCirclePosts(code)
-  await loadPendingSyncs(code)
 }
 
 onLoad((options = {}) => {
@@ -199,7 +218,8 @@ onLoad((options = {}) => {
     return
   }
   loadCircleDetail(circleCode.value)
-  loadCircleResourceContext(circleCode.value)
+  loadCirclePosts(circleCode.value)
+  loadCircleMembers(circleCode.value)
 })
 
 onShow(() => {
@@ -209,37 +229,70 @@ onShow(() => {
   }
   shouldRefreshOnShow.value = false
   loadCircleDetail(circleCode.value)
-  loadCircleResourceContext(circleCode.value)
+  loadCirclePosts(circleCode.value)
+  loadCircleMembers(circleCode.value)
 })
 
-const onPrivateMessage = () => showToast('私信功能开发中')
+onShareAppMessage(() => {
+  const title = String(detail.value?.title || '圈子详情').trim()
+  const memberCount = detail.value?.membersText || ''
+  // 优先使用封面图（更大更美观），其次使用logo
+  const imageUrl = resolveShareImageUrl()
+
+  // 构建分享标题：圈子名称 + 成员数
+  let shareTitle = `邀请你加入【${title}】`
+  if (memberCount) {
+    shareTitle = `邀请你加入【${title}】· ${memberCount}`
+  }
+
+  return {
+    title: shareTitle,
+    path: `/pages/circles/detail/index?code=${encodeURIComponent(circleCode.value)}`,
+    imageUrl: imageUrl || undefined
+  }
+})
+
+onShareTimeline(() => {
+  const title = String(detail.value?.title || '圈子详情').trim()
+  const memberCount = detail.value?.membersText || ''
+  const imageUrl = resolveShareImageUrl()
+
+  // 朋友圈分享标题
+  let shareTitle = `邀请你加入【${title}】`
+  if (memberCount) {
+    shareTitle = `邀请你加入【${title}】· ${memberCount}`
+  }
+
+  return {
+    title: shareTitle,
+    query: `code=${encodeURIComponent(circleCode.value)}`,
+    imageUrl: imageUrl || undefined
+  }
+})
+
 const onMoreNotice = () => showToast('查看公告')
 const onPostDetail = (post) => {
-  const postCode = String(post?.post_code || '').trim()
+  const postCode = String(post?.post_code || post?.postCode || '').trim()
   if (!postCode) {
-    showToast('资源编号缺失')
+    showToast('活动编号缺失')
     return
   }
   uni.navigateTo({
     url: `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode)}`
   })
 }
-const onApplyJoin = () => showToast('申请加入已提交')
-const onJoinNow = () => showToast('立即加入圈子')
-const onReviewSync = async (item, action) => {
-  if (!circleCode.value || !item?.sync_id) {
-    showToast('同步记录缺失')
+const onMemberDetail = (member) => {
+  const userId = String(member?.user_id || member?.userId || '').trim()
+  if (!userId) {
+    showToast('用户信息缺失')
     return
   }
-  try {
-    await reviewCirclePostSync(circleCode.value, item.sync_id, { action })
-    showToast(action === 'approve' ? '已通过同步' : '已拒绝同步')
-    loadCircleResourceContext(circleCode.value)
-    loadCircleDetail(circleCode.value)
-  } catch (err) {
-    showToast(err?.message || '审核处理失败')
-  }
+  uni.navigateTo({
+    url: `/pages/me/card/index?userId=${encodeURIComponent(userId)}`
+  })
 }
+const onApplyJoin = () => showToast('申请加入已提交')
+const onJoinNow = () => showToast('立即加入圈子')
 const onEditCircle = () => {
   if (!circleCode.value) {
     showToast('圈子编号缺失')
@@ -255,183 +308,83 @@ const onEditCircle = () => {
 <style scoped>
 .detail-page {
   min-height: 100vh;
-  background: #f6f6f8;
+  background: #ffffff;
 }
 
 .content-wrap {
-  padding-bottom: calc(150rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
+}
+
+.section-gap {
+  padding: 16rpx 0;
 }
 
 .owner-action-wrap {
-  padding: 16rpx 32rpx 0;
+  padding: 20rpx 32rpx;
+  border-bottom: 1rpx solid #f3f4f6;
 }
 
 .owner-edit-btn {
   width: 100%;
   height: 80rpx;
-  border-radius: 18rpx;
+  border-radius: 6rpx;
   border: 0;
-  background: linear-gradient(135deg, #1a57db 0%, #2563eb 100%);
+  background: #2563eb;
   color: #ffffff;
   font-size: 28rpx;
-  font-weight: 700;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10rpx 22rpx rgba(26, 87, 219, 0.16);
 }
 
 .owner-edit-btn-active {
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .list-wrap {
-  padding: 16rpx 32rpx 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-  background: #f6f6f8;
-}
-
-.review-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-}
-
-.review-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.review-section-title {
-  color: #0f172a;
-  font-size: 28rpx;
-  line-height: 40rpx;
-  font-weight: 700;
-}
-
-.review-section-sub {
-  color: #64748b;
-  font-size: 22rpx;
-  line-height: 32rpx;
-}
-
-.review-card {
-  padding: 22rpx;
-  border-radius: 18rpx;
   background: #ffffff;
-  border: 1rpx solid #e2e8f0;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
 }
 
-.review-card-title {
-  display: block;
-  color: #0f172a;
-  font-size: 28rpx;
-  line-height: 40rpx;
-  font-weight: 700;
-}
-
-.review-card-meta {
-  display: block;
-  margin-top: 6rpx;
-  color: #64748b;
-  font-size: 22rpx;
-  line-height: 32rpx;
-}
-
-.review-card-desc {
-  display: block;
-  margin-top: 12rpx;
-  color: #475569;
-  font-size: 24rpx;
-  line-height: 34rpx;
-}
-
-.review-card-actions {
-  margin-top: 18rpx;
+.event-list {
+  padding: 0 32rpx;
   display: flex;
-  justify-content: flex-end;
-  gap: 12rpx;
+  flex-direction: column;
+  gap: 24rpx;
 }
 
-.review-btn {
-  min-width: 132rpx;
-  height: 64rpx;
-  border-radius: 14rpx;
-  border: 0;
-  font-size: 24rpx;
-  line-height: 64rpx;
-  font-weight: 700;
-}
-
-.review-btn::after {
-  border: 0;
-}
-
-.review-btn-reject {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.review-btn-approve {
-  background: #1a57db;
-  color: #ffffff;
-}
-
-.review-btn-reject-active,
-.review-btn-approve-active {
-  opacity: 0.86;
+.member-list {
+  padding: 0 32rpx;
 }
 
 .empty-wrap {
-  margin-top: 14rpx;
-  border-radius: 14rpx;
-  border: 1rpx dashed #cbd5e1;
-  background: #ffffff;
-  min-height: 240rpx;
+  padding: 120rpx 32rpx;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
 }
 
-.empty-title {
-  color: #334155;
+.empty-text {
+  color: #9ca3af;
   font-size: 26rpx;
-  line-height: 34rpx;
-  font-weight: 600;
-}
-
-.empty-sub {
-  margin-top: 8rpx;
-  color: #94a3b8;
-  font-size: 22rpx;
-  line-height: 30rpx;
+  line-height: 36rpx;
 }
 
 @media (prefers-color-scheme: dark) {
   .detail-page {
-    background: #111621;
+    background: #111827;
   }
 
-  .owner-edit-btn {
-    box-shadow: none;
+  .owner-action-wrap {
+    border-bottom-color: #1f2937;
   }
 
-  .empty-wrap {
-    background: #0f172a;
-    border-color: #334155;
+  .list-wrap {
+    background: #111827;
   }
 
-  .empty-title {
-    color: #cbd5e1;
-  }
-
-  .empty-sub {
-    color: #64748b;
+  .empty-text {
+    color: #6b7280;
   }
 }
 </style>

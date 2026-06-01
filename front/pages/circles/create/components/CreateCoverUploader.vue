@@ -41,23 +41,24 @@ const chooseCover = () => {
 
 <style scoped>
 .section-wrap {
-  padding: 0 24rpx;
+  padding: 24rpx 32rpx;
+  background: #ffffff;
 }
 
 .section-title {
   display: block;
   color: #0f172a;
-  font-size: 30rpx;
-  line-height: 38rpx;
-  font-weight: 700;
-  margin-bottom: 12rpx;
+  font-size: 28rpx;
+  line-height: 1.3;
+  font-weight: 600;
+  margin-bottom: 16rpx;
 }
 
 .cover-card {
   position: relative;
   width: 100%;
   height: 330rpx;
-  border-radius: 20rpx;
+  border-radius: 16rpx;
   overflow: hidden;
   border: 2rpx dashed #cbd5e1;
   background: #e2e8f0;
@@ -86,14 +87,18 @@ const chooseCover = () => {
 .cover-tip {
   margin-top: 12rpx;
   color: #ffffff;
-  font-size: 24rpx;
-  line-height: 32rpx;
+  font-size: 26rpx;
+  line-height: 1.3;
   font-weight: 500;
 }
 
 @media (prefers-color-scheme: dark) {
+  .section-wrap {
+    background: #0f172a;
+  }
+
   .section-title {
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .cover-card {

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     JWT_SECRET_KEY: str = Field(default='replace-with-your-secret')
     JWT_ALGORITHM: str = Field(default='HS256')
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24)
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 365 * 10)
 
     OSS_ENDPOINT: str = Field(default='')
     OSS_BUCKET: str = Field(default='')

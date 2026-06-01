@@ -64,6 +64,7 @@
               v-for="item in members"
               :key="item.id"
               :member="item"
+              :interest-pending="isMemberInterestPending(item.id)"
               @view="onViewProfile"
               @interest="onInterestMember"
               @verify="onGoVerify"
@@ -90,7 +91,6 @@
       @reset="onResetFilter"
       @apply="onApplyFilter"
     />
-
   </view>
 </template>
 
@@ -126,6 +126,11 @@ const SPARSE_FIRST_PAGE_THRESHOLD = 3
 const LOCATION_HISTORY_STORAGE_KEY = 'network_location_history_v1'
 const LOCATION_HISTORY_LIMIT = 8
 const LOCATION_PAGE_RESULT_STORAGE_KEY = 'discover_location_page_result_v1'
+const RECOMMENDATION_CACHE_STORAGE_KEY = 'discover_recommendation_cache_v1'
+const RECOMMENDATION_CACHE_TTL_MS = 60 * 1000
+const RECOMMENDATION_CACHE_MAX_ENTRIES = 12
+const FILTER_OPTIONS_CACHE_STORAGE_KEY = 'discover_filter_options_cache_v1'
+const FILTER_OPTIONS_CACHE_TTL_MS = 10 * 60 * 1000
 let hasShownOnce = false
 const initialLocationCache = loadLocationFilterCache()
 const hasInitialLocationCache = Boolean(
@@ -192,8 +197,15 @@ const filterOptions = ref({
 })
 const loadedFilterOptions = ref(false)
 const locationHistoryCities = ref([])
+const filterOptionsLoading = ref(false)
+const pendingRecommendationReset = ref(false)
+const interestPendingMap = ref({})
+const sentImpressionKeys = ref({})
+const sentFeedbackKeys = ref({})
+const recommendationCacheByContext = ref({})
 
 let searchTimer = null
+let filterOptionsPromise = null
 
 const systemInfo = uni.getSystemInfoSync()
 const menuButtonRect = typeof uni.getMenuButtonBoundingClientRect === 'function'
@@ -338,6 +350,60 @@ const loadLocationHistory = () => {
       : []
   } catch {
     return []
+  }
+}
+
+const loadStoredRecommendationCache = () => {
+  try {
+    const raw = uni.getStorageSync(RECOMMENDATION_CACHE_STORAGE_KEY)
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const persistRecommendationCache = () => {
+  try {
+    uni.setStorageSync(RECOMMENDATION_CACHE_STORAGE_KEY, recommendationCacheByContext.value)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+const loadCachedFilterOptions = () => {
+  try {
+    const raw = uni.getStorageSync(FILTER_OPTIONS_CACHE_STORAGE_KEY)
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+    const updatedAt = Number(parsed.updated_at || 0)
+    if (!updatedAt || Date.now() - updatedAt > FILTER_OPTIONS_CACHE_TTL_MS) {
+      return null
+    }
+    const cities = Array.isArray(parsed.cities)
+      ? parsed.cities.map((item) => String(item || '').trim()).filter(Boolean)
+      : []
+    return {
+      cities,
+      industries: DEFAULT_INDUSTRY_OPTIONS
+    }
+  } catch {
+    return null
+  }
+}
+
+const persistFilterOptionsCache = (cities = []) => {
+  try {
+    uni.setStorageSync(FILTER_OPTIONS_CACHE_STORAGE_KEY, {
+      updated_at: Date.now(),
+      cities: Array.isArray(cities)
+        ? cities.map((item) => String(item || '').trim()).filter(Boolean)
+        : []
+    })
+  } catch {
+    // ignore storage errors
   }
 }
 
@@ -490,6 +556,8 @@ const clearLoginState = () => {
   uni.removeStorageSync('token')
   uni.removeStorageSync('isLoggedIn')
   uni.removeStorageSync('userInfo')
+  uni.removeStorageSync(RECOMMENDATION_CACHE_STORAGE_KEY)
+  recommendationCacheByContext.value = {}
 }
 
 const ensureLoggedIn = () => {
@@ -616,6 +684,146 @@ const joinNonEmpty = (...values) => {
   return values.map((item) => String(item || '').trim()).filter(Boolean).join(' | ')
 }
 
+const getViewerCacheKey = () => {
+  try {
+    const rawUserInfo = uni.getStorageSync('userInfo')
+    const userInfo = typeof rawUserInfo === 'string' ? JSON.parse(rawUserInfo) : rawUserInfo
+    if (!userInfo || typeof userInfo !== 'object') {
+      return 'guest'
+    }
+    return String(
+      userInfo.user_id
+      || userInfo.userId
+      || userInfo.id
+      || userInfo.phone
+      || 'guest'
+    ).trim() || 'guest'
+  } catch {
+    return 'guest'
+  }
+}
+
+const buildRecommendationCacheKey = ({ tab, keyword: nextKeyword, cityName, industryLabel, scope }) => {
+  return [
+    getViewerCacheKey(),
+    String(tab || 'recommend').trim() || 'recommend',
+    String(scope || 'national').trim() || 'national',
+    String(cityName || '').trim(),
+    String(industryLabel || '').trim(),
+    String(nextKeyword || '').trim().toLowerCase()
+  ].join('|')
+}
+
+const pruneRecommendationCacheEntries = (entries) => {
+  const now = Date.now()
+  const validEntries = Object.entries(entries || {})
+    .filter(([, value]) => {
+      if (!value || typeof value !== 'object') {
+        return false
+      }
+      const updatedAt = Number(value.updated_at || 0)
+      return updatedAt > 0 && now - updatedAt <= RECOMMENDATION_CACHE_TTL_MS * 3
+    })
+    .sort(([, left], [, right]) => Number(right.updated_at || 0) - Number(left.updated_at || 0))
+    .slice(0, RECOMMENDATION_CACHE_MAX_ENTRIES)
+
+  return Object.fromEntries(validEntries)
+}
+
+const getFreshRecommendationCacheEntry = (cacheKey) => {
+  const entry = recommendationCacheByContext.value[cacheKey]
+  if (!entry || typeof entry !== 'object') {
+    return null
+  }
+  const updatedAt = Number(entry.updated_at || 0)
+  if (!updatedAt || Date.now() - updatedAt > RECOMMENDATION_CACHE_TTL_MS) {
+    return null
+  }
+  return entry
+}
+
+const applyRecommendationCacheEntry = (entry) => {
+  const cachedMembers = Array.isArray(entry?.members) ? entry.members : []
+  members.value = cachedMembers
+  requestId.value = String(entry?.request_id || '').trim()
+  nextCursor.value = String(entry?.next_cursor || '').trim()
+  hasMore.value = Boolean(entry?.has_more) && Boolean(nextCursor.value)
+  activeCityQuery.value = String(entry?.active_city_query || '').trim()
+  loaded.value = true
+  loadError.value = ''
+}
+
+const persistRecommendationCacheEntry = (cacheKey, payload = {}) => {
+  const nextEntries = pruneRecommendationCacheEntries({
+    ...recommendationCacheByContext.value,
+    [cacheKey]: {
+      updated_at: Date.now(),
+      members: Array.isArray(payload.members) ? payload.members : [],
+      request_id: String(payload.request_id || '').trim(),
+      next_cursor: String(payload.next_cursor || '').trim(),
+      has_more: Boolean(payload.has_more),
+      active_city_query: String(payload.active_city_query || '').trim()
+    }
+  })
+  recommendationCacheByContext.value = nextEntries
+  persistRecommendationCache()
+}
+
+const patchCachedRecommendationInterestState = (memberId, interested) => {
+  const targetId = String(memberId || '').trim()
+  if (!targetId) {
+    return
+  }
+  const currentCacheKey = buildRecommendationCacheKey({
+    tab: activeTab.value,
+    keyword: normalizedKeyword.value,
+    cityName: effectiveCityName.value,
+    industryLabel: filters.value.industry_label || '',
+    scope: isNationalScope.value ? 'national' : 'city'
+  })
+  const currentEntry = recommendationCacheByContext.value[currentCacheKey]
+  if (!currentEntry || !Array.isArray(currentEntry.members)) {
+    return
+  }
+  const nextMembers = currentEntry.members.map((item) => {
+    if (String(item?.id || '').trim() !== targetId) {
+      return item
+    }
+    return {
+      ...item,
+      interested: Boolean(interested)
+    }
+  })
+  persistRecommendationCacheEntry(currentCacheKey, {
+    ...currentEntry,
+    members: nextMembers
+  })
+}
+
+const buildRecommendationContextSignature = () => {
+  return [
+    String(activeTab.value || 'recommend').trim(),
+    String(normalizedKeyword.value || '').trim().toLowerCase(),
+    isNationalScope.value ? 'national' : 'city',
+    String(effectiveCityName.value || '').trim(),
+    String(filters.value.industry_label || '').trim()
+  ].join('|')
+}
+
+const queueRecommendationReset = () => {
+  pendingRecommendationReset.value = true
+}
+
+const runQueuedRecommendationReset = () => {
+  if (!pendingRecommendationReset.value) {
+    return
+  }
+  pendingRecommendationReset.value = false
+  Promise.resolve().then(() => {
+    fetchRecommendations(true)
+  })
+}
+
 const mapMemberCard = (item = {}) => {
   const businessUserId = String(item.user_id || '').trim()
   const cityName = String(item.city_name || '').trim()
@@ -688,22 +896,77 @@ const updateMemberInterestState = (memberId, interested) => {
       interested: Boolean(interested)
     }
   })
+  patchCachedRecommendationInterestState(targetId, interested)
+}
+
+const isMemberInterestPending = (memberId) => {
+  const targetId = String(memberId || '').trim()
+  if (!targetId) {
+    return false
+  }
+  return Boolean(interestPendingMap.value[targetId])
+}
+
+const setMemberInterestPending = (memberId, pending) => {
+  const targetId = String(memberId || '').trim()
+  if (!targetId) {
+    return
+  }
+  const nextMap = {
+    ...interestPendingMap.value,
+    [targetId]: Boolean(pending)
+  }
+  if (!pending) {
+    delete nextMap[targetId]
+  }
+  interestPendingMap.value = nextMap
+}
+
+const hasSentSessionKey = (store, key) => {
+  const normalizedKey = String(key || '').trim()
+  if (!normalizedKey) {
+    return false
+  }
+  return Boolean(store.value[normalizedKey])
+}
+
+const markSentSessionKey = (store, key) => {
+  const normalizedKey = String(key || '').trim()
+  if (!normalizedKey) {
+    return
+  }
+  store.value = {
+    ...store.value,
+    [normalizedKey]: true
+  }
 }
 
 const reportImpressions = async (items, currentRequestId) => {
+  const normalizedRequestId = String(currentRequestId || '').trim()
   const targetUserIds = items
     .map((item) => String(item.businessUserId || '').trim())
     .filter(Boolean)
+    .filter((targetUserId) => {
+      if (!normalizedRequestId) {
+        return true
+      }
+      return !hasSentSessionKey(sentImpressionKeys, `${normalizedRequestId}|${targetUserId}`)
+    })
   if (!targetUserIds.length) {
     return
   }
   try {
     await reportNetworkImpressions({
-      request_id: currentRequestId,
+      request_id: normalizedRequestId,
       scene: 'discover',
       tab: activeTab.value,
       target_user_ids: targetUserIds
     })
+    if (normalizedRequestId) {
+      targetUserIds.forEach((targetUserId) => {
+        markSentSessionKey(sentImpressionKeys, `${normalizedRequestId}|${targetUserId}`)
+      })
+    }
   } catch {
     // ignore telemetry errors
   }
@@ -714,22 +977,55 @@ const sendFeedback = async (member, eventType, ext = null) => {
   if (!targetUserId) {
     return
   }
+  const normalizedRequestId = String(requestId.value || '').trim()
+  const feedbackDedupKey = normalizedRequestId
+    ? `${normalizedRequestId}|${targetUserId}|${String(eventType || '').trim()}`
+    : ''
+  if (feedbackDedupKey && hasSentSessionKey(sentFeedbackKeys, feedbackDedupKey)) {
+    return
+  }
   try {
     await reportNetworkFeedback({
-      request_id: requestId.value,
+      request_id: normalizedRequestId,
       scene: 'discover',
       tab: activeTab.value,
       target_user_id: targetUserId,
       event_type: eventType,
       ext: ext || {}
     })
+    if (feedbackDedupKey) {
+      markSentSessionKey(sentFeedbackKeys, feedbackDedupKey)
+    }
   } catch {
     // ignore telemetry errors
   }
 }
 
-const fetchFilterOptions = async () => {
-  if (loadedFilterOptions.value || !ensureLoggedIn()) {
+const fetchFilterOptions = async (options = {}) => {
+  const forceRefresh = Boolean(options?.forceRefresh)
+  if (!ensureLoggedIn()) {
+    return
+  }
+
+  if (loadedFilterOptions.value && !forceRefresh) {
+    return
+  }
+
+  const cachedOptions = forceRefresh ? null : loadCachedFilterOptions()
+  if (cachedOptions) {
+    filterOptions.value = cachedOptions
+    loadedFilterOptions.value = true
+    return
+  }
+
+  if (filterOptionsLoading.value) {
+    if (filterOptionsPromise) {
+      try {
+        await filterOptionsPromise
+      } catch {
+        // fetch promise handles local fallback state
+      }
+    }
     return
   }
 
@@ -737,29 +1033,45 @@ const fetchFilterOptions = async () => {
     cities: [],
     industries: DEFAULT_INDUSTRY_OPTIONS
   }
-  loadedFilterOptions.value = true
+  filterOptionsLoading.value = true
+  filterOptionsPromise = (async () => {
+    try {
+      const remoteOptions = await getNetworkFilterOptions()
+      const cities = Array.isArray(remoteOptions?.cities)
+        ? remoteOptions.cities.map((item) => String(item || '').trim()).filter(Boolean)
+        : []
+
+      filterOptions.value = {
+        cities,
+        industries: DEFAULT_INDUSTRY_OPTIONS
+      }
+      loadedFilterOptions.value = true
+      persistFilterOptionsCache(cities)
+    } catch {
+      loadedFilterOptions.value = false
+    } finally {
+      filterOptionsLoading.value = false
+      filterOptionsPromise = null
+    }
+  })()
 
   try {
-    const remoteOptions = await getNetworkFilterOptions()
-    const cities = Array.isArray(remoteOptions?.cities)
-      ? remoteOptions.cities.map((item) => String(item || '').trim()).filter(Boolean)
-      : []
-
-    filterOptions.value = {
-      cities,
-      industries: DEFAULT_INDUSTRY_OPTIONS
-    }
+    await filterOptionsPromise
   } catch {
-    // keep local options only
+    // fetch promise handles local fallback state
   }
 }
 
-const fetchRecommendations = async (reset = false) => {
+const fetchRecommendations = async (reset = false, options = {}) => {
+  const forceRefresh = Boolean(options?.forceRefresh)
   if (!ensureLoggedIn()) {
     return
   }
 
   if (loading.value || loadingMore.value) {
+    if (reset) {
+      queueRecommendationReset()
+    }
     return
   }
 
@@ -767,7 +1079,27 @@ const fetchRecommendations = async (reset = false) => {
     return
   }
 
+  const recommendationCacheKey = buildRecommendationCacheKey({
+    tab: activeTab.value,
+    keyword: normalizedKeyword.value,
+    cityName: effectiveCityName.value,
+    industryLabel: filters.value.industry_label || '',
+    scope: isNationalScope.value ? 'national' : 'city'
+  })
+
+  if (reset && !forceRefresh) {
+    const cachedEntry = getFreshRecommendationCacheEntry(recommendationCacheKey)
+    if (cachedEntry) {
+      pendingRecommendationReset.value = false
+      applyRecommendationCacheEntry(cachedEntry)
+      return
+    }
+  }
+
+  const requestContextSignature = buildRecommendationContextSignature()
+
   if (reset) {
+    pendingRecommendationReset.value = false
     loading.value = true
     loadError.value = ''
   } else {
@@ -843,6 +1175,11 @@ const fetchRecommendations = async (reset = false) => {
     }
 
     const mapped = incoming.map((item) => mapMemberCard(item))
+    const shouldApplyResponse = requestContextSignature === buildRecommendationContextSignature()
+      && !pendingRecommendationReset.value
+    if (!shouldApplyResponse) {
+      return
+    }
 
     if (reset) {
       members.value = mapped
@@ -869,6 +1206,13 @@ const fetchRecommendations = async (reset = false) => {
       if (mapped.length) {
         appendFirstPageHistory(recoContextKey, currentFirstPageIds)
       }
+      persistRecommendationCacheEntry(recommendationCacheKey, {
+        members: mapped,
+        request_id: data?.request_id,
+        next_cursor: data?.next_cursor,
+        has_more: data?.has_more,
+        active_city_query: selectedQueryCity
+      })
     }
 
     if (mapped.length) {
@@ -891,6 +1235,7 @@ const fetchRecommendations = async (reset = false) => {
   } finally {
     loading.value = false
     loadingMore.value = false
+    runQueuedRecommendationReset()
   }
 }
 
@@ -976,15 +1321,19 @@ const onInterestMember = async (member) => {
     return
   }
 
-  try {
-    // 调用后端API切换感兴趣状态
-    const response = await toggleUserInterest(targetUserId)
+  const memberId = String(member?.id || '').trim()
+  if (isMemberInterestPending(memberId)) {
+    return
+  }
 
-    // 根据后端返回的状态更新前端
+  const desiredInterestState = !Boolean(member?.interested)
+  setMemberInterestPending(memberId, true)
+
+  try {
+    const response = await toggleUserInterest(targetUserId, desiredInterestState)
     const newInterestState = Boolean(response?.is_interested)
     updateMemberInterestState(member.id, newInterestState)
 
-    // 发送反馈事件用于推荐算法
     if (newInterestState) {
       await sendFeedback(member, 'apply_friend', {
         source: 'discover_interest_icon'
@@ -999,6 +1348,8 @@ const onInterestMember = async (member) => {
   } catch (error) {
     console.error('Toggle interest failed:', error)
     showToast('操作失败，请稍后重试')
+  } finally {
+    setMemberInterestPending(memberId, false)
   }
 }
 
@@ -1009,7 +1360,7 @@ const onGoVerify = () => {
 }
 
 const onRetry = () => {
-  fetchRecommendations(true)
+  fetchRecommendations(true, { forceRefresh: true })
 }
 
 const onScrollToLower = () => {
@@ -1050,8 +1401,10 @@ const refreshLocation = async ({ silent = false, notifySuccess = false } = {}) =
 const refreshDiscoverData = async () => {
   firstPageHistoryByContext.value = loadStoredFirstPageHistory()
   locationHistoryCities.value = loadLocationHistory()
-  await fetchFilterOptions()
-  await fetchRecommendations(true)
+  recommendationCacheByContext.value = loadStoredRecommendationCache()
+  loadedFilterOptions.value = false
+  await fetchFilterOptions({ forceRefresh: true })
+  await fetchRecommendations(true, { forceRefresh: true })
 }
 
 const runRefreshDiscoverData = async () => {
@@ -1075,7 +1428,7 @@ const onRefresherRestore = () => {
   refreshing.value = false
 }
 
-watch(keyword, () => {
+const stopKeywordWatch = watch(keyword, () => {
   if (searchTimer) {
     clearTimeout(searchTimer)
   }
@@ -1088,6 +1441,7 @@ onMounted(async () => {
   hasPromptedLogin.value = false
   firstPageHistoryByContext.value = loadStoredFirstPageHistory()
   locationHistoryCities.value = loadLocationHistory()
+  recommendationCacheByContext.value = loadStoredRecommendationCache()
   await fetchFilterOptions()
   if (!hasInitialLocationCache) {
     await refreshLocation({ silent: true, notifySuccess: false })
@@ -1108,6 +1462,10 @@ onShow(() => {
 })
 
 onUnmounted(() => {
+  if (stopKeywordWatch) {
+    stopKeywordWatch()
+  }
+
   if (searchTimer) {
     clearTimeout(searchTimer)
     searchTimer = null

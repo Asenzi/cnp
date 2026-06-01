@@ -1,133 +1,211 @@
 <template>
-  <view class="post-card" hover-class="post-card-active" @tap="$emit('detail', item)">
-    <view class="meta-row">
-      <text class="type-tag" :class="item.type === 'need' ? 'type-need' : item.type === 'venue' ? 'type-venue' : 'type-offer'">
-        {{ item.typeText }}
-      </text>
-      <text class="time-text">{{ item.timeText }}</text>
-    </view>
-
-    <text class="title">{{ item.title }}</text>
-    <text class="content">{{ item.content }}</text>
-
-    <view v-if="item.images?.length" class="image-grid">
-      <image v-for="(img, idx) in item.images" :key="`${item.id}-${idx}`" class="grid-image" :src="img" mode="aspectFill" />
-    </view>
-
-    <view class="footer-row">
-      <view v-if="item.avatars?.length" class="avatar-stack">
-        <view
-          v-for="(color, idx) in item.avatars"
-          :key="`${item.id}-avatar-${idx}`"
-          class="stack-item"
-          :style="{ background: color }"
-        ></view>
+  <view class="resource-card" hover-class="resource-card-active" @tap="$emit('detail', item)">
+    <view class="card-header">
+      <view class="header-left">
+        <text class="type-badge" :class="`type-${item.type}`">{{ item.typeText }}</text>
+        <text class="time-text">{{ item.timeText }}</text>
       </view>
 
-      <view v-else class="read-row">
-        <ProfileSymbol name="visibility" :size="16" color="#94a3b8" />
-        <text class="metric-text">{{ item.readers }} 阅读</text>
+      <view
+        v-if="showInterest"
+        class="interest-action"
+        :class="{ 'interest-active': isInterested }"
+        hover-class="interest-hover"
+        @tap.stop="$emit('interest', item)"
+      >
+        <text class="interest-icon">{{ isInterested ? '♥' : '♡' }}</text>
       </view>
+    </view>
 
-      <view v-if="item.industryLabels?.length" class="industry-row">
+    <text class="resource-title">{{ item.title }}</text>
+    <text v-if="item.content" class="resource-desc">{{ item.content }}</text>
+
+    <view v-if="item.images?.length" class="image-grid" :class="`grid-${Math.min(item.images.length, 3)}`">
+      <image
+        v-for="(img, idx) in item.images.slice(0, 3)"
+        :key="`${item.id}-${idx}`"
+        class="grid-image"
+        :src="img"
+        mode="aspectFill"
+      />
+    </view>
+
+    <view class="card-footer">
+      <view v-if="item.industryLabels?.length" class="tags-row">
         <text
           v-for="(label, idx) in item.industryLabels.slice(0, 2)"
-          :key="`${item.id}-industry-${idx}`"
+          :key="`${item.id}-tag-${idx}`"
           class="industry-tag"
         >
           {{ label }}
         </text>
+      </view>
+
+      <view v-if="!item.avatars?.length" class="stats-row">
+        <text class="stat-text">{{ item.readers }} 阅读</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup>
-import ProfileSymbol from './ProfileSymbol.vue'
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   item: {
     type: Object,
     default: () => ({})
+  },
+  showInterest: {
+    type: Boolean,
+    default: false
   }
 })
 
-defineEmits(['detail'])
+defineEmits(['detail', 'interest'])
+
+const isInterested = computed(() => {
+  return Boolean(
+    props.item?.interested ||
+    props.item?.isInterested ||
+    props.item?.is_interested ||
+    props.item?.followed ||
+    props.item?.isFollowed ||
+    props.item?.is_followed
+  )
+})
 </script>
 
 <style scoped>
-.post-card {
+.resource-card {
   background: #ffffff;
-  border-radius: 20rpx;
-  border: 1rpx solid #f1f5f9;
-  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  border-radius: 16rpx;
   padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  border: 1rpx solid rgba(15, 23, 42, 0.06);
 }
 
-.post-card-active {
-  opacity: 0.9;
+.resource-card-active {
+  background: #fafbfc;
 }
 
-.meta-row {
+.card-header {
   display: flex;
   align-items: center;
-  gap: 10rpx;
-  margin-bottom: 14rpx;
+  justify-content: space-between;
+  gap: 12rpx;
 }
 
-.type-tag {
+.header-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.type-badge {
+  flex-shrink: 0;
   padding: 4rpx 12rpx;
-  border-radius: 8rpx;
-  font-size: 16rpx;
-  line-height: 24rpx;
-  font-weight: 700;
+  border-radius: 6rpx;
+  font-size: 20rpx;
+  line-height: 1.3;
+  font-weight: 600;
 }
 
 .type-need {
-  background: #ffedd5;
-  color: #ea580c;
+  background: rgba(251, 191, 36, 0.08);
+  color: #d97706;
 }
 
 .type-offer {
-  background: rgba(26, 87, 219, 0.1);
-  color: #1a57db;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
 }
 
 .type-venue {
-  background: rgba(5, 150, 105, 0.12);
-  color: #047857;
+  background: rgba(16, 185, 129, 0.08);
+  color: #059669;
 }
 
 .time-text {
   color: #94a3b8;
-  font-size: 20rpx;
-  line-height: 28rpx;
+  font-size: 22rpx;
+  line-height: 1.3;
 }
 
-.title {
-  display: block;
+.interest-action {
+  flex-shrink: 0;
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 12rpx;
+  background: #f8fafc;
+  border: 1rpx solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.interest-hover {
+  background: #f1f5f9;
+}
+
+.interest-active {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.interest-icon {
+  font-size: 24rpx;
+  line-height: 1;
+  color: #94a3b8;
+}
+
+.interest-active .interest-icon {
+  color: #ef4444;
+}
+
+.resource-title {
   color: #0f172a;
-  font-size: 30rpx;
-  line-height: 40rpx;
-  font-weight: 700;
-}
-
-.content {
-  margin-top: 8rpx;
+  font-size: 28rpx;
+  line-height: 1.4;
+  font-weight: 600;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: break-all;
+}
+
+.resource-desc {
   color: #64748b;
   font-size: 24rpx;
-  line-height: 34rpx;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
 }
 
 .image-grid {
-  margin-top: 14rpx;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8rpx;
+  margin-top: 4rpx;
+}
+
+.grid-1 {
+  grid-template-columns: 1fr;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .grid-image {
@@ -137,89 +215,113 @@ defineEmits(['detail'])
   background: #f1f5f9;
 }
 
-.footer-row {
-  margin-top: 16rpx;
+.grid-1 .grid-image {
+  height: 240rpx;
+}
+
+.card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-.avatar-stack {
-  display: flex;
-  align-items: center;
-}
-
-.stack-item {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 999rpx;
-  border: 4rpx solid #ffffff;
-  margin-left: -12rpx;
-}
-
-.stack-item:first-child {
-  margin-left: 0;
-}
-
-.read-row {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-}
-
-.industry-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
   gap: 12rpx;
+  margin-top: 4rpx;
+}
+
+.tags-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
 }
 
 .industry-tag {
-  max-width: 156rpx;
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
-  background: rgba(26, 87, 219, 0.1);
-  color: #1a57db;
+  flex-shrink: 0;
+  max-width: 160rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  background: rgba(15, 23, 42, 0.04);
+  color: #475569;
   font-size: 20rpx;
-  line-height: 28rpx;
-  font-weight: 600;
-  white-space: nowrap;
+  line-height: 1.3;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.metric-text {
+.stats-row {
+  flex-shrink: 0;
+}
+
+.stat-text {
   color: #94a3b8;
   font-size: 20rpx;
-  line-height: 28rpx;
+  line-height: 1.3;
 }
 
 @media (prefers-color-scheme: dark) {
-  .post-card {
+  .resource-card {
     background: #0f172a;
-    border-color: #1e293b;
-    box-shadow: none;
+    border-color: rgba(255, 255, 255, 0.06);
   }
 
-  .title {
-    color: #f8fafc;
+  .resource-card-active {
+    background: #1e293b;
   }
 
-  .content {
+  .type-need {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+  }
+
+  .type-offer {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+  }
+
+  .type-venue {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+  }
+
+  .time-text {
+    color: #64748b;
+  }
+
+  .interest-action {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  .interest-hover {
+    background: #334155;
+  }
+
+  .interest-active {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+  }
+
+  .resource-title {
+    color: #f1f5f9;
+  }
+
+  .resource-desc {
     color: #94a3b8;
   }
 
   .grid-image {
-    background: #334155;
+    background: #1e293b;
   }
 
   .industry-tag {
-    background: rgba(96, 165, 250, 0.18);
-    color: #bfdbfe;
+    background: rgba(255, 255, 255, 0.04);
+    color: #94a3b8;
   }
 
-  .stack-item {
-    border-color: #0f172a;
+  .stat-text {
+    color: #64748b;
   }
 }
 </style>

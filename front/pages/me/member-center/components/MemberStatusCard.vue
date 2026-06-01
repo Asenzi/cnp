@@ -37,9 +37,9 @@ defineProps({
   overflow: hidden;
   border-radius: 24rpx;
   padding: 48rpx 40rpx 40rpx;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border: 1rpx solid rgba(51, 65, 85, 0.6);
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.24);
+  background: linear-gradient(135deg, #1a57db 0%, #1548b8 100%);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8rpx 24rpx rgba(26, 87, 219, 0.3), 0 2rpx 8rpx rgba(26, 87, 219, 0.2), inset 0 1rpx 0 rgba(255, 255, 255, 0.1);
   font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
@@ -50,7 +50,7 @@ defineProps({
   right: -140rpx;
   top: -140rpx;
   border-radius: 999px;
-  background: rgba(212, 175, 55, 0.1);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
 }
 
 .status-top {
@@ -69,16 +69,13 @@ defineProps({
   font-weight: 700;
   letter-spacing: 0.02em;
   font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
-  background: linear-gradient(to right, #fde68a, #d4af37);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #ffffff;
 }
 
 .status-subtitle {
   display: block;
   margin-top: 12rpx;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 24rpx;
   line-height: 36rpx;
   letter-spacing: 0.02em;
@@ -87,13 +84,15 @@ defineProps({
 .status-pill {
   flex-shrink: 0;
   border-radius: 999px;
-  border: 1rpx solid rgba(212, 175, 55, 0.4);
-  background: rgba(212, 175, 55, 0.18);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10rpx);
   padding: 8rpx 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1), inset 0 1rpx 0 rgba(255, 255, 255, 0.2);
 }
 
 .status-pill-text {
-  color: #d4af37;
+  color: #ffffff;
   font-size: 22rpx;
   line-height: 32rpx;
   font-weight: 700;
@@ -112,7 +111,7 @@ defineProps({
 
 .status-expire {
   display: block;
-  color: #cbd5e1;
+  color: rgba(255, 255, 255, 0.85);
   font-size: 24rpx;
   line-height: 36rpx;
 }
@@ -120,7 +119,7 @@ defineProps({
 .status-slogan {
   display: block;
   margin-top: 12rpx;
-  color: #e2e8f0;
+  color: #ffffff;
   font-size: 28rpx;
   line-height: 40rpx;
   font-style: normal;

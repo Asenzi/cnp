@@ -7,7 +7,7 @@ from secrets import token_hex
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import BusinessException
@@ -442,6 +442,23 @@ def _serialize_post(
             "is_verified": bool(author.is_verified),
         },
     }
+
+    # 如果是活动类型，添加活动相关字段
+    if str(post.mode or "").strip().lower() == "venue":
+        payload.update({
+            "event_date": str(post.event_date or "").strip() if hasattr(post, 'event_date') else "",
+            "event_time": str(post.event_time or "").strip() if hasattr(post, 'event_time') else "",
+            "duration": int(post.duration or 1) if hasattr(post, 'duration') else 1,
+            "capacity": int(post.capacity or 0) if hasattr(post, 'capacity') else 0,
+            "location": str(post.location or "").strip() if hasattr(post, 'location') else "",
+            "address": str(post.address or "").strip() if hasattr(post, 'address') else "",
+            "payment_type": str(post.payment_type or "free").strip() if hasattr(post, 'payment_type') else "free",
+            "price": str(post.price or "").strip() if hasattr(post, 'price') else "",
+            "contact": str(post.contact or "").strip() if hasattr(post, 'contact') else "",
+            "detail_content": str(post.detail_content or "").strip() if hasattr(post, 'detail_content') else "",
+            "participant_count": int(post.participant_count or 0) if hasattr(post, 'participant_count') else 0,
+        })
+
     if circle_syncs is not None:
         payload["circle_syncs"] = circle_syncs
     return payload
@@ -685,6 +702,17 @@ def create_resource_post(
     industry_label: str | None,
     images: list[str],
     sync_circle_codes: list[str] | None = None,
+    # 活动相关参数
+    event_date: str | None = None,
+    event_time: str | None = None,
+    duration: int | None = None,
+    capacity: int | None = None,
+    location: str | None = None,
+    address: str | None = None,
+    payment_type: str | None = None,
+    price: str | None = None,
+    contact: str | None = None,
+    detail_content: str | None = None,
 ) -> dict[str, Any]:
     safe_mode = str(mode or "").strip().lower()
     if safe_mode not in SUPPORTED_POST_MODES:
@@ -715,6 +743,21 @@ def create_resource_post(
         is_pinned=False,
         pinned_at=None,
     )
+
+    # 如果是活动模式，设置活动相关字段
+    if safe_mode == "venue":
+        post.event_date = str(event_date or "").strip() or None
+        post.event_time = str(event_time or "").strip() or None
+        post.duration = int(duration) if duration else 1
+        post.capacity = int(capacity) if capacity else 0
+        post.location = str(location or "").strip() or None
+        post.address = str(address or "").strip() or None
+        post.payment_type = str(payment_type or "free").strip()
+        post.price = str(price or "").strip() or None
+        post.contact = str(contact or "").strip() or None
+        post.detail_content = str(detail_content or "").strip() or None
+        post.participant_count = 0
+
     db.add(post)
     db.flush()
     circle_syncs = _sync_post_to_circles(
@@ -874,8 +917,12 @@ def set_resource_post_like(
             db.add(row)
             post.like_count = int(post.like_count or 0) + 1
             db.add(post)
-            db.commit()
-            db.refresh(post)
+            try:
+                db.commit()
+                db.refresh(post)
+            except IntegrityError:
+                db.rollback()
+                post, _ = _resolve_post_with_author(db=db, post_code=post_code)
     else:
         if row is not None:
             db.delete(row)

@@ -1,51 +1,101 @@
 <template>
-  <view class="list-card" hover-class="list-card-active" @tap="openCircle">
-    <view class="main-row">
-      <view class="cover-wrap">
-        <image v-if="circle.coverImage" class="cover-image" mode="aspectFill" :src="circle.coverImage" />
-        <view v-else class="cover-placeholder">
-          <text class="cover-placeholder-text">&#x5708;</text>
+  <view class="circle-card" hover-class="circle-card-active" @tap="openCircle">
+    <view class="card-header">
+      <image
+        v-if="displayCoverImage"
+        class="circle-cover"
+        mode="aspectFill"
+        :src="displayCoverImage"
+        @error="onCoverError"
+      />
+      <view v-else class="circle-cover circle-cover-placeholder"></view>
+
+      <view class="header-content">
+        <view class="title-row">
+          <text class="circle-title">{{ circle.title }}</text>
+          <view
+            class="interest-action"
+            :class="{ 'interest-action-active': isInterested }"
+            hover-class="interest-action-hover"
+            @tap.stop="$emit('interest', circle)"
+          >
+            <text class="interest-icon">{{ isInterested ? '♥' : '♡' }}</text>
+            <text class="interest-text">{{ isInterested ? '已感兴趣' : '感兴趣' }}</text>
+          </view>
         </view>
-      </view>
 
-      <view class="content-wrap">
-        <text class="title">{{ circle.title }}</text>
+        <text v-if="circle.industryLabel" class="industry-tag">{{ circle.industryLabel }}</text>
 
-        <view class="badge-row">
-          <text v-if="circle.ownerVerified" class="badge badge-premium">PREMIUM</text>
-          <text class="badge badge-industry">{{ circle.industryLabel || '\u5708\u5b50' }}</text>
+        <view class="stats-row">
+          <view class="stat-item">
+            <text class="stat-value">{{ circle.members }}</text>
+            <text class="stat-label">成员</text>
+          </view>
+          <view class="stat-divider"></view>
+          <view class="stat-item">
+            <text class="stat-value">{{ circle.posts }}</text>
+            <text class="stat-label">动态</text>
+          </view>
         </view>
-
-        <text class="desc">{{ circle.description || '\u6682\u65e0\u5708\u5b50\u4ecb\u7ecd' }}</text>
       </view>
     </view>
 
-    <view class="bottom-row">
-      <view class="stats-wrap">
-        <view class="stats-item">
-          <text class="stats-label">&#x6210;&#x5458;</text>
-          <text class="stats-value">{{ circle.members }}</text>
-        </view>
-        <view class="stats-item">
-          <text class="stats-label">&#x52A8;&#x6001;</text>
-          <text class="stats-value">{{ circle.posts }}</text>
-        </view>
-      </view>
-
-      <button class="action-btn" hover-class="action-btn-active" @tap.stop="openCircle">
-        &#x67E5;&#x770B;&#x5708;&#x5B50;
-      </button>
-    </view>
+    <text v-if="circle.description" class="circle-desc">{{ circle.description }}</text>
   </view>
 </template>
 
 <script setup>
+import { computed, ref, watch } from 'vue'
+
 const props = defineProps({
   circle: {
     type: Object,
     default: () => ({})
   }
 })
+
+defineEmits(['interest'])
+
+const normalizeCircleImage = (value) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return ''
+  }
+  if (normalized === '/static/logo.png' || /\/static\/logo\.png(?:[?#].*)?$/i.test(normalized)) {
+    return ''
+  }
+  if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
+    return ''
+  }
+  return normalized
+}
+
+const coverImage = ref('')
+
+watch(
+  () => props.circle?.coverImage,
+  (nextValue) => {
+    coverImage.value = normalizeCircleImage(nextValue)
+  },
+  { immediate: true }
+)
+
+const isInterested = computed(() => {
+  return Boolean(
+    props.circle?.interested ||
+    props.circle?.isInterested ||
+    props.circle?.is_interested ||
+    props.circle?.followed ||
+    props.circle?.isFollowed ||
+    props.circle?.is_followed
+  )
+})
+
+const displayCoverImage = computed(() => normalizeCircleImage(coverImage.value))
+
+const onCoverError = () => {
+  coverImage.value = ''
+}
 
 const openCircle = () => {
   const circleCode = String(props.circle?.circleCode || '').trim()
@@ -59,174 +109,217 @@ const openCircle = () => {
 </script>
 
 <style scoped>
-.list-card {
+.circle-card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
   display: flex;
   flex-direction: column;
   gap: 16rpx;
-  padding: 22rpx;
-  border-radius: 26rpx;
-  background: #ffffff;
-  border: 1rpx solid #edf2f7;
-  box-shadow: 0 12rpx 28rpx rgba(15, 23, 42, 0.06);
+  border: 1rpx solid rgba(15, 23, 42, 0.06);
 }
 
-.list-card-active {
-  background: #f8fafc;
+.circle-card-active {
+  background: #fafbfc;
 }
 
-.main-row {
+.card-header {
   display: flex;
+  gap: 16rpx;
   align-items: flex-start;
-  gap: 20rpx;
-  min-width: 0;
 }
 
-.cover-wrap {
-  width: 144rpx;
-  height: 144rpx;
-  border-radius: 22rpx;
-  overflow: hidden;
+.circle-cover {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #dbeafe 0%, #e2e8f0 100%);
+  background: #f1f5f9;
 }
 
-.cover-image {
-  width: 100%;
-  height: 100%;
-  display: block;
+.circle-cover-placeholder {
+  border: 1rpx dashed #cbd5e1;
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.12), rgba(226, 232, 240, 0.35)),
+    #f8fafc;
 }
 
-.cover-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cover-placeholder-text {
-  color: #64748b;
-  font-size: 56rpx;
-  line-height: 1;
-  font-weight: 700;
-}
-
-.content-wrap {
+.header-content {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 8rpx;
 }
 
-.title {
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.circle-title {
+  flex: 1;
+  min-width: 0;
+  color: #0f172a;
+  font-size: 28rpx;
+  line-height: 1.3;
+  font-weight: 600;
   overflow: hidden;
-  color: #111827;
-  font-size: 30rpx;
-  line-height: 40rpx;
-  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.badge-row {
-  margin-top: 8rpx;
+.industry-tag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  background: rgba(15, 23, 42, 0.04);
+  color: #475569;
+  font-size: 20rpx;
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.stats-row {
   display: flex;
   align-items: center;
-  gap: 10rpx;
-  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 4rpx;
 }
 
-.badge {
-  border-radius: 999rpx;
-  padding: 4rpx 12rpx;
-  font-size: 18rpx;
-  line-height: 24rpx;
-  font-weight: 700;
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4rpx;
 }
 
-.badge-premium {
-  color: #2563eb;
-  background: rgba(37, 99, 235, 0.12);
+.stat-value {
+  color: #0f172a;
+  font-size: 24rpx;
+  line-height: 1.3;
+  font-weight: 600;
 }
 
-.badge-industry {
-  color: #16a34a;
-  background: rgba(22, 163, 74, 0.12);
+.stat-label {
+  color: #94a3b8;
+  font-size: 20rpx;
+  line-height: 1.3;
 }
 
-.desc {
-  margin-top: 8rpx;
-  display: -webkit-box;
-  overflow: hidden;
+.stat-divider {
+  width: 1rpx;
+  height: 20rpx;
+  background: #e2e8f0;
+}
+
+.circle-desc {
   color: #64748b;
-  font-size: 22rpx;
-  line-height: 30rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  overflow: hidden;
   word-break: break-all;
 }
 
-.bottom-row {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.stats-wrap {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 24rpx;
+.interest-action {
   flex-shrink: 0;
-}
-
-.stats-item {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
+  align-items: center;
+  gap: 6rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: #f8fafc;
+  border: 1rpx solid #e2e8f0;
 }
 
-.stats-label {
-  display: block;
+.interest-action-hover {
+  background: #f1f5f9;
+}
+
+.interest-action-active {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.interest-icon {
+  font-size: 20rpx;
+  line-height: 1;
   color: #94a3b8;
-  font-size: 18rpx;
-  line-height: 24rpx;
-  text-align: left;
 }
 
-.stats-value {
-  display: block;
-  margin-top: 4rpx;
-  color: #0f172a;
-  font-size: 28rpx;
-  line-height: 34rpx;
-  font-weight: 700;
-  text-align: left;
+.interest-action-active .interest-icon {
+  color: #ef4444;
 }
 
-.action-btn {
-  margin: 0;
-  min-width: 170rpx;
-  height: 72rpx;
-  padding: 0 24rpx;
-  border: 0;
-  border-radius: 18rpx;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #ffffff;
-  font-size: 24rpx;
-  line-height: 72rpx;
-  font-weight: 700;
-  box-shadow: 0 10rpx 20rpx rgba(37, 99, 235, 0.22);
-  flex-shrink: 0;
+.interest-text {
+  color: #64748b;
+  font-size: 20rpx;
+  line-height: 1.3;
+  font-weight: 500;
 }
 
-.action-btn::after {
-  border: 0;
+.interest-action-active .interest-text {
+  color: #ef4444;
 }
 
-.action-btn-active {
-  opacity: 0.88;
+@media (prefers-color-scheme: dark) {
+  .circle-card {
+    background: #0f172a;
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .circle-card-active {
+    background: #1e293b;
+  }
+
+  .circle-cover {
+    background: #1e293b;
+  }
+
+  .circle-cover-placeholder {
+    border-color: #334155;
+  }
+
+  .circle-title {
+    color: #f1f5f9;
+  }
+
+  .industry-tag {
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+  }
+
+  .stat-value {
+    color: #f1f5f9;
+  }
+
+  .stat-label {
+    color: #94a3b8;
+  }
+
+  .stat-divider {
+    background: #334155;
+  }
+
+  .circle-desc {
+    color: #94a3b8;
+  }
+
+  .interest-action {
+    background: #111827;
+    border-color: #334155;
+  }
+
+  .interest-action-hover {
+    background: #1f2937;
+  }
+
+  .interest-text {
+    color: #cbd5e1;
+  }
 }
 </style>

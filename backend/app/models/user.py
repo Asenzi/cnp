@@ -38,7 +38,7 @@ class User(Base):
     display_wechat: Mapped[str | None] = mapped_column(String(64), nullable=True)
     email: Mapped[str | None] = mapped_column(String(100), nullable=True)
     city_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
-    city_name: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    city_name: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     card_files_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     circle_count: Mapped[int] = mapped_column(
         Integer,

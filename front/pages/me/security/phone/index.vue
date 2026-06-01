@@ -75,14 +75,14 @@ let countdownTimer = null
 const normalizePhone = (value) => String(value || '').replace(/\D/g, '').slice(0, 11)
 const normalizeCode = (value) => String(value || '').replace(/\D/g, '').slice(0, 8)
 
-watch(phone, (value) => {
+const stopPhoneWatch = watch(phone, (value) => {
   const nextValue = normalizePhone(value)
   if (nextValue !== value) {
     phone.value = nextValue
   }
 })
 
-watch(code, (value) => {
+const stopCodeWatch = watch(code, (value) => {
   const nextValue = normalizeCode(value)
   if (nextValue !== value) {
     code.value = nextValue
@@ -240,6 +240,14 @@ onShow(() => {
 })
 
 onUnmounted(() => {
+  // 停止所有 watch
+  if (stopPhoneWatch) {
+    stopPhoneWatch()
+  }
+  if (stopCodeWatch) {
+    stopCodeWatch()
+  }
+
   if (countdownTimer) {
     clearInterval(countdownTimer)
     countdownTimer = null

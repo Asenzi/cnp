@@ -1,29 +1,28 @@
 <template>
   <view
     class="plan-card"
-    :class="[
-      plan.recommended ? 'plan-card-recommended' : '',
-      selected ? 'plan-card-selected' : ''
-    ]"
-    hover-class="plan-card-active"
+    :class="{ 'is-selected': selected }"
+    hover-class="plan-hover"
     @tap="$emit('select', plan)"
   >
-    <view v-if="plan.recommended && plan.badgeText" class="plan-badge">
-      <text class="plan-badge-text">{{ plan.badgeText }}</text>
+    <view v-if="plan.recommended && plan.badgeText" class="recommend-tag">
+      {{ plan.badgeText }}
     </view>
 
-    <view class="plan-main">
-      <view>
+    <view class="card-body">
+      <view class="plan-header">
         <text class="plan-name">{{ plan.name }}</text>
         <text v-if="plan.subtitle" class="plan-subtitle">{{ plan.subtitle }}</text>
-        <!-- 积分功能暂时隐藏
-        <text v-if="pointsOfferText" class="plan-points-offer">{{ pointsOfferText }}</text>
-        -->
       </view>
 
-      <view class="price-wrap">
-        <text class="price-main">¥{{ formatAmount(plan.price) }}</text>
-        <text v-if="showOriginalPrice" class="price-origin">¥{{ formatAmount(plan.originalPrice) }}</text>
+      <view class="plan-pricing">
+        <view class="price-main">
+          <text class="currency">¥</text>
+          <text class="amount">{{ formatAmount(plan.price) }}</text>
+        </view>
+        <text v-if="showOriginalPrice" class="price-original">
+          原价 ¥{{ formatAmount(plan.originalPrice) }}
+        </text>
       </view>
     </view>
   </view>
@@ -51,26 +50,6 @@ const showOriginalPrice = computed(() => {
   return Number.isFinite(original) && original > 0 && original > current
 })
 
-const pointsOfferText = computed(() => {
-  const offer = props.plan?.pointsOffer
-  if (!offer || !offer.enabled) {
-    return ''
-  }
-  const requiredPoints = Number(offer.required_points || offer.requiredPoints || 0)
-  const discountText = String(offer.discount_text || offer.discountText || '').trim()
-  if (!requiredPoints || !discountText) {
-    return ''
-  }
-  const missingPoints = Number(offer.missing_points || offer.missingPoints || 0)
-  if (offer.can_use || offer.canUse) {
-    return `${requiredPoints}积分可享${discountText}`
-  }
-  if (missingPoints > 0) {
-    return `${requiredPoints}积分可享${discountText}，还差${missingPoints}积分`
-  }
-  return `${requiredPoints}积分可享${discountText}`
-})
-
 const formatAmount = (value) => {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) {
@@ -86,131 +65,106 @@ const formatAmount = (value) => {
 <style scoped>
 .plan-card {
   position: relative;
-  border-radius: 24rpx;
-  border: 1rpx solid #e2e8f0;
   background: #ffffff;
-  padding: 36rpx 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
-  font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
+  border: 2rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04), 0 1rpx 2rpx rgba(0, 0, 0, 0.02);
+  transition: all 0.3s ease;
 }
 
-.plan-card-recommended {
-  border: 2rpx solid #d4af37;
-  background: rgba(212, 175, 55, 0.05);
+.plan-hover {
+  transform: translateY(-4rpx);
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.1), 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
 }
 
-.plan-card-selected {
+.is-selected {
   border-color: #1a57db;
-  box-shadow: 0 0 0 2rpx rgba(26, 87, 219, 0.14), 0 8rpx 20rpx rgba(26, 87, 219, 0.08);
+  border-width: 3rpx;
+  background: linear-gradient(to bottom, #ffffff 0%, #f0f7ff 100%);
+  box-shadow: 0 4rpx 16rpx rgba(26, 87, 219, 0.25), 0 2rpx 8rpx rgba(26, 87, 219, 0.15), inset 0 1rpx 0 rgba(26, 87, 219, 0.05);
 }
 
-.plan-card-active {
-  opacity: 0.9;
-}
-
-.plan-badge {
+.recommend-tag {
   position: absolute;
-  right: 0;
-  top: 0;
-  border-radius: 0 12rpx 0 20rpx;
-  background: #d4af37;
-  padding: 8rpx 20rpx;
-  z-index: 2;
-}
-
-.plan-badge-text {
-  color: #111621;
+  left: 32rpx;
+  top: -14rpx;
+  padding: 6rpx 20rpx;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  border-radius: 8rpx;
+  color: #78350f;
   font-size: 22rpx;
   line-height: 28rpx;
-  font-weight: 700;
+  font-weight: 600;
+  box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.35), 0 2rpx 4rpx rgba(251, 191, 36, 0.2);
 }
 
-.plan-main {
+.card-body {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   gap: 32rpx;
 }
 
-.plan-card-recommended .plan-main {
-  margin-top: 48rpx;
+.plan-header {
+  flex: 1;
+  min-width: 0;
 }
 
 .plan-name {
   display: block;
-  color: #0f172a;
-  font-size: 36rpx;
-  line-height: 48rpx;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
+  color: #111827;
+  font-size: 32rpx;
+  line-height: 40rpx;
+  font-weight: 600;
+  margin-bottom: 8rpx;
 }
 
 .plan-subtitle {
   display: block;
-  margin-top: 8rpx;
-  color: #64748b;
+  color: #6b7280;
   font-size: 24rpx;
-  line-height: 36rpx;
-}
-
-.plan-points-offer {
-  display: block;
-  margin-top: 12rpx;
-  color: #1d4ed8;
-  font-size: 22rpx;
   line-height: 32rpx;
-  font-weight: 700;
 }
 
-.price-wrap {
+.plan-pricing {
   text-align: right;
-  min-width: 180rpx;
+  flex-shrink: 0;
 }
 
 .price-main {
-  display: block;
-  color: #0f172a;
-  font-size: 52rpx;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4rpx;
+  margin-bottom: 6rpx;
+}
+
+.currency {
+  color: #111827;
+  font-size: 28rpx;
+  line-height: 36rpx;
+  font-weight: 600;
+}
+
+.amount {
+  color: #111827;
+  font-size: 48rpx;
   line-height: 56rpx;
   font-weight: 700;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
+  letter-spacing: -0.02em;
 }
 
-.plan-card-recommended .price-main {
-  color: #d4af37;
+.is-selected .currency,
+.is-selected .amount {
+  color: #1a57db;
 }
 
-.price-origin {
+.price-original {
   display: block;
-  color: #94a3b8;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  line-height: 32rpx;
+  color: #9ca3af;
+  font-size: 22rpx;
+  line-height: 28rpx;
   text-decoration: line-through;
-}
-
-@media (prefers-color-scheme: dark) {
-  .plan-card {
-    background: #0f172a;
-    border-color: #1e293b;
-  }
-
-  .plan-card-recommended {
-    border-color: #d4af37;
-    background: rgba(212, 175, 55, 0.12);
-  }
-
-  .plan-name,
-  .price-main {
-    color: #e2e8f0;
-  }
-
-  .plan-subtitle,
-  .price-origin {
-    color: #94a3b8;
-  }
 }
 </style>

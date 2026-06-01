@@ -83,33 +83,31 @@ const onChangeIndustry = (event) => {
 
 <style scoped>
 .card {
-  margin: 0 24rpx;
+  margin: 0;
   background: #ffffff;
-  border-radius: 20rpx;
-  box-shadow: 0 2rpx 10rpx rgba(15, 23, 42, 0.05);
-  padding: 20rpx;
+  padding: 24rpx 32rpx;
 }
 
 .card-title {
   display: block;
   color: #0f172a;
-  font-size: 30rpx;
-  line-height: 38rpx;
-  font-weight: 700;
-  margin-bottom: 16rpx;
+  font-size: 28rpx;
+  line-height: 1.3;
+  font-weight: 600;
+  margin-bottom: 20rpx;
 }
 
 .field-block + .field-block {
-  margin-top: 16rpx;
+  margin-top: 20rpx;
 }
 
 .field-label {
   display: block;
-  color: #334155;
+  color: #475569;
   font-size: 24rpx;
-  line-height: 30rpx;
-  font-weight: 600;
-  margin-bottom: 8rpx;
+  line-height: 1.3;
+  font-weight: 500;
+  margin-bottom: 10rpx;
 }
 
 .field-input,
@@ -118,20 +116,20 @@ const onChangeIndustry = (event) => {
   width: 100%;
   box-sizing: border-box;
   border-radius: 12rpx;
-  border: 1rpx solid #e2e8f0;
+  border: 1rpx solid rgba(15, 23, 42, 0.08);
   background: #f8fafc;
   color: #0f172a;
 }
 
 .field-input {
   height: 88rpx;
-  padding: 0 18rpx;
-  font-size: 26rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
 }
 
 .picker-wrap {
   height: 88rpx;
-  padding: 0 18rpx;
+  padding: 0 20rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -139,7 +137,7 @@ const onChangeIndustry = (event) => {
 
 .picker-text {
   color: #0f172a;
-  font-size: 26rpx;
+  font-size: 28rpx;
 }
 
 .picker-text-placeholder {
@@ -149,14 +147,14 @@ const onChangeIndustry = (event) => {
 .picker-arrow {
   width: 24rpx;
   height: 24rpx;
-  opacity: 0.72;
+  opacity: 0.5;
 }
 
 .field-textarea {
   min-height: 180rpx;
-  padding: 16rpx 18rpx;
-  font-size: 24rpx;
-  line-height: 34rpx;
+  padding: 16rpx 20rpx;
+  font-size: 26rpx;
+  line-height: 1.5;
 }
 
 .field-placeholder {
@@ -166,27 +164,26 @@ const onChangeIndustry = (event) => {
 @media (prefers-color-scheme: dark) {
   .card {
     background: #0f172a;
-    box-shadow: none;
   }
 
   .card-title {
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .field-label {
-    color: #cbd5e1;
+    color: #94a3b8;
   }
 
   .field-input,
   .picker-wrap,
   .field-textarea {
-    border-color: #334155;
+    border-color: rgba(255, 255, 255, 0.08);
     background: #1e293b;
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .picker-text {
-    color: #f8fafc;
+    color: #f1f5f9;
   }
 
   .picker-text-placeholder,

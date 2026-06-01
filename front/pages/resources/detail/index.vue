@@ -1,6 +1,6 @@
 ﻿<template>
   <view class="detail-page">
-    <scroll-view class="detail-scroll" scroll-y :show-scrollbar="false">
+    <scroll-view class="detail-scroll" :class="{ 'detail-scroll-self': isSelfPost }" scroll-y :show-scrollbar="false">
       <view class="detail-main">
         <view v-if="loading && !post.post_code" class="status-wrap">
           <text class="status-text">加载中...</text>
@@ -25,7 +25,16 @@
                 <text class="publisher-role">{{ authorRole }}</text>
               </view>
             </view>
-            <button class="profile-btn" hover-class="profile-btn-active" @tap="onTapProfile">查看主页</button>
+            <button
+              v-if="isSelfPost"
+              class="publisher-share-btn"
+              hover-class="publisher-share-btn-active"
+              open-type="share"
+              @tap="onShare"
+            >
+              <image class="publisher-share-icon" src="/static/icon/share.png" mode="aspectFit" />
+            </button>
+            <button v-else class="profile-btn" hover-class="profile-btn-active" @tap="onTapProfile">查看主页</button>
           </view>
 
           <view class="content-card">
@@ -104,7 +113,7 @@
       </view>
     </scroll-view>
 
-    <view class="bottom-nav">
+    <view v-if="!isSelfPost" class="bottom-nav">
       <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
         <image class="btn-icon-image" src="/static/icon/share.png" mode="aspectFit" />
         <text class="btn-label">分享</text>
@@ -114,6 +123,65 @@
         <text class="btn-label-primary">联系方式</text>
       </button>
     </view>
+
+    <view v-if="cardPopupVisible" class="card-popup-mask" @tap="closeCardPopup">
+      <view class="card-popup-sheet" @tap.stop>
+        <view class="card-popup-handle"></view>
+        <view class="card-popup-head">
+          <text class="card-popup-title">用户名片</text>
+          <text class="card-popup-close" @tap="closeCardPopup">关闭</text>
+        </view>
+
+        <view v-if="cardLoading" class="card-loading-wrap">
+          <text class="card-loading-text">名片加载中...</text>
+        </view>
+
+        <template v-else>
+          <view class="business-card">
+            <view class="business-card-top">
+              <image class="business-card-avatar" :src="cardAvatar" mode="aspectFill" />
+              <view class="business-card-main">
+                <view class="business-card-name-row">
+                  <text class="business-card-name">{{ cardName }}</text>
+                  <text v-if="cardVerified" class="business-card-verified">已认证</text>
+                </view>
+                <text class="business-card-role">{{ cardRole }}</text>
+                <text v-if="cardIntro" class="business-card-intro">{{ cardIntro }}</text>
+              </view>
+            </view>
+
+            <view class="contact-list">
+              <view v-if="visibleContactRows.length" class="contact-list-inner">
+                <view
+                  v-for="row in visibleContactRows"
+                  :key="row.key"
+                  class="contact-row"
+                  hover-class="contact-row-hover"
+                  @tap="copyContact(row.value, row.copyText)"
+                >
+                  <text class="contact-label">{{ row.label }}</text>
+                  <text class="contact-value">{{ row.value }}</text>
+                  <text class="contact-copy">复制</text>
+                </view>
+              </view>
+              <view v-else class="contact-locked">
+                <text class="contact-locked-title">{{ cardLockedTitle }}</text>
+                <text class="contact-locked-desc">{{ cardLockedDesc }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="card-popup-actions">
+            <button class="card-action-btn card-action-secondary" hover-class="card-action-hover" @tap="onTapProfile">
+              查看主页
+            </button>
+            <button class="card-action-btn card-action-primary" hover-class="card-action-hover" @tap="goChatFromCard">
+              发消息
+            </button>
+          </view>
+        </template>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -121,12 +189,17 @@
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onShareAppMessage } from '@dcloudio/uni-app'
 import { getResourceDetail, reportResourceView } from '../../../api/post'
-import ProfileSymbol from '../../me/card/components/ProfileSymbol.vue'
+import { getUserProfileById } from '../../../api/user'
 
 const postCode = ref('')
 const post = ref({})
 const loading = ref(false)
 const loadError = ref('')
+const cardPopupVisible = ref(false)
+const cardLoading = ref(false)
+const cardProfile = ref({})
+const cardProfileUserId = ref('')
+const cardLoadError = ref('')
 
 const imageList = computed(() => {
   return Array.isArray(post.value?.images)
@@ -145,6 +218,79 @@ const authorRole = computed(() => {
   return parts.length ? parts.join(' | ') : fallbackRole
 })
 const authorVerified = computed(() => Boolean(post.value?.author?.is_verified))
+const authorUserId = computed(() => {
+  return String(
+    post.value?.author?.user_id ||
+    post.value?.author?.userId ||
+    post.value?.author?.business_user_id ||
+    ''
+  ).trim()
+})
+const currentUserId = computed(() => {
+  const userInfo = uni.getStorageSync('userInfo') || {}
+  return String(userInfo?.user_id || userInfo?.userId || '').trim()
+})
+const isSelfPost = computed(() => {
+  const authorId = authorUserId.value
+  const selfId = currentUserId.value
+  return Boolean(authorId && selfId && authorId === selfId)
+})
+const cardSource = computed(() => {
+  const profile = cardProfile.value && typeof cardProfile.value === 'object' ? cardProfile.value : {}
+  const author = post.value?.author && typeof post.value.author === 'object' ? post.value.author : {}
+  return {
+    ...author,
+    ...profile
+  }
+})
+const cardName = computed(() => String(cardSource.value?.nickname || authorName.value || '未命名用户').trim())
+const cardAvatar = computed(() => String(cardSource.value?.avatar_url || authorAvatar.value || '/static/logo.png').trim() || '/static/logo.png')
+const cardVerified = computed(() => Boolean(cardSource.value?.is_verified || authorVerified.value))
+const cardRole = computed(() => {
+  const companyName = String(cardSource.value?.company_name || '').trim()
+  const jobTitle = String(cardSource.value?.job_title || '').trim()
+  const industry = String(cardSource.value?.industry_label || cardSource.value?.role || '').trim()
+  const parts = [companyName, jobTitle].filter(Boolean)
+  return parts.length ? parts.join(' | ') : industry || '商务人士'
+})
+const cardIntro = computed(() => String(cardSource.value?.intro || '').trim())
+const visibleContactRows = computed(() => {
+  if (!cardSource.value?.contact_visible) {
+    return []
+  }
+  return [
+    {
+      key: 'wechat',
+      label: '微信',
+      value: String(cardSource.value?.display_wechat || '').trim(),
+      copyText: '微信已复制'
+    },
+    {
+      key: 'phone',
+      label: '手机',
+      value: String(cardSource.value?.display_phone || '').trim(),
+      copyText: '手机号已复制'
+    },
+    {
+      key: 'email',
+      label: '邮箱',
+      value: String(cardSource.value?.display_email || cardSource.value?.email || '').trim(),
+      copyText: '邮箱已复制'
+    }
+  ].filter((item) => item.value)
+})
+const cardLockedTitle = computed(() => {
+  return String(cardSource.value?.contact_locked_reason || cardLoadError.value || '').trim() || '暂无法查看联系方式'
+})
+const cardLockedDesc = computed(() => {
+  if (cardSource.value?.target_has_contact === false) {
+    return '对方暂未公开联系方式'
+  }
+  if (cardLoadError.value) {
+    return '可先查看主页，或稍后重试'
+  }
+  return '请根据平台权限规则查看完整联系方式'
+})
 const modeText = computed(() => {
   const mode = String(post.value?.mode || '').trim()
   if (mode === 'resource') {
@@ -277,11 +423,12 @@ const previewImage = (index) => {
 }
 
 const onTapProfile = () => {
-  const targetUserId = String(post.value?.author?.user_id || post.value?.author?.userId || '').trim()
+  const targetUserId = authorUserId.value
   if (!targetUserId) {
     showToast('作者信息缺失')
     return
   }
+  cardPopupVisible.value = false
   uni.navigateTo({
     url: `/pages/me/card/index?userId=${encodeURIComponent(targetUserId)}`
   })
@@ -295,16 +442,63 @@ const onShare = () => {
   }
 }
 
-const onChat = () => {
-  const targetUserId = String(post.value?.author?.user_id || '').trim()
+const loadCardProfile = async (targetUserId) => {
+  if (!targetUserId || cardProfileUserId.value === targetUserId) {
+    return
+  }
+  cardProfile.value = {}
+  cardProfileUserId.value = ''
+  cardLoading.value = true
+  cardLoadError.value = ''
+  try {
+    const profile = await getUserProfileById(targetUserId)
+    cardProfile.value = profile || {}
+    cardProfileUserId.value = targetUserId
+  } catch (err) {
+    cardLoadError.value = err?.message || '名片加载失败'
+  } finally {
+    cardLoading.value = false
+  }
+}
+
+const closeCardPopup = () => {
+  cardPopupVisible.value = false
+}
+
+const onChat = async () => {
+  const targetUserId = authorUserId.value
   if (!targetUserId) {
     showToast('作者信息缺失')
     return
   }
-  const name = encodeURIComponent(String(post.value?.author?.nickname || '').trim())
-  const avatar = encodeURIComponent(String(post.value?.author?.avatar_url || '').trim())
+  cardPopupVisible.value = true
+  await loadCardProfile(targetUserId)
+}
+
+const goChatFromCard = () => {
+  const targetUserId = authorUserId.value
+  if (!targetUserId) {
+    showToast('作者信息缺失')
+    return
+  }
+  cardPopupVisible.value = false
+  const name = encodeURIComponent(cardName.value)
+  const avatar = encodeURIComponent(cardAvatar.value)
   uni.navigateTo({
     url: `/pages/messages/chat/index?targetUserId=${encodeURIComponent(targetUserId)}&name=${name}&avatar=${avatar}`
+  })
+}
+
+const copyContact = (value, title) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return
+  }
+  uni.setClipboardData({
+    data: normalized,
+    success: () => {
+      showToast(title || '已复制')
+    }
   })
 }
 
@@ -343,6 +537,10 @@ onPullDownRefresh(async () => {
 
 .detail-scroll {
   height: calc(100vh - 124rpx - env(safe-area-inset-bottom));
+}
+
+.detail-scroll-self {
+  height: 100vh;
 }
 
 .detail-main {
@@ -425,13 +623,14 @@ onPullDownRefresh(async () => {
 
 .profile-btn {
   border: 0;
-  background: transparent;
+  background: #eff6ff;
   color: #2563eb;
   font-size: 24rpx;
   line-height: 56rpx;
   font-weight: 600;
   height: 56rpx;
-  padding: 0 12rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
 }
 
 .profile-btn::after {
@@ -440,6 +639,33 @@ onPullDownRefresh(async () => {
 
 .profile-btn-active {
   opacity: 0.82;
+}
+
+.publisher-share-btn {
+  width: 72rpx;
+  height: 72rpx;
+  padding: 0;
+  border: 0;
+  border-radius: 12rpx;
+  background: #f6f8fc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.publisher-share-btn::after {
+  border: 0;
+}
+
+.publisher-share-btn-active {
+  opacity: 0.82;
+}
+
+.publisher-share-icon {
+  width: 32rpx;
+  height: 32rpx;
+  display: block;
 }
 
 .content-card {
@@ -791,6 +1017,249 @@ onPullDownRefresh(async () => {
   white-space: nowrap;
 }
 
+.card-popup-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.card-popup-sheet {
+  width: 100%;
+  max-width: 750rpx;
+  box-sizing: border-box;
+  padding: 16rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  border-radius: 28rpx 28rpx 0 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.card-popup-handle {
+  align-self: center;
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #d8dee8;
+}
+
+.card-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-popup-title {
+  color: #172033;
+  font-size: 32rpx;
+  line-height: 44rpx;
+  font-weight: 700;
+}
+
+.card-popup-close {
+  color: #66758a;
+  font-size: 24rpx;
+  line-height: 34rpx;
+  padding: 8rpx 0 8rpx 24rpx;
+}
+
+.card-loading-wrap {
+  min-height: 360rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-loading-text {
+  color: #66758a;
+  font-size: 26rpx;
+  line-height: 36rpx;
+}
+
+.business-card {
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #fbfcfe 0%, #eef5ff 100%);
+  border: 1rpx solid #e7ecf3;
+  padding: 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 28rpx;
+}
+
+.business-card-top {
+  display: flex;
+  gap: 20rpx;
+  align-items: flex-start;
+}
+
+.business-card-avatar {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 24rpx;
+  flex-shrink: 0;
+  background: #f3f6fa;
+}
+
+.business-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.business-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.business-card-name {
+  color: #172033;
+  font-size: 34rpx;
+  line-height: 44rpx;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-card-verified {
+  flex-shrink: 0;
+  border-radius: 999rpx;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  font-size: 20rpx;
+  line-height: 28rpx;
+  font-weight: 600;
+  padding: 2rpx 10rpx;
+}
+
+.business-card-role,
+.business-card-intro {
+  color: #66758a;
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.business-card-intro {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.contact-list {
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
+}
+
+.contact-row {
+  min-height: 72rpx;
+  padding: 0 18rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  border-bottom: 1rpx solid #edf1f6;
+}
+
+.contact-row:last-child {
+  border-bottom: 0;
+}
+
+.contact-row-hover {
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.contact-label {
+  width: 72rpx;
+  color: #66758a;
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.contact-value {
+  flex: 1;
+  min-width: 0;
+  color: #172033;
+  font-size: 26rpx;
+  line-height: 36rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-copy {
+  flex-shrink: 0;
+  color: #2563eb;
+  font-size: 22rpx;
+  line-height: 32rpx;
+  font-weight: 600;
+}
+
+.contact-locked {
+  min-height: 132rpx;
+  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  text-align: center;
+}
+
+.contact-locked-title {
+  color: #172033;
+  font-size: 26rpx;
+  line-height: 36rpx;
+  font-weight: 600;
+}
+
+.contact-locked-desc {
+  color: #66758a;
+  font-size: 22rpx;
+  line-height: 32rpx;
+}
+
+.card-popup-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.card-action-btn {
+  flex: 1;
+  height: 72rpx;
+  border: 0;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  line-height: 72rpx;
+  font-weight: 600;
+}
+
+.card-action-btn::after {
+  border: 0;
+}
+
+.card-action-secondary {
+  background: #f6f8fc;
+  color: #66758a;
+}
+
+.card-action-primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.card-action-hover {
+  opacity: 0.84;
+}
+
 /* 深色模式 */
 @media (prefers-color-scheme: dark) {
   .detail-page {
@@ -824,6 +1293,14 @@ onPullDownRefresh(async () => {
     background: #2a2a2a;
   }
 
+  .profile-btn {
+    background: rgba(37, 99, 235, 0.18);
+  }
+
+  .publisher-share-btn {
+    background: #2a2a2a;
+  }
+
   .tag {
     background: #2a2a2a;
     color: #8a8a8a;
@@ -847,6 +1324,42 @@ onPullDownRefresh(async () => {
   }
 
   .bottom-btn-plain {
+    background: #2a2a2a;
+    color: #8a8a8a;
+  }
+
+  .card-popup-sheet,
+  .business-card,
+  .contact-list {
+    background: #1a1a1a;
+    border-color: #2a2a2a;
+  }
+
+  .card-popup-title,
+  .business-card-name,
+  .contact-value,
+  .contact-locked-title {
+    color: #ffffff;
+  }
+
+  .card-popup-close,
+  .card-loading-text,
+  .business-card-role,
+  .business-card-intro,
+  .contact-label,
+  .contact-locked-desc {
+    color: #8a8a8a;
+  }
+
+  .card-popup-handle {
+    background: #3a3a3a;
+  }
+
+  .contact-row {
+    border-bottom-color: #2a2a2a;
+  }
+
+  .card-action-secondary {
     background: #2a2a2a;
     color: #8a8a8a;
   }

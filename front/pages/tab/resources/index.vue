@@ -18,7 +18,7 @@
       class="feed-scroll"
       scroll-y
       :show-scrollbar="false"
-      :lower-threshold="120"
+      :lower-threshold="360"
       :refresher-enabled="true"
       :refresher-triggered="refreshing"
       refresher-background="#f6f6f8"
@@ -55,10 +55,10 @@
         </view>
 
         <template v-else>
-          <template v-for="(post, index) in feedCards">
+          <!-- 活动卡片 - 第二版上线 -->
+          <!-- <template v-for="(post, index) in feedCards" :key="post.id">
             <VenueEventCard
               v-if="post.type === 'venue'"
-              :key="post.id"
               :item="post"
               :show-interest="true"
               :style="{ animationDelay: `${index * 50}ms` }"
@@ -68,7 +68,6 @@
             />
             <ProfilePostCard
               v-else
-              :key="post.id"
               :item="post"
               :show-interest="true"
               :style="{ animationDelay: `${index * 50}ms` }"
@@ -76,7 +75,18 @@
               @detail="onTapDetail"
               @interest="onToggleInterest"
             />
-          </template>
+          </template> -->
+
+          <ProfilePostCard
+            v-for="(post, index) in feedCards"
+            :key="post.id"
+            :item="post"
+            :show-interest="true"
+            :style="{ animationDelay: getFeedCardAnimationDelay(index) }"
+            class="feed-card-enter"
+            @detail="onTapDetail"
+            @interest="onToggleInterest"
+          />
 
           <view v-if="showEmpty" class="empty-wrap">
             <view class="empty-icon-wrap">
@@ -86,10 +96,25 @@
             <text class="empty-desc">换个关键词或筛选条件试试</text>
           </view>
 
-          <view v-if="loadingMore" class="load-more-wrap">
-            <view class="loading-spinner loading-spinner-small"></view>
-            <text class="load-more-text">加载中...</text>
-          </view>
+          <template v-if="loadingMore">
+            <view v-for="i in 2" :key="`paging-skeleton-${i}`" class="skeleton-card paging-skeleton-card">
+              <view class="skeleton-header">
+                <view class="skeleton-avatar"></view>
+                <view class="skeleton-info">
+                  <view class="skeleton-line skeleton-name"></view>
+                  <view class="skeleton-line skeleton-time"></view>
+                </view>
+              </view>
+              <view class="skeleton-content">
+                <view class="skeleton-line skeleton-text"></view>
+                <view class="skeleton-line skeleton-text-short"></view>
+              </view>
+            </view>
+            <view class="load-more-wrap">
+              <view class="loading-spinner loading-spinner-small"></view>
+              <text class="load-more-text">加载中...</text>
+            </view>
+          </template>
           <view v-else-if="hasMore && hasAny" class="load-more-wrap">
             <text class="load-more-text">上拉加载更多</text>
           </view>
@@ -107,7 +132,7 @@ import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getResourceFeed, getResourceFilters, toggleResourceInterest } from '../../../api/post'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import ProfilePostCard from '../../me/card/components/ProfilePostCard.vue'
-import VenueEventCard from './components/VenueEventCard.vue'
+// import VenueEventCard from './components/VenueEventCard.vue' // 第二版上线
 import ResourcePublishFab from './components/ResourcePublishFab.vue'
 import { mapProfilePostItem } from '../../me/card/modules/profile-home-view-model'
 import { getLocationErrorMessage, resolveCurrentCityByGps, saveCurrentCity } from '../discover/modules/location'
@@ -180,6 +205,10 @@ const feedCards = computed(() => {
   }))
 })
 
+const getFeedCardAnimationDelay = (index) => {
+  return `${Math.min(Number(index || 0) % PAGE_SIZE, 4) * 35}ms`
+}
+
 const showEmpty = computed(() => loaded.value && !loading.value && !hasAny.value && !loadError.value)
 const normalizedKeyword = computed(() => String(keyword.value || '').trim())
 const hasActiveFilter = computed(() => Boolean(selectedIndustry.value))
@@ -187,8 +216,8 @@ const sortLabel = computed(() => (sortKey.value === 'latest' ? '最新' : '热�
 
 const resourceLeftTabs = computed(() => [
   { key: 'cooperate', label: '找合作' },
-  { key: 'resource', label: '找资源' },
-  { key: 'venue', label: '活动' }
+  { key: 'resource', label: '找资源' }
+  // { key: 'venue', label: '活动' } // 第二版上线
 ])
 
 const resourceRightControls = computed(() => [
@@ -713,6 +742,10 @@ onUnmounted(() => {
   padding: 32rpx;
   box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
   animation: fadeInUp 0.4s ease-out forwards;
+}
+
+.paging-skeleton-card {
+  animation: none;
 }
 
 .skeleton-header {

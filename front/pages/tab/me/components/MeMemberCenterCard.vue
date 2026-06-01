@@ -1,20 +1,18 @@
 <template>
-  <view class="member-card-wrap">
+  <view class="member-card-wrap" @tap="$emit('open')">
     <view class="member-card">
       <view class="member-icon">
-        <view class="member-icon-badge">
-          <text class="member-star">★</text>
-        </view>
+        <image class="member-badge-img" mode="aspectFit" src="/static/icon/huiyuan.png" />
       </view>
 
       <view class="member-main">
         <text class="member-title">会员中心</text>
-        <text class="member-desc">开通会员享特权</text>
+        <text class="member-desc">开通会员，解锁更多权益</text>
       </view>
 
-      <button class="member-open-btn" hover-class="member-open-btn-active" @tap="$emit('open')">
-        立即开通
-      </button>
+      <view class="member-open-btn">
+        <text class="member-open-text">立即开通</text>
+      </view>
     </view>
   </view>
 </template>
@@ -28,47 +26,34 @@ defineEmits(['open'])
   margin-top: 0;
   margin-bottom: 32rpx;
   border-radius: 16rpx;
-  background: linear-gradient(135deg, #2f6cff 0%, #1a57db 100%);
-  border: 1rpx solid rgba(26, 87, 219, 0.3);
-  padding: 12rpx;
+  background: #fff9f5;
+  border: 1rpx solid #f4e3cf;
+  padding: 12rpx 0;
 }
 
 .member-card {
-  border-radius: 16rpx;
-  background: linear-gradient(135deg, #2f6cff 0%, #1a57db 100%);
   min-height: 112rpx;
   display: flex;
   align-items: center;
   gap: 16rpx;
-  padding: 0 20rpx;
+  padding: 0 24rpx;
 }
 
 .member-icon {
   width: 64rpx;
   height: 64rpx;
-  border-radius: 12rpx;
-  background: rgba(255, 255, 255, 0.16);
+  border-radius: 14rpx;
+  background: linear-gradient(180deg, #f7d98a 0%, #ecbb5d 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.45);
 }
 
-.member-icon-badge {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.member-star {
-  color: #1a57db;
-  font-size: 20rpx;
-  line-height: 1;
-  font-weight: 700;
+.member-badge-img {
+  width: 34rpx;
+  height: 34rpx;
 }
 
 .member-main {
@@ -80,53 +65,59 @@ defineEmits(['open'])
 }
 
 .member-title {
-  color: #ffffff;
+  color: #9b6a15;
   font-size: 30rpx;
   line-height: 38rpx;
   font-weight: 700;
 }
 
 .member-desc {
-  color: rgba(255, 255, 255, 0.88);
+  color: #c08b34;
   font-size: 22rpx;
   line-height: 28rpx;
 }
 
 .member-open-btn {
-  margin: 0;
-  padding: 0 20rpx;
+  min-width: 128rpx;
   height: 52rpx;
-  line-height: 52rpx;
+  padding: 0 20rpx;
   border-radius: 999rpx;
-  border: 0;
   background: #ffffff;
-  color: #1a57db;
-  font-size: 22rpx;
-  font-weight: 700;
+  border: 1rpx solid #f0d7b2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.member-open-btn::after {
-  border: 0;
-}
-
-.member-open-btn-active {
-  opacity: 0.86;
+.member-open-text {
+  color: #b67b1f;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1;
 }
 
 @media (prefers-color-scheme: dark) {
   .member-card-wrap {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-    border-color: rgba(29, 78, 216, 0.4);
+    background: rgba(120, 76, 17, 0.22);
+    border-color: rgba(224, 177, 83, 0.24);
   }
 
-  .member-card {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  .member-title {
+    color: #f2d28c;
+  }
+
+  .member-desc {
+    color: #dfb665;
   }
 
   .member-open-btn {
-    background: #e2e8f0;
-    color: #1e40af;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(224, 177, 83, 0.3);
+  }
+
+  .member-open-text {
+    color: #f2d28c;
   }
 }
 </style>

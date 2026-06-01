@@ -108,7 +108,7 @@ watch(
 <style scoped>
 .hero-wrap {
   background: #ffffff;
-  padding: 32rpx;
+  padding: 40rpx 32rpx;
 }
 
 .hero-row {
@@ -118,12 +118,13 @@ watch(
 }
 
 .avatar {
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: 999rpx;
-  border: 3rpx solid rgba(26, 87, 219, 0.16);
-  background: #e2e8f0;
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 64rpx;
+  border: 2rpx solid rgba(26, 87, 219, 0.1);
+  background: #f3f4f6;
   flex-shrink: 0;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
 }
 
 .meta-wrap {
@@ -132,29 +133,30 @@ watch(
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 8rpx;
 }
 
 .name-row {
   display: flex;
   align-items: center;
-  gap: 10rpx;
+  gap: 8rpx;
   min-width: 0;
 }
 
 .name {
   max-width: 100%;
-  color: #0f172a;
-  font-size: 38rpx;
-  line-height: 52rpx;
-  font-weight: 700;
+  color: #111827;
+  font-size: 36rpx;
+  line-height: 48rpx;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .member-badge {
-  width: 36rpx;
-  height: 36rpx;
+  width: 32rpx;
+  height: 32rpx;
   flex-shrink: 0;
 }
 
@@ -163,31 +165,28 @@ watch(
   align-items: center;
   justify-content: center;
   border-radius: 999rpx;
-  background: rgba(245, 158, 11, 0.14);
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .meta-line {
-  margin-top: 10rpx;
-  color: #64748b;
-  font-size: 24rpx;
-  line-height: 34rpx;
-  font-weight: 500;
+  color: #6b7280;
+  font-size: 26rpx;
+  line-height: 36rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .verify-row {
-  margin-top: 10rpx;
   display: flex;
   align-items: center;
   gap: 8rpx;
 }
 
 .verify-text {
-  font-size: 22rpx;
-  line-height: 30rpx;
-  font-weight: 700;
+  font-size: 24rpx;
+  line-height: 32rpx;
+  font-weight: 600;
 }
 
 .verify-text-active {
@@ -195,25 +194,26 @@ watch(
 }
 
 .verify-text-idle {
-  color: #94a3b8;
+  color: #9ca3af;
 }
 
 .message-btn {
-  width: 84rpx;
-  height: 84rpx;
+  width: 80rpx;
+  height: 80rpx;
   padding: 0;
   border: 0;
-  border-radius: 24rpx;
+  border-radius: 20rpx;
   background: rgba(26, 87, 219, 0.08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
 .message-icon {
-  width: 40rpx;
-  height: 40rpx;
+  width: 36rpx;
+  height: 36rpx;
   display: block;
 }
 
@@ -222,7 +222,8 @@ watch(
 }
 
 .message-btn-hover {
-  opacity: 0.84;
+  background: rgba(26, 87, 219, 0.12);
+  transform: scale(0.96);
 }
 
 @media (prefers-color-scheme: dark) {

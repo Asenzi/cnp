@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -8,6 +8,17 @@ from app.models.base import Base
 
 class NetworkRecoFeedback(Base):
     __tablename__ = "network_reco_feedback"
+    __table_args__ = (
+        UniqueConstraint(
+            "viewer_user_pk",
+            "target_user_pk",
+            "scene",
+            "tab_key",
+            "request_id",
+            "event_type",
+            name="uq_network_reco_feedback_request_target_event",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     viewer_user_pk: Mapped[int] = mapped_column(

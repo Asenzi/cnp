@@ -1144,8 +1144,12 @@ onPullDownRefresh(async () => {
 })
 
 onUnmounted(() => {
+  isPageActive.value = false
   stopPolling()
   closeSocket()
+
+  // 清理 Map 对象
+  pendingDeliveryStateMap.clear()
 })
 </script>
 

@@ -15,6 +15,22 @@ export function getUserProfileById(targetUserId) {
   })
 }
 
+export function getUserProfileMiniappCode(targetUserId) {
+  const safeId = encodeURIComponent(String(targetUserId || '').trim())
+  return request({
+    url: `/api/v1/user/profiles/${safeId}/miniapp-code`,
+    method: 'GET'
+  })
+}
+
+export function unlockUserProfileContact(targetUserId) {
+  const safeId = encodeURIComponent(String(targetUserId || '').trim())
+  return request({
+    url: `/api/v1/user/profiles/${safeId}/contact-unlock`,
+    method: 'POST'
+  })
+}
+
 export function updateCurrentUserProfile(payload) {
   return request({
     url: '/api/v1/user/me',

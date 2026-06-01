@@ -130,6 +130,17 @@ const formatCount = (value) => {
   return `${Math.floor(numeric)}`
 }
 
+const sanitizeCircleImage = (value) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return '/static/logo.png'
+  }
+  if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
+    return '/static/logo.png'
+  }
+  return normalized
+}
+
 const mapCircleCard = (item = {}) => {
   const circleCode = String(item.circle_code || '').trim()
   const description = String(item.description || '').trim()
@@ -143,7 +154,7 @@ const mapCircleCard = (item = {}) => {
     industryLabel,
     members: formatCount(item.member_count || 0),
     posts: formatCount(item.post_count || 0),
-    coverImage: String(item.avatar_url || item.cover_url || '').trim(),
+    coverImage: sanitizeCircleImage(item.avatar_url || item.cover_url || ''),
     ownerVerified: Boolean(item.owner_is_verified)
   }
 }
@@ -177,9 +188,19 @@ const fetchMyCircles = async (reset = false) => {
     const mappedItems = incomingItems.map((item) => mapCircleCard(item))
 
     if (reset) {
-      circles.value = mappedItems
+      // 重置时直接替换，并去重
+      const uniqueMap = new Map()
+      mappedItems.forEach((item) => {
+        if (!uniqueMap.has(item.circleCode)) {
+          uniqueMap.set(item.circleCode, item)
+        }
+      })
+      circles.value = Array.from(uniqueMap.values())
     } else {
-      circles.value = [...circles.value, ...mappedItems]
+      // 追加时去重
+      const existingCodes = new Set(circles.value.map((c) => c.circleCode))
+      const newItems = mappedItems.filter((item) => !existingCodes.has(item.circleCode))
+      circles.value = [...circles.value, ...newItems]
     }
 
     const serverTotal = Number(data?.total)

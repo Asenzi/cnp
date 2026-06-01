@@ -84,8 +84,6 @@
         <view v-else-if="!hasMore && displayRecords.length > 0" class="load-tip">没有更多了</view>
       </view>
     </scroll-view>
-
-    <view v-if="showTimeFilterMenu || showTypeFilterMenu" class="filter-mask" @tap="closeAllFilterMenus"></view>
   </view>
 </template>
 
@@ -356,7 +354,7 @@ onReachBottom(async () => {
   min-height: 100vh;
   height: 100vh;
   position: relative;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  background: #f5f5f5;
 }
 
 .wallet-scroll {
@@ -364,39 +362,24 @@ onReachBottom(async () => {
 }
 
 .wallet-content {
-  padding: 32rpx 24rpx calc(48rpx + env(safe-area-inset-bottom));
+  padding: 32rpx 32rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
 .action-wrap {
-  margin-top: 24rpx;
+  margin-top: 32rpx;
 }
 
 .recharge-btn {
-  height: 88rpx;
-  border-radius: 20rpx;
-  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
-  box-shadow: 0 8rpx 24rpx rgba(26, 87, 219, 0.25);
+  height: 96rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  border: 2rpx solid #e5e7eb;
   overflow: hidden;
   position: relative;
-  transition: all 0.2s ease;
-}
-
-.recharge-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
 }
 
 .recharge-btn-hover {
-  transform: translateY(-2rpx);
-  box-shadow: 0 12rpx 28rpx rgba(26, 87, 219, 0.35);
-}
-
-.recharge-btn-hover::before {
-  opacity: 1;
+  background: #fafafa;
 }
 
 .recharge-btn-inner {
@@ -404,99 +387,85 @@ onReachBottom(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
+  gap: 0;
 }
 
 .recharge-icon {
-  width: 32rpx;
-  height: 32rpx;
+  display: none;
 }
 
 .recharge-text {
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 600;
-  letter-spacing: 1rpx;
+  color: #2563eb;
+  font-size: 32rpx;
+  font-weight: 400;
 }
 
 .section-head {
   margin-top: 48rpx;
-  margin-bottom: 20rpx;
+  margin-bottom: 24rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .section-title {
-  color: #0f172a;
+  color: #111827;
   font-size: 32rpx;
-  font-weight: 700;
-  letter-spacing: 0.5rpx;
+  font-weight: 600;
 }
 
 .filter-row {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
   position: relative;
-  z-index: 30;
 }
 
 .filter-btn {
   padding: 0 20rpx;
   height: 56rpx;
-  border-radius: 28rpx;
-  background: #ffffff;
-  border: 2rpx solid #e2e8f0;
+  border-radius: 8rpx;
+  background: #f5f5f5;
+  border: 0;
   display: flex;
   align-items: center;
   gap: 8rpx;
-  transition: all 0.2s ease;
 }
 
 .filter-btn-selected {
-  background: rgba(26, 87, 219, 0.08);
-  border-color: rgba(26, 87, 219, 0.2);
+  background: #e5e7eb;
 }
 
 .filter-btn-hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: #e5e7eb;
 }
 
 .filter-text {
-  color: #475569;
-  font-size: 24rpx;
-  font-weight: 600;
+  color: #6b7280;
+  font-size: 26rpx;
+  font-weight: 400;
 }
 
 .filter-btn-selected .filter-text {
-  color: #1a57db;
+  color: #111827;
 }
 
 .filter-icon {
   width: 20rpx;
   height: 20rpx;
-  opacity: 0.6;
-}
-
-.filter-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  background: rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(2rpx);
+  opacity: 0.5;
 }
 
 .filter-dropdown {
   position: absolute;
   top: calc(100% + 12rpx);
-  min-width: 180rpx;
+  min-width: 200rpx;
   padding: 8rpx;
-  border-radius: 20rpx;
+  border-radius: 12rpx;
   background: #ffffff;
-  border: 1rpx solid #e2e8f0;
-  box-shadow: 0 16rpx 40rpx rgba(15, 23, 42, 0.12);
+  border: 1rpx solid #e5e7eb;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  z-index: 100;
 }
 
 .time-filter-dropdown {
@@ -508,55 +477,54 @@ onReachBottom(async () => {
 }
 
 .filter-option {
-  min-height: 64rpx;
-  padding: 0 20rpx;
-  border-radius: 16rpx;
+  min-height: 72rpx;
+  padding: 0 24rpx;
+  border-radius: 8rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  transition: all 0.15s ease;
 }
 
 .filter-option-hover {
-  background: #f8fafc;
+  background: #f9fafb;
 }
 
 .filter-option-active {
-  background: rgba(26, 87, 219, 0.08);
+  background: #f3f4f6;
 }
 
 .filter-option-text {
-  color: #334155;
-  font-size: 26rpx;
-  font-weight: 600;
+  color: #374151;
+  font-size: 28rpx;
+  font-weight: 400;
 }
 
 .filter-option-active .filter-option-text {
-  color: #1a57db;
+  color: #111827;
 }
 
 .filter-check {
-  width: 28rpx;
-  height: 28rpx;
-  border-radius: 14rpx;
-  background: #1a57db;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 16rpx;
+  background: #2563eb;
   color: #ffffff;
-  font-size: 18rpx;
-  font-weight: 700;
+  font-size: 20rpx;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .tx-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 0 32rpx;
 }
 
 .empty-wrap {
-  padding: 100rpx 0 60rpx;
+  padding: 120rpx 32rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -567,7 +535,7 @@ onReachBottom(async () => {
   width: 160rpx;
   height: 160rpx;
   border-radius: 80rpx;
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -576,31 +544,31 @@ onReachBottom(async () => {
 .empty-icon {
   width: 80rpx;
   height: 80rpx;
-  opacity: 0.4;
+  opacity: 0.3;
 }
 
 .empty-text {
-  color: #94a3b8;
-  font-size: 26rpx;
-  font-weight: 500;
+  color: #9ca3af;
+  font-size: 28rpx;
+  font-weight: 400;
 }
 
 .load-tip {
-  margin-top: 24rpx;
-  margin-bottom: 20rpx;
+  margin-top: 32rpx;
+  margin-bottom: 24rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12rpx;
-  color: #94a3b8;
-  font-size: 24rpx;
+  color: #9ca3af;
+  font-size: 26rpx;
 }
 
 .loading-spinner {
-  width: 28rpx;
-  height: 28rpx;
-  border: 3rpx solid #e2e8f0;
-  border-top-color: #1a57db;
+  width: 32rpx;
+  height: 32rpx;
+  border: 3rpx solid #e5e7eb;
+  border-top-color: #2563eb;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -613,72 +581,81 @@ onReachBottom(async () => {
 
 @media (prefers-color-scheme: dark) {
   .wallet-page {
-    background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+    background: #000000;
   }
 
   .section-title {
-    color: #f1f5f9;
+    color: #f9fafb;
+  }
+
+  .recharge-btn {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .recharge-btn-hover {
+    background: #111827;
+  }
+
+  .recharge-text {
+    color: #60a5fa;
   }
 
   .filter-btn {
-    background: #1e293b;
-    border-color: #334155;
+    background: #1f2937;
   }
 
   .filter-btn-selected {
-    background: rgba(59, 130, 246, 0.15);
-    border-color: rgba(59, 130, 246, 0.3);
+    background: #374151;
   }
 
   .filter-btn-hover {
-    background: #334155;
-    border-color: #475569;
+    background: #374151;
   }
 
   .filter-text {
-    color: #cbd5e1;
+    color: #9ca3af;
   }
 
   .filter-btn-selected .filter-text {
-    color: #60a5fa;
-  }
-
-  .filter-mask {
-    background: rgba(0, 0, 0, 0.3);
+    color: #f9fafb;
   }
 
   .filter-dropdown {
-    background: #1e293b;
-    border-color: #334155;
-    box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.4);
+    background: #1f2937;
+    border-color: #374151;
   }
 
   .filter-option-hover {
-    background: #334155;
+    background: #374151;
   }
 
   .filter-option-active {
-    background: rgba(59, 130, 246, 0.2);
+    background: #111827;
   }
 
   .filter-option-text {
-    color: #cbd5e1;
+    color: #d1d5db;
   }
 
   .filter-option-active .filter-option-text {
-    color: #60a5fa;
+    color: #f9fafb;
   }
 
   .filter-check {
     background: #3b82f6;
   }
 
+  .tx-list {
+    background: #111827;
+  }
+
   .empty-icon-wrap {
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    background: #1f2937;
   }
 
   .loading-spinner {
-    border-color: #334155;
+    border-color: #374151;
     border-top-color: #3b82f6;
   }
 }

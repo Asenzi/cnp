@@ -1,17 +1,16 @@
-﻿<template>
+<template>
   <view class="owner-wrap">
     <view class="owner-main">
       <image class="owner-avatar" mode="aspectFill" :src="owner.avatar" />
       <view class="owner-info">
-        <view class="name-row">
-          <text class="owner-name">{{ owner.name }} ({{ owner.role }})</text>
-          <image class="verified-icon" mode="aspectFit" src="/static/me-icons/verified-emerald.png" />
-        </view>
+        <text class="owner-name">{{ owner.name }} <text class="owner-role">{{ owner.role }}</text></text>
         <text class="owner-intro">{{ owner.intro }}</text>
       </view>
     </view>
 
-    <button class="dm-btn" hover-class="dm-btn-active" @tap="emit('dm')">私信</button>
+    <button class="share-btn" open-type="share" hover-class="share-btn-active">
+      <image class="share-icon" mode="aspectFit" src="/static/icon/share.png" />
+    </button>
   </view>
 </template>
 
@@ -22,21 +21,17 @@ defineProps({
     default: () => ({})
   }
 })
-
-const emit = defineEmits(['dm'])
 </script>
 
 <style scoped>
 .owner-wrap {
-  margin: 16rpx 32rpx 0;
-  background: #ffffff;
-  border-radius: 16rpx;
-  border: 1rpx solid #e2e8f0;
-  padding: 18rpx;
+  margin: 0 32rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14rpx;
+  gap: 16rpx;
 }
 
 .owner-main {
@@ -48,10 +43,10 @@ const emit = defineEmits(['dm'])
 }
 
 .owner-avatar {
-  width: 88rpx;
-  height: 88rpx;
-  border-radius: 999rpx;
-  background: #e2e8f0;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 8rpx;
+  background: #f3f4f6;
   flex-shrink: 0;
 }
 
@@ -60,68 +55,76 @@ const emit = defineEmits(['dm'])
   min-width: 0;
 }
 
-.name-row {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-}
-
 .owner-name {
-  max-width: 380rpx;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #0f172a;
-  font-size: 24rpx;
-  line-height: 32rpx;
-  font-weight: 700;
+  display: block;
+  color: #111827;
+  font-size: 26rpx;
+  line-height: 34rpx;
+  font-weight: 500;
 }
 
-.verified-icon {
-  width: 22rpx;
-  height: 22rpx;
-  flex-shrink: 0;
+.owner-role {
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .owner-intro {
   display: block;
-  margin-top: 4rpx;
-  color: #64748b;
-  font-size: 20rpx;
-  line-height: 28rpx;
+  margin-top: 2rpx;
+  color: #9ca3af;
+  font-size: 22rpx;
+  line-height: 30rpx;
 }
 
-.dm-btn {
-  height: 60rpx;
-  border-radius: 12rpx;
+.share-btn {
+  width: 56rpx;
+  height: 56rpx;
+  padding: 0;
   border: 0;
-  padding: 0 20rpx;
-  background: rgba(26, 87, 219, 0.1);
-  color: #1a57db;
-  font-size: 22rpx;
-  font-weight: 700;
+  border-radius: 8rpx;
+  background: #eff6ff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.dm-btn-active {
-  opacity: 0.84;
+.share-btn::after {
+  border: 0;
+}
+
+.share-icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.share-btn-active {
+  opacity: 0.6;
 }
 
 @media (prefers-color-scheme: dark) {
   .owner-wrap {
-    background: #0f172a;
-    border-color: #1e293b;
+    border-bottom-color: #1f2937;
+  }
+
+  .owner-avatar {
+    background: #1f2937;
   }
 
   .owner-name {
-    color: #f8fafc;
+    color: #f9fafb;
+  }
+
+  .owner-role {
+    color: #9ca3af;
   }
 
   .owner-intro {
-    color: #94a3b8;
+    color: #6b7280;
+  }
+
+  .share-btn {
+    background: rgba(37, 99, 235, 0.15);
   }
 }
 </style>

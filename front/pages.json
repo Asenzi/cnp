@@ -77,6 +77,15 @@
       }
     },
     {
+      "path": "pages/me/interests/index",
+      "style": {
+        "navigationBarTitleText": "感兴趣",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/me/points/index",
       "style": {
         "navigationBarTitleText": "获取积分",
@@ -159,6 +168,24 @@
       }
     },
     {
+      "path": "pages/me/help-feedback/index",
+      "style": {
+        "navigationBarTitleText": "帮助与反馈",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/about/index",
+      "style": {
+        "navigationBarTitleText": "鍏充簬鎴戜滑",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#0d1320",
+        "backgroundColor": "#0d1320"
+      }
+    },
+    {
       "path": "pages/me/privacy/index",
       "style": {
         "navigationBarTitleText": "隐私设置",
@@ -218,6 +245,22 @@
       }
     },
     {
+      "path": "pages/legal/user-agreement",
+      "style": {
+        "navigationBarTitleText": "用户协议",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f8fafc"
+      }
+    },
+    {
+      "path": "pages/legal/privacy-policy",
+      "style": {
+        "navigationBarTitleText": "隐私政策",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f8fafc"
+      }
+    },
+    {
       "path": "pages/messages/friend-apply/index",
       "style": {
         "navigationBarTitleText": "好友申请",
@@ -274,6 +317,14 @@
       "path": "pages/resources/venue-detail/index",
       "style": {
         "navigationBarTitleText": "活动详情",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/resources/detail-design/index",
+      "style": {
+        "navigationBarTitleText": "详情页设计",
         "navigationBarBackgroundColor": "#f6f6f8",
         "backgroundColor": "#f6f6f8"
       }
@@ -305,7 +356,9 @@
       "style": {
         "navigationBarTitleText": "圈子详情",
         "navigationBarBackgroundColor": "#f6f6f8",
-        "backgroundColor": "#f6f6f8"
+        "backgroundColor": "#f6f6f8",
+        "enableShareAppMessage": true,
+        "enableShareTimeline": true
       }
     }
     

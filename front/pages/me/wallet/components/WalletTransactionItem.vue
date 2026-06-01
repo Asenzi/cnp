@@ -57,16 +57,13 @@ const statusClass = computed(() => {
 
 <style scoped>
 .tx-item {
-  padding: 24rpx 28rpx;
-  border-radius: 20rpx;
+  padding: 32rpx 0;
+  border-bottom: 1rpx solid #f3f4f6;
   background: #ffffff;
-  border: 1rpx solid #f1f5f9;
-  box-shadow: 0 2rpx 12rpx rgba(15, 23, 42, 0.04);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20rpx;
-  transition: all 0.2s ease;
+  gap: 24rpx;
 }
 
 .tx-left {
@@ -74,163 +71,147 @@ const statusClass = computed(() => {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  gap: 24rpx;
 }
 
 .tx-icon-wrap {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 18rpx;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.tx-icon-wrap::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, transparent 100%);
-  opacity: 0.3;
 }
 
 .icon-bg-blue {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  background: #eff6ff;
 }
 
 .icon-bg-orange {
-  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+  background: #fff7ed;
 }
 
 .icon-bg-slate {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: #f9fafb;
 }
 
 .tx-icon {
-  width: 40rpx;
-  height: 40rpx;
-  position: relative;
-  z-index: 1;
+  width: 44rpx;
+  height: 44rpx;
 }
 
 .tx-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
+  gap: 8rpx;
 }
 
 .tx-title {
-  color: #0f172a;
-  font-size: 28rpx;
-  font-weight: 600;
+  color: #111827;
+  font-size: 30rpx;
+  font-weight: 400;
   line-height: 1.3;
 }
 
 .tx-time {
-  color: #64748b;
-  font-size: 22rpx;
+  color: #9ca3af;
+  font-size: 26rpx;
   line-height: 1.2;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .tx-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6rpx;
+  gap: 8rpx;
 }
 
 .tx-amount {
-  font-size: 30rpx;
-  font-weight: 700;
+  font-size: 32rpx;
+  font-weight: 500;
   line-height: 1.2;
-  letter-spacing: 0.5rpx;
 }
 
 .tx-amount-income {
-  color: #1a57db;
+  color: #111827;
 }
 
 .tx-amount-expense {
-  color: #e11d48;
+  color: #111827;
 }
 
 .tx-status {
-  padding: 4rpx 12rpx;
-  border-radius: 12rpx;
-  font-size: 18rpx;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+  font-weight: 400;
 }
 
 .tx-status-income {
-  color: #1a57db;
-  background: rgba(26, 87, 219, 0.1);
+  color: #059669;
+  background: #d1fae5;
 }
 
 .tx-status-expense {
-  color: #e11d48;
-  background: rgba(225, 29, 72, 0.1);
+  color: #dc2626;
+  background: #fee2e2;
 }
 
 .tx-status-pending {
-  color: #ea580c;
-  background: rgba(234, 88, 12, 0.1);
+  color: #d97706;
+  background: #fef3c7;
 }
 
 @media (prefers-color-scheme: dark) {
   .tx-item {
-    background: #1e293b;
-    border-color: #334155;
-    box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.2);
+    background: #111827;
+    border-bottom-color: #1f2937;
   }
 
   .icon-bg-blue {
-    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    background: rgba(37, 99, 235, 0.12);
   }
 
   .icon-bg-orange {
-    background: linear-gradient(135deg, #9a3412 0%, #c2410c 100%);
+    background: rgba(249, 115, 22, 0.12);
   }
 
   .icon-bg-slate {
-    background: linear-gradient(135deg, #334155 0%, #475569 100%);
+    background: #1f2937;
   }
 
   .tx-title {
-    color: #f1f5f9;
+    color: #f9fafb;
   }
 
   .tx-time {
-    color: #94a3b8;
+    color: #6b7280;
   }
 
   .tx-amount-income {
-    color: #60a5fa;
+    color: #f9fafb;
   }
 
   .tx-amount-expense {
-    color: #fb7185;
+    color: #f9fafb;
   }
 
   .tx-status-income {
-    color: #60a5fa;
-    background: rgba(96, 165, 250, 0.15);
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.12);
   }
 
   .tx-status-expense {
-    color: #fb7185;
-    background: rgba(251, 113, 133, 0.15);
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.12);
   }
 
   .tx-status-pending {
-    color: #fb923c;
-    background: rgba(251, 146, 60, 0.15);
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
   }
 }
 </style>

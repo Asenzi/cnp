@@ -64,33 +64,65 @@ export function getUserResourceFeed(targetUserId, params = {}) {
 }
 
 export function createResourcePost(payload = {}) {
+  const data = {
+    mode: String(payload.mode || 'cooperate').trim(),
+    title: String(payload.title || '').trim(),
+    description: String(payload.description || '').trim(),
+    industry_label: String(payload.industry_label || '').trim(),
+    images: Array.isArray(payload.images) ? payload.images : [],
+    sync_circle_codes: Array.isArray(payload.sync_circle_codes) ? payload.sync_circle_codes : []
+  }
+
+  // 如果是活动模式，添加活动相关字段
+  if (payload.mode === 'venue') {
+    data.event_date = String(payload.event_date || '').trim()
+    data.event_time = String(payload.event_time || '').trim()
+    data.duration = Number(payload.duration || 1)
+    data.capacity = Number(payload.capacity || 0)
+    data.location = String(payload.location || '').trim()
+    data.address = String(payload.address || '').trim()
+    data.payment_type = String(payload.payment_type || 'free').trim()
+    data.price = String(payload.price || '').trim()
+    data.contact = String(payload.contact || '').trim()
+    data.detail_content = String(payload.detail_content || '').trim()
+  }
+
   return request({
     url: '/api/v1/post',
     method: 'POST',
-    data: {
-      mode: String(payload.mode || 'cooperate').trim(),
-      title: String(payload.title || '').trim(),
-      description: String(payload.description || '').trim(),
-      industry_label: String(payload.industry_label || '').trim(),
-      images: Array.isArray(payload.images) ? payload.images : [],
-      sync_circle_codes: Array.isArray(payload.sync_circle_codes) ? payload.sync_circle_codes : []
-    }
+    data
   })
 }
 
 export function updateResourcePost(postCode, payload = {}) {
   const safeCode = encodeURIComponent(String(postCode || '').trim())
+  const data = {
+    mode: String(payload.mode || 'cooperate').trim(),
+    title: String(payload.title || '').trim(),
+    description: String(payload.description || '').trim(),
+    industry_label: String(payload.industry_label || '').trim(),
+    images: Array.isArray(payload.images) ? payload.images : [],
+    sync_circle_codes: Array.isArray(payload.sync_circle_codes) ? payload.sync_circle_codes : []
+  }
+
+  // 如果是活动模式，添加活动相关字段
+  if (payload.mode === 'venue') {
+    data.event_date = String(payload.event_date || '').trim()
+    data.event_time = String(payload.event_time || '').trim()
+    data.duration = Number(payload.duration || 1)
+    data.capacity = Number(payload.capacity || 0)
+    data.location = String(payload.location || '').trim()
+    data.address = String(payload.address || '').trim()
+    data.payment_type = String(payload.payment_type || 'free').trim()
+    data.price = String(payload.price || '').trim()
+    data.contact = String(payload.contact || '').trim()
+    data.detail_content = String(payload.detail_content || '').trim()
+  }
+
   return request({
     url: `/api/v1/post/${safeCode}`,
     method: 'PUT',
-    data: {
-      mode: String(payload.mode || 'cooperate').trim(),
-      title: String(payload.title || '').trim(),
-      description: String(payload.description || '').trim(),
-      industry_label: String(payload.industry_label || '').trim(),
-      images: Array.isArray(payload.images) ? payload.images : [],
-      sync_circle_codes: Array.isArray(payload.sync_circle_codes) ? payload.sync_circle_codes : []
-    }
+    data
   })
 }
 
@@ -198,5 +230,24 @@ export function uploadResourceImage(filePath, fileName = 'resource-image') {
         })
       }
     })
+  })
+}
+
+export function toggleResourceInterest(postCode) {
+  const safeCode = encodeURIComponent(String(postCode || '').trim())
+  return request({
+    url: `/api/v1/post/${safeCode}/interest/toggle`,
+    method: 'POST'
+  })
+}
+
+export function getInterestedResources(params = {}) {
+  const query = buildQuery({
+    cursor: String(params.cursor || '').trim(),
+    limit: Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  })
+  return request({
+    url: `/api/v1/post/interests${query ? `?${query}` : ''}`,
+    method: 'GET'
   })
 }

@@ -4,6 +4,7 @@
       v-for="item in items"
       :key="item.id"
       :circle="item"
+      @interest="$emit('interest', $event)"
     />
   </view>
 </template>
@@ -17,6 +18,8 @@ defineProps({
     default: () => []
   }
 })
+
+defineEmits(['interest'])
 </script>
 
 <style scoped>

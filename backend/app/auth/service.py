@@ -10,6 +10,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.asset_urls import normalize_persisted_asset_url
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
@@ -89,6 +90,19 @@ def _normalize_optional_text(value: str | None, max_len: int) -> str | None:
     if not normalized:
         return None
     return normalized[:max_len]
+
+
+def _normalize_avatar_input(value: str | None) -> str | None:
+    normalized = _normalize_optional_text(value, 255)
+    if not normalized:
+        return None
+    try:
+        return normalize_persisted_asset_url(
+            normalized,
+            field_label="头像",
+        )[:255]
+    except BusinessException:
+        return None
 
 
 def _parse_card_files(card_files_json: str | None) -> list[dict]:
@@ -681,7 +695,7 @@ async def login_with_wechat_code(
     identity_phone = _wechat_virtual_phone(openid)
 
     normalized_nickname = _normalize_optional_text(nickname, 64)
-    normalized_avatar_url = _normalize_optional_text(avatar_url, 255)
+    normalized_avatar_url = _normalize_avatar_input(avatar_url)
 
     is_new_user = False
 
@@ -792,7 +806,7 @@ async def bind_wechat_for_user(
     )
 
     normalized_nickname = _normalize_optional_text(nickname, 64)
-    normalized_avatar_url = _normalize_optional_text(avatar_url, 255)
+    normalized_avatar_url = _normalize_avatar_input(avatar_url)
 
     try:
         existing_bound_user = get_user_by_wechat_openid(db=db, wechat_openid=openid)

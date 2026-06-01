@@ -39,6 +39,17 @@ export function getCirclePosts(circleCode, params = {}) {
   })
 }
 
+export function getCircleMembers(circleCode, params = {}) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  return request({
+    url: `/api/v1/circle/${safeCode}/members?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
 export function getPendingCirclePostSyncs(circleCode) {
   const safeCode = encodeURIComponent(String(circleCode || '').trim())
   return request({
@@ -178,4 +189,33 @@ export function uploadCircleCover(filePath, fileName = 'circle-cover') {
 
 export function uploadCircleAvatar(filePath, fileName = 'circle-avatar') {
   return uploadCircleImage(filePath, fileName)
+}
+
+export function toggleCircleInterest(circleCode) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  return request({
+    url: `/api/v1/circle/${safeCode}/interest/toggle`,
+    method: 'POST'
+  })
+}
+
+export function getInterestedCircles(params = {}) {
+  const query = []
+  const appendQuery = (key, value) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+    query.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  }
+
+  const cursor = String(params.cursor || '').trim()
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+
+  appendQuery('cursor', cursor)
+  appendQuery('limit', limit)
+
+  return request({
+    url: `/api/v1/circle/interests${query.length ? `?${query.join('&')}` : ''}`,
+    method: 'GET'
+  })
 }

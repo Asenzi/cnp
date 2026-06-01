@@ -32,6 +32,7 @@ from app.crud.network import (
     get_shared_circle_names,
     get_shared_connection_names,
     get_user_circle_codes,
+    get_user_interests,
     list_candidate_users,
     list_filter_option_values,
     list_recent_feedback_target_profiles,
@@ -43,7 +44,7 @@ from app.models.user_verification import UserVerification
 from app.verification.constants import VerificationStatus, VerificationType
 
 SUPPORTED_TABS = {"recommend", "nearby", "latest"}
-SUPPORTED_EVENTS = {"click_card", "apply_friend", "chat_start", "dismiss", "block"}
+SUPPORTED_EVENTS = {"click_card", "apply_friend", "cancel_interest", "chat_start", "dismiss", "block"}
 POSITIVE_EVENTS = {"click_card", "apply_friend", "chat_start"}
 DEFAULT_DOMAIN_TAGS = ["AI", "产品", "技术", "运营", "营销", "投资", "供应链", "企业服务"]
 DEFAULT_INDUSTRY_OPTIONS = [
@@ -1135,6 +1136,9 @@ def list_network_recommendations(
     candidate_user_pks = {int(row.user.id) for row in page_rows if row.user and row.user.id}
     candidate_profile_map = _load_candidate_profile_lines(db=db, candidate_user_pks=candidate_user_pks)
 
+    # 获取感兴趣状态
+    interest_map = get_user_interests(db=db, user_pk=viewer.id, target_user_pks=candidate_user_pks)
+
     if offset <= 0 and page_rows:
         _FIRST_PAGE_RECENT_CACHE[refresh_context_key] = (
             datetime.now(UTC).timestamp(),
@@ -1177,6 +1181,7 @@ def list_network_recommendations(
                 "job_title": str(row.user.job_title or candidate_profile_map.get(int(row.user.id), {}).get("job_title", "")).strip(),
                 "circle_names": list(safe_reason_detail["circle_names"]),
                 "is_verified": bool(row.user.is_verified),
+                "is_interested": interest_map.get(int(row.user.id), False),
                 "active_text": row.active_text,
                 "reason_tags": safe_reason_tags,
                 "reason_detail": safe_reason_detail,
@@ -1256,7 +1261,7 @@ def save_network_feedback(
     normalized_tab = tab if tab in SUPPORTED_TABS else "recommend"
     ext_json = json.dumps(ext or {}, ensure_ascii=False) if ext else None
 
-    create_reco_feedback(
+    saved = create_reco_feedback(
         db=db,
         viewer_user_pk=viewer.id,
         target_user_pk=int(target_pk),
@@ -1266,4 +1271,4 @@ def save_network_feedback(
         event_type=normalized_event_type,
         ext_json=ext_json,
     )
-    return True
+    return bool(saved)

@@ -71,3 +71,34 @@ export function reportNetworkFeedback(payload = {}) {
     }
   })
 }
+
+export function toggleUserInterest(targetUserId, desiredInterested) {
+  const desiredQuery = typeof desiredInterested === 'boolean'
+    ? `&desired=${desiredInterested ? 'true' : 'false'}`
+    : ''
+  return request({
+    url: `/api/v1/network/interest/toggle?target_user_id=${encodeURIComponent(targetUserId)}${desiredQuery}`,
+    method: 'POST'
+  })
+}
+
+export function getInterestedUsers(params = {}) {
+  const query = []
+  const appendQuery = (key, value) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+    query.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  }
+
+  const cursor = String(params.cursor || '').trim()
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+
+  appendQuery('cursor', cursor)
+  appendQuery('limit', limit)
+
+  return request({
+    url: `/api/v1/network/interests${query.length ? `?${query.join('&')}` : ''}`,
+    method: 'GET'
+  })
+}

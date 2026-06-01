@@ -290,7 +290,7 @@ onLoad(() => {
 .recharge-page {
   min-height: 100vh;
   height: 100vh;
-  background: #f6f6f8;
+  background: #fafafa;
 }
 
 .recharge-scroll {
@@ -298,112 +298,114 @@ onLoad(() => {
 }
 
 .page-content {
-  padding: 24rpx 24rpx calc(140rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 32rpx calc(140rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 32rpx;
 }
 
 .section {
-  border-radius: 20rpx;
-  padding: 20rpx;
   background: #ffffff;
 }
 
 .section-title {
   display: block;
-  color: #0f172a;
-  font-size: 30rpx;
-  font-weight: 700;
+  color: #111827;
+  font-size: 28rpx;
+  font-weight: 600;
+  margin-bottom: 20rpx;
 }
 
 .amount-grid {
-  margin-top: 16rpx;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 .amount-item {
   position: relative;
-  height: 84rpx;
-  border: 1rpx solid #cbd5e1;
-  border-radius: 16rpx;
+  height: 96rpx;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 8rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4rpx;
-  background: #f8fafc;
+  gap: 2rpx;
+  background: #ffffff;
   text-align: center;
 }
 
 .amount-item-active {
-  border-color: #1a57db;
-  background: rgba(26, 87, 219, 0.1);
-}
-
-.amount-item-active::after {
-  content: '';
-  position: absolute;
-  right: 8rpx;
-  top: 8rpx;
-  width: 12rpx;
-  height: 12rpx;
-  border-radius: 50%;
-  background: #1a57db;
+  border-color: #2563eb;
+  background: #eff6ff;
 }
 
 .amount-yuan {
-  color: #1e293b;
-  font-size: 26rpx;
+  color: #6b7280;
+  font-size: 24rpx;
   line-height: 1;
+}
+
+.amount-item-active .amount-yuan {
+  color: #2563eb;
 }
 
 .amount-value {
-  color: #0f172a;
-  font-size: 38rpx;
-  font-weight: 700;
+  color: #111827;
+  font-size: 36rpx;
+  font-weight: 600;
   line-height: 1;
 }
 
+.amount-item-active .amount-value {
+  color: #2563eb;
+}
+
 .custom-input-wrap {
-  margin-top: 14rpx;
-  height: 88rpx;
-  border: 1rpx solid #cbd5e1;
-  border-radius: 16rpx;
-  background: #f8fafc;
-  padding: 0 20rpx;
+  height: 96rpx;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 8rpx;
+  background: #ffffff;
+  padding: 0 24rpx;
   display: flex;
   align-items: center;
 }
 
 .custom-input-wrap-active {
-  border-color: #1a57db;
-  background: rgba(26, 87, 219, 0.04);
+  border-color: #2563eb;
+  background: #eff6ff;
 }
 
 .custom-yuan {
-  color: #0f172a;
+  color: #111827;
   font-size: 32rpx;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .custom-input {
   flex: 1;
-  margin-left: 10rpx;
-  color: #0f172a;
-  font-size: 30rpx;
+  margin-left: 8rpx;
+  color: #111827;
+  font-size: 32rpx;
+  font-weight: 600;
 }
 
 .tip-text {
   display: block;
-  margin-top: 10rpx;
-  color: #64748b;
-  font-size: 22rpx;
+  margin-top: 12rpx;
+  color: #9ca3af;
+  font-size: 24rpx;
+  font-weight: 400;
 }
 
 .pay-summary {
-  gap: 16rpx;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  background: #f9fafb;
+  border: 2rpx solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
 .summary-row {
@@ -413,8 +415,9 @@ onLoad(() => {
 }
 
 .summary-label {
-  color: #475569;
-  font-size: 26rpx;
+  color: #6b7280;
+  font-size: 28rpx;
+  font-weight: 400;
 }
 
 .summary-value-wrap {
@@ -424,40 +427,40 @@ onLoad(() => {
 }
 
 .summary-icon {
-  width: 28rpx;
-  height: 28rpx;
+  width: 32rpx;
+  height: 32rpx;
 }
 
 .summary-value {
-  color: #0f172a;
-  font-size: 26rpx;
-  font-weight: 600;
+  color: #111827;
+  font-size: 28rpx;
+  font-weight: 500;
 }
 
 .summary-amount {
-  color: #1a57db;
-  font-size: 36rpx;
-  font-weight: 700;
+  color: #111827;
+  font-size: 40rpx;
+  font-weight: 600;
 }
 
 .safe-tip {
-  margin-top: -4rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8rpx;
-  padding: 12rpx 4rpx;
+  padding: 16rpx;
 }
 
 .safe-icon {
-  width: 24rpx;
-  height: 24rpx;
-  opacity: 0.7;
+  width: 28rpx;
+  height: 28rpx;
+  opacity: 0.6;
 }
 
 .safe-text {
-  color: #64748b;
-  font-size: 22rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+  font-weight: 400;
 }
 
 .bottom-bar {
@@ -465,24 +468,23 @@ onLoad(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 12rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  border-top: 1rpx solid #e2e8f0;
+  padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
+  background: #ffffff;
+  border-top: 2rpx solid #e5e7eb;
 }
 
 .submit-btn {
-  height: 88rpx;
+  height: 96rpx;
   border: 0;
-  border-radius: 20rpx;
-  background: #1a57db;
+  border-radius: 12rpx;
+  background: #2563eb;
   color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 700;
+  font-size: 32rpx;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  box-shadow: 0 8rpx 20rpx rgba(26, 87, 219, 0.18);
 }
 
 .submit-btn::after {
@@ -490,6 +492,99 @@ onLoad(() => {
 }
 
 .submit-btn-disabled {
-  opacity: 0.55;
+  opacity: 0.5;
+  background: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recharge-page {
+    background: #000000;
+  }
+
+  .section {
+    background: #111827;
+  }
+
+  .section-title {
+    color: #f9fafb;
+  }
+
+  .amount-item {
+    border-color: #374151;
+    background: #1f2937;
+  }
+
+  .amount-item-active {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.15);
+  }
+
+  .amount-yuan {
+    color: #9ca3af;
+  }
+
+  .amount-item-active .amount-yuan {
+    color: #60a5fa;
+  }
+
+  .amount-value {
+    color: #f9fafb;
+  }
+
+  .amount-item-active .amount-value {
+    color: #60a5fa;
+  }
+
+  .custom-input-wrap {
+    border-color: #374151;
+    background: #1f2937;
+  }
+
+  .custom-input-wrap-active {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.15);
+  }
+
+  .custom-yuan {
+    color: #f9fafb;
+  }
+
+  .custom-input {
+    color: #f9fafb;
+  }
+
+  .tip-text {
+    color: #6b7280;
+  }
+
+  .pay-summary {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .summary-label {
+    color: #9ca3af;
+  }
+
+  .summary-value {
+    color: #f9fafb;
+  }
+
+  .summary-amount {
+    color: #f9fafb;
+  }
+
+  .safe-text {
+    color: #9ca3af;
+  }
+
+  .bottom-bar {
+    background: #111827;
+    border-top-color: #374151;
+  }
+
+  .submit-btn-disabled {
+    background: #374151;
+  }
 }
 </style>

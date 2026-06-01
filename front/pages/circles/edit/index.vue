@@ -120,6 +120,9 @@ const isLocalTempFilePath = (value) => {
   if (!normalized) {
     return false
   }
+  if (/^https?:\/\/tmp\//i.test(normalized)) {
+    return true
+  }
   if (/^https?:\/\//i.test(normalized)) {
     return false
   }

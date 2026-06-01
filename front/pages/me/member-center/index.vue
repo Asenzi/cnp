@@ -965,13 +965,27 @@ onShow(async () => {
   line-height: 96rpx;
   border: 0;
   border-radius: 24rpx;
-  background: #1a57db;
+  background: linear-gradient(135deg, #1a57db 0%, #1548b8 100%);
   color: #ffffff;
   font-size: 32rpx;
   font-weight: 700;
   letter-spacing: 0.02em;
   font-family: var(--member-body-font);
-  box-shadow: 0 8rpx 24rpx rgba(26, 87, 219, 0.2);
+  box-shadow: 0 8rpx 24rpx rgba(26, 87, 219, 0.35), 0 2rpx 8rpx rgba(26, 87, 219, 0.2);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.open-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
 }
 
 .open-btn::after {
@@ -982,14 +996,18 @@ onShow(async () => {
   display: inline-flex;
   align-items: center;
   gap: 16rpx;
+  position: relative;
+  z-index: 1;
 }
 
 .open-btn-active {
-  opacity: 0.9;
+  transform: translateY(-2rpx);
+  box-shadow: 0 12rpx 32rpx rgba(26, 87, 219, 0.4), 0 4rpx 12rpx rgba(26, 87, 219, 0.25);
 }
 
 .open-btn-disabled {
-  opacity: 0.7;
+  opacity: 0.6;
+  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {

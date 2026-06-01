@@ -3,12 +3,16 @@ from pathlib import Path as FsPath
 from secrets import token_hex
 
 from fastapi import APIRouter, Depends, File, Path, Query, Request, UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id
+from app.core.asset_urls import normalize_persisted_asset_url, sanitize_public_asset_url
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
 from app.crud import get_user_by_business_user_id, get_user_by_id
+from app.models.resource_post import ResourcePost, ResourcePostLike
+from app.models.user import User
 from app.post import (
     create_resource_post,
     delete_resource_post,
@@ -48,6 +52,13 @@ IMAGE_CONTENT_TYPE_EXTENSION_MAP = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+IMAGE_SUFFIX_CONTENT_TYPE_MAP = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
 
 
 def _require_current_user(db: Session, current_user_pk: int):
@@ -58,14 +69,51 @@ def _require_current_user(db: Session, current_user_pk: int):
 
 
 def _to_public_file_url(file_url: str, request: Request | None) -> str:
-    normalized = str(file_url or "").strip()
+    normalized = sanitize_public_asset_url(file_url)
     if not normalized:
         return normalized
-    if normalized.startswith(("http://", "https://", "wxfile://", "file://")):
+    if normalized.startswith(("http://", "https://")):
         return normalized
     if normalized.startswith("/static/") and request is not None:
         return f"{str(request.base_url).rstrip('/')}{normalized}"
     return normalized
+
+
+def _normalize_post_images(images: list[str], request: Request) -> list[str]:
+    normalized_items: list[str] = []
+    for item in list(images or []):
+        normalized_items.append(
+            normalize_persisted_asset_url(
+                item,
+                request=request,
+                field_label="资源图片",
+            )[:255]
+        )
+    return normalized_items[:9]
+
+
+def _infer_image_content_type(
+    *,
+    content_type: str,
+    file_name: str,
+    file_bytes: bytes,
+) -> str:
+    normalized_type = str(content_type or "").lower().strip()
+    if normalized_type in ALLOWED_IMAGE_CONTENT_TYPES:
+        return normalized_type
+
+    file_header = file_bytes[:16]
+    if file_header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if file_header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if file_header[:6] in {b"GIF87a", b"GIF89a"}:
+        return "image/gif"
+    if len(file_header) >= 12 and file_header[:4] == b"RIFF" and file_header[8:12] == b"WEBP":
+        return "image/webp"
+
+    suffix = FsPath(file_name or "").suffix.lower()
+    return IMAGE_SUFFIX_CONTENT_TYPE_MAP.get(suffix, normalized_type)
 
 
 def _publicize_post_payload(payload: dict, request: Request | None) -> dict:
@@ -183,6 +231,88 @@ def get_user_post_feed(
     return success_response(data=payload)
 
 
+def _parse_offset_cursor(cursor: str | None) -> int:
+    try:
+        return max(int(str(cursor or "").strip() or "0"), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _serialize_interested_post(post: ResourcePost, author: User, like: ResourcePostLike, request: Request) -> dict:
+    payload = {
+        "post_code": str(post.post_code or "").strip(),
+        "mode": str(post.mode or "cooperate"),
+        "industry_label": str(post.industry_label or "").strip(),
+        "title": str(post.title or "").strip(),
+        "description": str(post.description or "").strip(),
+        "images": [],
+        "view_count": int(post.view_count or 0),
+        "like_count": int(post.like_count or 0),
+        "comment_count": int(post.comment_count or 0),
+        "status": str(post.status or "active"),
+        "liked": True,
+        "interested": True,
+        "is_interested": True,
+        "time_text": "最近收藏",
+        "created_at": post.created_at.isoformat() if post.created_at else None,
+        "interested_at": like.created_at.isoformat() if like.created_at else None,
+        "author": {
+            "user_id": str(author.user_id or "").strip(),
+            "nickname": str(author.nickname or "").strip() or "未命名用户",
+            "avatar_url": str(author.avatar_url or "").strip() or "/static/logo.png",
+            "company_name": str(author.company_name or "").strip(),
+            "job_title": str(author.job_title or "").strip(),
+            "role": str(author.industry_label or "").strip(),
+            "is_verified": bool(author.is_verified),
+        },
+    }
+    try:
+        import json
+
+        images = json.loads(post.images_json or "[]")
+        payload["images"] = images if isinstance(images, list) else []
+    except Exception:
+        payload["images"] = []
+    return _publicize_post_payload(payload, request=request)
+
+
+@router.get("/interests", summary="List interested resource posts")
+def get_post_interests(
+    request: Request,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+    offset = _parse_offset_cursor(cursor)
+    safe_limit = min(max(int(limit or 20), 1), 50)
+    rows = db.execute(
+        select(ResourcePostLike, ResourcePost, User)
+        .join(ResourcePost, ResourcePost.id == ResourcePostLike.post_pk)
+        .join(User, User.id == ResourcePost.author_user_pk)
+        .where(
+            ResourcePostLike.user_pk == int(user_id),
+            ResourcePost.status == "active",
+        )
+        .order_by(ResourcePostLike.created_at.desc(), ResourcePostLike.id.desc())
+        .offset(offset)
+        .limit(safe_limit + 1)
+    ).all()
+    page_rows = rows[:safe_limit]
+    has_more = len(rows) > safe_limit
+    return success_response(
+        data={
+            "items": [
+                _serialize_interested_post(post=post, author=author, like=like, request=request)
+                for like, post, author in page_rows
+            ],
+            "next_cursor": str(offset + len(page_rows)) if has_more else "",
+            "has_more": has_more,
+        }
+    )
+
+
 @router.post("", summary="发布资源")
 def create_post(
     request: Request,
@@ -191,6 +321,7 @@ def create_post(
     db: Session = Depends(db_session),
 ):
     user = _require_current_user(db=db, current_user_pk=user_id)
+    normalized_images = _normalize_post_images(payload.images, request)
     review_result = submit_post_review(
         db=db,
         author=user,
@@ -200,7 +331,7 @@ def create_post(
             "title": payload.title,
             "description": payload.description,
             "industry_label": payload.industry_label,
-            "images": payload.images,
+            "images": normalized_images,
         },
     )
     if review_result["review_required"]:
@@ -212,7 +343,7 @@ def create_post(
                     "title": payload.title,
                     "description": payload.description,
                     "industry_label": payload.industry_label,
-                    "images": payload.images,
+                    "images": normalized_images,
                     "sync_circle_codes": payload.sync_circle_codes,
                 },
             },
@@ -226,8 +357,18 @@ def create_post(
         title=payload.title,
         description=payload.description,
         industry_label=payload.industry_label,
-        images=payload.images,
+        images=normalized_images,
         sync_circle_codes=payload.sync_circle_codes,
+        event_date=payload.event_date,
+        event_time=payload.event_time,
+        duration=payload.duration,
+        capacity=payload.capacity,
+        location=payload.location,
+        address=payload.address,
+        payment_type=payload.payment_type,
+        price=payload.price,
+        contact=payload.contact,
+        detail_content=payload.detail_content,
     )
     created["_review"] = {
         "review_required": False,
@@ -248,6 +389,7 @@ def update_post(
     db: Session = Depends(db_session),
 ):
     user = _require_current_user(db=db, current_user_pk=user_id)
+    normalized_images = _normalize_post_images(payload.images, request)
     review_result = submit_post_review(
         db=db,
         author=user,
@@ -258,7 +400,7 @@ def update_post(
             "title": payload.title,
             "description": payload.description,
             "industry_label": payload.industry_label,
-            "images": payload.images,
+            "images": normalized_images,
         },
     )
     if review_result["review_required"]:
@@ -271,7 +413,7 @@ def update_post(
                     "title": payload.title,
                     "description": payload.description,
                     "industry_label": payload.industry_label,
-                    "images": payload.images,
+                    "images": normalized_images,
                     "sync_circle_codes": payload.sync_circle_codes,
                 },
             },
@@ -286,7 +428,7 @@ def update_post(
         title=payload.title,
         description=payload.description,
         industry_label=payload.industry_label,
-        images=payload.images,
+        images=normalized_images,
         sync_circle_codes=payload.sync_circle_codes,
     )
     updated["_review"] = {
@@ -362,6 +504,42 @@ def delete_post_like(
     return success_response(data=payload, message="已取消点赞")
 
 
+@router.post("/{post_code}/interest/toggle", summary="Toggle resource interest status")
+def toggle_post_interest(
+    post_code: str = Path(..., min_length=4),
+    desired: bool | None = Query(default=None, description="Desired interest state"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+    normalized_code = str(post_code or "").strip()
+    post = db.execute(
+        select(ResourcePost).where(ResourcePost.post_code == normalized_code)
+    ).scalar_one_or_none()
+    if post is None or str(post.status or "active") == "deleted":
+        raise BusinessException(message="资源不存在", code=4045, status_code=404)
+
+    existing_like = db.execute(
+        select(ResourcePostLike.id).where(
+            ResourcePostLike.post_pk == int(post.id),
+            ResourcePostLike.user_pk == int(user_id),
+        )
+    ).scalar_one_or_none()
+    next_interested = bool(desired) if isinstance(desired, bool) else existing_like is None
+    payload = set_resource_post_like(
+        db=db,
+        viewer_user_pk=user_id,
+        post_code=normalized_code,
+        liked=next_interested,
+    )
+    payload["interested"] = next_interested
+    payload["is_interested"] = next_interested
+    return success_response(
+        data=payload,
+        message="已标记感兴趣" if next_interested else "已取消感兴趣",
+    )
+
+
 @router.post("/{post_code}/status", summary="上架/下架资源")
 def update_post_status(
     request: Request,
@@ -428,15 +606,19 @@ async def upload_post_image(
 ):
     _require_current_user(db=db, current_user_pk=user_id)
 
-    content_type = (file.content_type or "").lower().strip()
-    if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-        raise BusinessException(message="资源图片仅支持 JPG/PNG/WEBP/GIF", code=5463, status_code=400)
-
     file_bytes = await file.read()
     if not file_bytes:
         raise BusinessException(message="上传文件为空", code=5464, status_code=400)
     if len(file_bytes) > MAX_IMAGE_SIZE_BYTES:
         raise BusinessException(message="资源图片大小不能超过10MB", code=5465, status_code=400)
+
+    content_type = _infer_image_content_type(
+        content_type=file.content_type or "",
+        file_name=file.filename or "",
+        file_bytes=file_bytes,
+    )
+    if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise BusinessException(message="资源图片仅支持 JPG/PNG/WEBP/GIF", code=5463, status_code=400)
 
     suffix = FsPath(file.filename or "").suffix.lower()
     if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:

@@ -441,31 +441,35 @@ const formatCompactNumber = (value) => {
   return `${Math.floor(numeric)}`
 }
 
+const sanitizeCircleImage = (value) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return ''
+  }
+  if (normalized === '/static/logo.png' || /\/static\/logo\.png(?:[?#].*)?$/i.test(normalized)) {
+    return ''
+  }
+  if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
+    return ''
+  }
+  return normalized
+}
+
 const mapCircleCard = (item = {}, index = 0) => {
   const industryLabel = String(item.industry_label || '').trim()
   const ownerCity = String(item.owner_city_name || '').trim()
   const description = String(item.description || '').trim()
-  const reasonTags = Array.isArray(item.reason_tags)
-    ? item.reason_tags.map((tag) => String(tag || '').trim()).filter(Boolean)
-    : []
-
-  let descText = description
-  if (!descText) {
-    descText = [industryLabel, ownerCity].filter(Boolean).join(' / ') || texts.defaultDesc
-  } else if (reasonTags.length) {
-    descText = `${reasonTags.join(' 路 ')} 路 ${description}`
-  }
 
   return {
     id: String(item.circle_code || '').trim() || `circle-${index}`,
     circleCode: String(item.circle_code || '').trim(),
     title: String(item.name || '').trim() || texts.unnamedCircle,
-    description: descText,
+    description: description || texts.defaultDesc,
     industryLabel,
     ownerCity,
     members: formatCompactNumber(item.member_count || 0),
     posts: formatCompactNumber(item.post_count || 0),
-    coverImage: String(item.cover_url || item.avatar_url || '').trim(),
+    coverImage: sanitizeCircleImage(item.avatar_url || item.cover_url || ''),
     ownerName: String(item.owner_nickname || '').trim(),
     ownerAvatar: String(item.owner_avatar_url || '').trim(),
     ownerVerified: Boolean(item.owner_is_verified)
@@ -787,7 +791,7 @@ const onRefresherRestore = () => {
   refreshing.value = false
 }
 
-watch(keyword, () => {
+const stopKeywordWatch = watch(keyword, () => {
   if (searchTimer) {
     clearTimeout(searchTimer)
     searchTimer = null
@@ -825,6 +829,11 @@ onPullDownRefresh(async () => {
 
 onUnmounted(() => {
   isPageAlive.value = false
+
+  // 停止 watch
+  if (stopKeywordWatch) {
+    stopKeywordWatch()
+  }
 
   // 清理所有定时器
   if (searchTimer) {

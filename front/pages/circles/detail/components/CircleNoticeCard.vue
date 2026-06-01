@@ -1,22 +1,16 @@
-﻿<template>
+<template>
   <view class="notice-wrap">
     <view class="notice-head">
-      <view class="notice-title-row">
-        <image class="notice-icon" mode="aspectFit" src="/static/me-icons/badge-primary.png" />
-        <text class="notice-title">最新公告</text>
-      </view>
-
-      <view class="more-link" hover-class="more-link-active" @tap="emit('more')">
-        <text class="more-text">更多</text>
-        <image class="more-chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
-      </view>
+      <text class="notice-title">圈子公告</text>
+      <text class="more-link" @tap="toggleNotice">{{ noticeExpanded ? '收起' : '查看详情' }}</text>
     </view>
-
-    <text class="notice-text">{{ notice }}</text>
+    <text class="notice-text" :class="{ 'notice-collapsed': !noticeExpanded }">{{ notice }}</text>
   </view>
 </template>
 
 <script setup>
+import { ref } from 'vue'
+
 defineProps({
   notice: {
     type: String,
@@ -25,80 +19,71 @@ defineProps({
 })
 
 const emit = defineEmits(['more'])
+
+const noticeExpanded = ref(false)
+
+const toggleNotice = () => {
+  noticeExpanded.value = !noticeExpanded.value
+  if (noticeExpanded.value) {
+    emit('more')
+  }
+}
 </script>
 
 <style scoped>
 .notice-wrap {
-  margin: 16rpx 32rpx 0;
-  border-radius: 16rpx;
-  border: 1rpx solid rgba(26, 87, 219, 0.2);
-  background: rgba(26, 87, 219, 0.06);
-  padding: 18rpx;
+  margin: 0 32rpx;
+  padding: 20rpx 16rpx;
+  background: #f0f9ff;
+  border-radius: 8rpx;
 }
 
 .notice-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-.notice-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.notice-icon {
-  width: 30rpx;
-  height: 30rpx;
+  margin-bottom: 12rpx;
 }
 
 .notice-title {
-  color: #1a57db;
-  font-size: 24rpx;
-  line-height: 32rpx;
-  font-weight: 700;
+  color: #111827;
+  font-size: 28rpx;
+  line-height: 36rpx;
+  font-weight: 600;
 }
 
 .more-link {
-  display: flex;
-  align-items: center;
-  gap: 4rpx;
-}
-
-.more-link-active {
-  opacity: 0.8;
-}
-
-.more-text {
-  color: #1a57db;
-  font-size: 20rpx;
-  line-height: 28rpx;
-  font-weight: 700;
-}
-
-.more-chevron {
-  width: 18rpx;
-  height: 18rpx;
-  opacity: 0.7;
+  color: #2563eb;
+  font-size: 24rpx;
+  line-height: 32rpx;
 }
 
 .notice-text {
   display: block;
-  margin-top: 10rpx;
-  color: #334155;
-  font-size: 22rpx;
-  line-height: 32rpx;
+  color: #4b5563;
+  font-size: 26rpx;
+  line-height: 40rpx;
+}
+
+.notice-collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (prefers-color-scheme: dark) {
   .notice-wrap {
-    background: rgba(26, 87, 219, 0.12);
-    border-color: rgba(26, 87, 219, 0.3);
+    background: rgba(37, 99, 235, 0.1);
+  }
+
+  .notice-title {
+    color: #f9fafb;
   }
 
   .notice-text {
-    color: #cbd5e1;
+    color: #d1d5db;
   }
 }
 </style>

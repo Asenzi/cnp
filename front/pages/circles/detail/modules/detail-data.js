@@ -26,7 +26,6 @@
 }
 
 export const detailTabs = [
-  { key: 'resource', label: '资源' },
   { key: 'event', label: '活动' },
   { key: 'member', label: '成员' }
 ]
