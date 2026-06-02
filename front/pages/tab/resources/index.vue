@@ -129,7 +129,13 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
-import { getResourceFeed, getResourceFilters, toggleResourceInterest } from '../../../api/post'
+import {
+  getResourceFeed,
+  getResourceFilters,
+  reportResourceFeedback,
+  reportResourceImpressions,
+  toggleResourceInterest
+} from '../../../api/post'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import ProfilePostCard from '../../me/card/components/ProfilePostCard.vue'
 // import VenueEventCard from './components/VenueEventCard.vue' // 第二版上线
@@ -174,6 +180,7 @@ const locating = ref(false)
 const isPageAlive = ref(true) // 页面生命周期标记
 const loginRedirectTimer = ref(null) // 登录跳转定时器
 const currentRequestId = ref(0) // 请求ID，用于取消过期请求
+const reportedImpressionKeys = ref(new Set())
 // 暂时隐藏城市定位筛选入口，但保留相关状态和逻辑，便于后续恢复
 const showLocationFilter = false
 
@@ -297,6 +304,55 @@ const showToast = (title) => {
   uni.showToast({
     title,
     icon: 'none'
+  })
+}
+
+const reportFeedImpressions = (items = [], feedRequestId = '', tabKey = activeMode.value) => {
+  const requestKey = String(feedRequestId || '').trim()
+  if (!requestKey || !Array.isArray(items) || !items.length) {
+    return
+  }
+  const postCodes = []
+  const nextReportedKeys = new Set(reportedImpressionKeys.value)
+  items.forEach((item) => {
+    const postCode = String(item?.post_code || item?.postCode || '').trim()
+    if (!postCode) {
+      return
+    }
+    const key = `${requestKey}:${postCode}`
+    if (nextReportedKeys.has(key)) {
+      return
+    }
+    nextReportedKeys.add(key)
+    postCodes.push(postCode)
+  })
+  reportedImpressionKeys.value = nextReportedKeys
+  if (!postCodes.length) {
+    return
+  }
+  reportResourceImpressions({
+    request_id: requestKey,
+    tab: tabKey,
+    post_codes: postCodes
+  }).catch(() => {
+    // 曝光失败不影响浏览。
+  })
+}
+
+const reportFeedFeedback = (postCode, eventType, ext = {}) => {
+  const normalizedCode = String(postCode || '').trim()
+  const normalizedEvent = String(eventType || '').trim()
+  if (!normalizedCode || !normalizedEvent) {
+    return
+  }
+  reportResourceFeedback({
+    request_id: requestId.value,
+    tab: activeMode.value,
+    post_code: normalizedCode,
+    event_type: normalizedEvent,
+    ext
+  }).catch(() => {
+    // 行为反馈失败不阻塞用户操作。
   })
 }
 
@@ -443,6 +499,7 @@ const fetchFeed = async (reset = false) => {
     hasMore.value = Boolean(data?.has_more) && Boolean(nextCursor.value)
     loaded.value = true
     loadError.value = ''
+    reportFeedImpressions(incoming, requestId.value, params.mode)
 
     if (reset && incoming.length) {
       const currentFirstPageIds = incoming
@@ -541,6 +598,7 @@ const onTapDetail = (post) => {
     ? `/pages/resources/venue-detail/index?postCode=${encodeURIComponent(postCode)}`
     : `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode)}`
 
+  reportFeedFeedback(postCode, 'click_detail', { source: 'resource_feed' })
   uni.navigateTo({ url })
 }
 
@@ -588,6 +646,7 @@ const onToggleInterest = async (post) => {
 
   try {
     await toggleResourceInterest(postCode)
+    reportFeedFeedback(postCode, wasInterested ? 'cancel_interest' : 'interest', { source: 'resource_feed' })
 
     uni.showToast({
       title: wasInterested ? '已取消感兴趣' : '已标记感兴趣',

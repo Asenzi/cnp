@@ -5,7 +5,7 @@
     <view class="status-top">
       <view>
         <text class="status-title">尊享会员 VIP</text>
-        <text class="status-subtitle">全脉联 · 商务社交首选</text>
+        <text class="status-subtitle">圈脉链 · 商务社交首选</text>
       </view>
       <view class="status-pill">
         <text class="status-pill-text">{{ status?.statusText || '未开通' }}</text>
@@ -17,7 +17,6 @@
         <text class="status-expire">有效期至：{{ status?.expireDateText || '--' }}</text>
         <text class="status-slogan">升级会员，解锁无限商机</text>
       </view>
-      <image class="status-vip-icon" mode="aspectFit" src="/static/me-icons/badge-primary.png" />
     </view>
   </view>
 </template>
@@ -37,9 +36,9 @@ defineProps({
   overflow: hidden;
   border-radius: 24rpx;
   padding: 48rpx 40rpx 40rpx;
-  background: linear-gradient(135deg, #1a57db 0%, #1548b8 100%);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8rpx 24rpx rgba(26, 87, 219, 0.3), 0 2rpx 8rpx rgba(26, 87, 219, 0.2), inset 0 1rpx 0 rgba(255, 255, 255, 0.1);
+  background: #0676af;
+  border: 0;
+  box-shadow: none;
   font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
@@ -84,29 +83,33 @@ defineProps({
 .status-pill {
   flex-shrink: 0;
   border-radius: 999px;
-  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  border: 0;
   background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(10rpx);
   backdrop-filter: blur(10rpx);
-  padding: 8rpx 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1), inset 0 1rpx 0 rgba(255, 255, 255, 0.2);
+  min-width: 104rpx;
+  height: 48rpx;
+  padding: 6rpx 10rpx;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .status-pill-text {
   color: #ffffff;
   font-size: 22rpx;
-  line-height: 32rpx;
+  line-height: 48rpx;
   font-weight: 700;
   letter-spacing: 0.02em;
+  text-align: center;
 }
 
 .status-bottom {
   position: relative;
   z-index: 1;
   margin-top: 56rpx;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 32rpx;
+  display: block;
 }
 
 .status-expire {
@@ -128,10 +131,4 @@ defineProps({
   font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
-.status-vip-icon {
-  width: 96rpx;
-  height: 96rpx;
-  opacity: 0.44;
-  flex-shrink: 0;
-}
 </style>

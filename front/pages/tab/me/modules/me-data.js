@@ -29,7 +29,7 @@
 ]
 
 export const settingList = [
-  { key: 'account-security', iconPath: '/static/me-icons/shield-person-primary.png', label: '账号与安全' },
-  { key: 'help', iconPath: '/static/me-icons/help-gray.png', label: '帮助与反馈' },
-  { key: 'about', iconPath: '/static/me-icons/info-gray.png', label: '关于我们' }
+  { key: 'account-security', iconPath: '/static/icon/safe.png', label: '账号与安全' },
+  { key: 'help', iconPath: '/static/icon/help.png', label: '帮助与反馈' },
+  { key: 'about', iconPath: '/static/icon/about.png', label: '关于我们' }
 ]

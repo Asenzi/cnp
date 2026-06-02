@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -38,6 +39,9 @@ from app.schemas.user import (
     UpdatePrivacySettingsRequest,
 )
 from app.payment import consume_contact_package_view, resolve_contact_package_snapshot, resolve_member_snapshot
+from app.models.circle_interest import CircleInterest
+from app.models.resource_post import ResourcePostLike
+from app.models.user_interest import UserInterest
 from app.review import submit_profile_update_review
 from app.verification.constants import VerificationStatus, VerificationType
 
@@ -275,6 +279,39 @@ def _resolve_user_stats(db: Session, user) -> dict:
         return fallback_stats
 
 
+def _resolve_interest_stats(db: Session, *, user_pk: int) -> dict:
+    stats = {
+        "network_interest_count": 0,
+        "resource_interest_count": 0,
+        "circle_interest_count": 0,
+        "interest_count": 0,
+    }
+    try:
+        network_count = db.execute(
+            select(func.count(UserInterest.id)).where(UserInterest.user_pk == int(user_pk))
+        ).scalar_one_or_none()
+        resource_count = db.execute(
+            select(func.count(ResourcePostLike.id)).where(ResourcePostLike.user_pk == int(user_pk))
+        ).scalar_one_or_none()
+        circle_count = db.execute(
+            select(func.count(CircleInterest.id)).where(CircleInterest.user_pk == int(user_pk))
+        ).scalar_one_or_none()
+    except SQLAlchemyError as exc:
+        logger.warning(f"Failed to query user interest stats. user_pk={user_pk}, error={exc}")
+        db.rollback()
+        return stats
+
+    stats["network_interest_count"] = int(network_count or 0)
+    stats["resource_interest_count"] = int(resource_count or 0)
+    stats["circle_interest_count"] = int(circle_count or 0)
+    stats["interest_count"] = (
+        stats["network_interest_count"]
+        + stats["resource_interest_count"]
+        + stats["circle_interest_count"]
+    )
+    return stats
+
+
 def _serialize_privacy_settings(user, blocked_count: int) -> dict:
     return PrivacySettingsData(
         phone_visible_to_friends=bool(user.show_contact),
@@ -440,6 +477,7 @@ def _unlock_contact_with_package(
 
 def _serialize_user(user, request: Request, db: Session) -> dict:
     stats = _resolve_user_stats(db=db, user=user)
+    interest_stats = _resolve_interest_stats(db=db, user_pk=int(user.id))
     member_snapshot = resolve_member_snapshot(db=db, user_pk=int(user.id))
     contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=int(user.id))
     real_name_verified = _has_approved_real_name_verification(db=db, user=user)
@@ -477,6 +515,12 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
         "allow_auto_add_friend": bool(user.allow_auto_add_friend),
         "circle_count": int(stats["circle_count"] or 0),
         "network_count": int(stats["network_count"] or 0),
+        "interest_count": int(interest_stats["interest_count"] or 0),
+        "interested_count": int(interest_stats["interest_count"] or 0),
+        "follow_favorite_count": int(interest_stats["interest_count"] or 0),
+        "network_interest_count": int(interest_stats["network_interest_count"] or 0),
+        "resource_interest_count": int(interest_stats["resource_interest_count"] or 0),
+        "circle_interest_count": int(interest_stats["circle_interest_count"] or 0),
         "points": int(stats.get("points") or 0),
         "available_points": int(stats.get("available_points") or 0),
         "frozen_points": int(stats.get("frozen_points") or 0),

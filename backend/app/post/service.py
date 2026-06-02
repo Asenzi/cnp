@@ -1,8 +1,9 @@
 import base64
+from collections import Counter
 import hashlib
 import json
-from datetime import UTC, datetime
-from math import log1p
+from datetime import UTC, datetime, timedelta
+from math import exp, log1p
 from secrets import token_hex
 from typing import Any
 
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
 from app.models.circle import Circle
-from app.models.resource_post import ResourcePost, ResourcePostLike
+from app.models.resource_post import ResourcePost, ResourcePostImpression, ResourcePostLike, ResourcePostRecoFeedback
 from app.models.resource_post_circle_sync import ResourcePostCircleSync
 from app.models.user import User
 from app.models.user_circle_membership import UserCircleMembership
@@ -24,6 +25,9 @@ SUPPORTED_POST_MODES = {"cooperate", "resource", "venue"}
 SUPPORTED_SORT_KEYS = {"latest", "popular"}
 SUPPORTED_MANAGE_STATUS = {"active", "offline"}
 SUPPORTED_CIRCLE_SYNC_STATUS = {"pending", "approved", "rejected", "cancelled"}
+RESOURCE_POSITIVE_EVENTS = {"click_detail", "interest", "contact", "chat_start", "share"}
+RESOURCE_STRONG_POSITIVE_EVENTS = {"interest", "contact", "chat_start"}
+RESOURCE_NEGATIVE_EVENTS = {"cancel_interest", "dismiss", "report"}
 
 
 def _normalize_circle_codes(circle_codes: list[str] | None) -> list[str]:
@@ -250,6 +254,208 @@ def _request_rotation_jitter(*, viewer_user_pk: int, post_pk: int, request_salt:
     digest = hashlib.sha1(f"{viewer_user_pk}:{post_pk}:{request_salt}".encode("utf-8")).hexdigest()
     raw_value = int(digest[:8], 16) / 0xFFFFFFFF
     return max(0.0, min(raw_value, 1.0))
+
+
+def _smoothed_rate(successes: int, impressions: int, *, prior_rate: float, prior_strength: float) -> float:
+    safe_successes = max(int(successes or 0), 0)
+    safe_impressions = max(int(impressions or 0), 0)
+    return (safe_successes + (prior_rate * prior_strength)) / (safe_impressions + prior_strength)
+
+
+def _is_missing_reco_table_error(error: SQLAlchemyError) -> bool:
+    raw_args = getattr(getattr(error, "orig", None), "args", ())
+    return bool(raw_args and int(raw_args[0] or 0) == 1146)
+
+
+def _count_resource_impressions_in_days(
+    *,
+    db: Session,
+    post_ids: list[int],
+    days: int,
+    viewer_user_pk: int | None = None,
+) -> dict[int, int]:
+    if not post_ids:
+        return {}
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(int(days or 1), 1))
+    conditions = [
+        ResourcePostImpression.post_pk.in_(post_ids),
+        ResourcePostImpression.created_at >= since,
+    ]
+    if viewer_user_pk is not None:
+        conditions.append(ResourcePostImpression.viewer_user_pk == int(viewer_user_pk))
+    try:
+        rows = db.execute(
+            select(ResourcePostImpression.post_pk, func.count(ResourcePostImpression.id))
+            .where(*conditions)
+            .group_by(ResourcePostImpression.post_pk)
+        ).all()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        if _is_missing_reco_table_error(exc):
+            return {}
+        raise
+    return {int(post_pk): int(count or 0) for post_pk, count in rows}
+
+
+def _count_resource_feedback_in_days(
+    *,
+    db: Session,
+    post_ids: list[int],
+    days: int,
+    event_types: set[str],
+    viewer_user_pk: int | None = None,
+) -> dict[int, int]:
+    if not post_ids or not event_types:
+        return {}
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(int(days or 1), 1))
+    conditions = [
+        ResourcePostRecoFeedback.post_pk.in_(post_ids),
+        ResourcePostRecoFeedback.event_type.in_(event_types),
+        ResourcePostRecoFeedback.created_at >= since,
+    ]
+    if viewer_user_pk is not None:
+        conditions.append(ResourcePostRecoFeedback.viewer_user_pk == int(viewer_user_pk))
+    try:
+        rows = db.execute(
+            select(ResourcePostRecoFeedback.post_pk, func.count(ResourcePostRecoFeedback.id))
+            .where(*conditions)
+            .group_by(ResourcePostRecoFeedback.post_pk)
+        ).all()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        if _is_missing_reco_table_error(exc):
+            return {}
+        raise
+    return {int(post_pk): int(count or 0) for post_pk, count in rows}
+
+
+def _build_resource_intent_profile(db: Session, *, viewer_user_pk: int) -> dict[str, dict[str, float]]:
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+    try:
+        rows = db.execute(
+            select(
+                ResourcePost.industry_label,
+                User.city_name,
+                ResourcePostRecoFeedback.event_type,
+                ResourcePostRecoFeedback.created_at,
+            )
+            .join(ResourcePost, ResourcePost.id == ResourcePostRecoFeedback.post_pk)
+            .join(User, User.id == ResourcePost.author_user_pk)
+            .where(
+                ResourcePostRecoFeedback.viewer_user_pk == int(viewer_user_pk),
+                ResourcePostRecoFeedback.event_type.in_(RESOURCE_POSITIVE_EVENTS),
+                ResourcePostRecoFeedback.created_at >= since,
+            )
+            .order_by(ResourcePostRecoFeedback.created_at.desc(), ResourcePostRecoFeedback.id.desc())
+            .limit(120)
+        ).all()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        if _is_missing_reco_table_error(exc):
+            return {"industries": {}, "cities": {}}
+        raise
+    now = datetime.now(UTC).replace(tzinfo=None)
+    industry_weights: dict[str, float] = {}
+    city_weights: dict[str, float] = {}
+    event_weights = {
+        "click_detail": 1.0,
+        "share": 1.15,
+        "interest": 1.45,
+        "contact": 1.65,
+        "chat_start": 1.85,
+    }
+    for industry_label, city_name, event_type, created_at in rows:
+        if not isinstance(created_at, datetime):
+            continue
+        age_hours = max((now - created_at.replace(tzinfo=None)).total_seconds() / 3600, 0)
+        weight = float(event_weights.get(str(event_type or ""), 1.0)) * exp(-age_hours / 96.0)
+        clean_industry = _normalize_text(industry_label)
+        clean_city = _normalize_text(city_name)
+        if clean_industry:
+            industry_weights[clean_industry] = industry_weights.get(clean_industry, 0.0) + weight
+        if clean_city:
+            city_weights[clean_city] = city_weights.get(clean_city, 0.0) + (weight * 0.75)
+    return {
+        "industries": industry_weights,
+        "cities": city_weights,
+    }
+
+
+def _weighted_interest_lookup(score_map: dict[str, float], key: str | None) -> float:
+    clean_key = _normalize_text(key)
+    if not clean_key or not score_map:
+        return 0.0
+    peak = max(score_map.values()) if score_map else 0.0
+    if peak <= 0:
+        return 0.0
+    return _clamp_score(float(score_map.get(clean_key, 0.0)) / peak)
+
+
+def _resource_quality_score(post: ResourcePost, author: User) -> float:
+    images = _parse_images(post.images_json)
+    description_len = len(_normalize_text(post.description))
+    title_len = len(_normalize_text(post.title))
+    score = 0.18
+    if images:
+        score += min(len(images), 3) * 0.07
+    if 12 <= title_len <= 80:
+        score += 0.10
+    if description_len >= 80:
+        score += 0.18
+    elif description_len >= 30:
+        score += 0.10
+    if _normalize_text(post.industry_label):
+        score += 0.10
+    if bool(author.is_verified):
+        score += 0.12
+    if _normalize_text(author.company_name):
+        score += 0.05
+    if _normalize_text(author.job_title):
+        score += 0.05
+    return _clamp_score(score)
+
+
+def _apply_resource_diversity_window(
+    rows: list[tuple[float, tuple[ResourcePost, User, bool, bool, bool, dict[str, Any]]]],
+    *,
+    window_size: int,
+) -> list[tuple[float, tuple[ResourcePost, User, bool, bool, bool, dict[str, Any]]]]:
+    if len(rows) <= 1:
+        return rows
+    safe_window = min(max(int(window_size or 0), 1), len(rows))
+    pinned_rows = [row for row in rows if bool(row[1][0].is_pinned)]
+    regular_rows = [row for row in rows if not bool(row[1][0].is_pinned)]
+    selected_ids = {int(row[1][0].id) for row in pinned_rows[:safe_window]}
+    author_counter: Counter[int] = Counter(int(row[1][0].author_user_pk) for row in pinned_rows[:safe_window])
+    industry_counter: Counter[str] = Counter(_normalize_text(row[1][0].industry_label) for row in pinned_rows[:safe_window])
+    top_rows = pinned_rows[:safe_window]
+
+    for row in regular_rows:
+        if len(top_rows) >= safe_window:
+            break
+        post = row[1][0]
+        industry_key = _normalize_text(post.industry_label)
+        if author_counter[int(post.author_user_pk)] >= 2:
+            continue
+        if industry_key and industry_counter[industry_key] >= 5:
+            continue
+        selected_ids.add(int(post.id))
+        author_counter[int(post.author_user_pk)] += 1
+        if industry_key:
+            industry_counter[industry_key] += 1
+        top_rows.append(row)
+
+    for row in rows:
+        if len(top_rows) >= safe_window:
+            break
+        post = row[1][0]
+        if int(post.id) in selected_ids:
+            continue
+        selected_ids.add(int(post.id))
+        top_rows.append(row)
+
+    remaining_rows = [row for row in rows if int(row[1][0].id) not in selected_ids]
+    return top_rows + remaining_rows
 
 
 def _resource_keyword_bonus(post: ResourcePost, author: User, keyword: str | None) -> float:
@@ -541,7 +747,11 @@ def list_resource_posts(
     viewer_industry = _normalize_lower(viewer.industry_label)
     viewer_city = _normalize_lower(viewer.city_name)
 
-    where_conditions = [ResourcePost.status == "active", User.is_active.is_(True)]
+    where_conditions = [
+        ResourcePost.status == "active",
+        User.is_active.is_(True),
+        ResourcePost.author_user_pk != int(viewer_user_pk),
+    ]
     if safe_mode in SUPPORTED_POST_MODES:
         where_conditions.append(ResourcePost.mode == safe_mode)
     if safe_industry:
@@ -564,9 +774,56 @@ def list_resource_posts(
     )
 
     rows = db.execute(base_query).all()
+    post_ids = [int(post.id) for post, _ in rows]
+    viewer_impression_1d_map = _count_resource_impressions_in_days(
+        db=db,
+        post_ids=post_ids,
+        viewer_user_pk=int(viewer_user_pk),
+        days=1,
+    )
+    viewer_impression_7d_map = _count_resource_impressions_in_days(
+        db=db,
+        post_ids=post_ids,
+        viewer_user_pk=int(viewer_user_pk),
+        days=7,
+    )
+    viewer_positive_30d_map = _count_resource_feedback_in_days(
+        db=db,
+        post_ids=post_ids,
+        viewer_user_pk=int(viewer_user_pk),
+        days=30,
+        event_types=RESOURCE_STRONG_POSITIVE_EVENTS,
+    )
+    viewer_negative_30d_map = _count_resource_feedback_in_days(
+        db=db,
+        post_ids=post_ids,
+        viewer_user_pk=int(viewer_user_pk),
+        days=30,
+        event_types=RESOURCE_NEGATIVE_EVENTS,
+    )
+    global_impression_14d_map = _count_resource_impressions_in_days(db=db, post_ids=post_ids, days=14)
+    global_click_14d_map = _count_resource_feedback_in_days(
+        db=db,
+        post_ids=post_ids,
+        days=14,
+        event_types={"click_detail"},
+    )
+    global_strong_positive_14d_map = _count_resource_feedback_in_days(
+        db=db,
+        post_ids=post_ids,
+        days=14,
+        event_types=RESOURCE_STRONG_POSITIVE_EVENTS,
+    )
+    global_negative_14d_map = _count_resource_feedback_in_days(
+        db=db,
+        post_ids=post_ids,
+        days=14,
+        event_types=RESOURCE_NEGATIVE_EVENTS,
+    )
+    intent_profile = _build_resource_intent_profile(db=db, viewer_user_pk=int(viewer_user_pk))
 
     now = datetime.now(UTC).replace(tzinfo=None)
-    scored_rows: list[tuple[float, tuple[ResourcePost, User, bool, bool, bool]]] = []
+    scored_rows: list[tuple[float, tuple[ResourcePost, User, bool, bool, bool, dict[str, Any]]]] = []
     for post, author in rows:
         same_industry = bool(viewer_industry) and (
             _normalize_lower(post.industry_label) == viewer_industry
@@ -583,27 +840,97 @@ def list_resource_posts(
             + (log1p(max(int(post.comment_count or 0), 0)) / 4.2)
         )
         keyword_score = _resource_keyword_bonus(post=post, author=author, keyword=safe_keyword)
+        quality_score = _resource_quality_score(post=post, author=author)
+        global_impressions = int(global_impression_14d_map.get(int(post.id), 0))
+        click_rate = _smoothed_rate(
+            global_click_14d_map.get(int(post.id), 0),
+            global_impressions,
+            prior_rate=0.045,
+            prior_strength=10,
+        )
+        strong_positive_rate = _smoothed_rate(
+            global_strong_positive_14d_map.get(int(post.id), 0),
+            global_impressions,
+            prior_rate=0.025,
+            prior_strength=10,
+        )
+        negative_rate = _smoothed_rate(
+            global_negative_14d_map.get(int(post.id), 0),
+            global_impressions,
+            prior_rate=0.018,
+            prior_strength=10,
+        )
+        engagement_score = _clamp_score(
+            (click_rate / 0.18 * 0.45)
+            + (strong_positive_rate / 0.10 * 0.45)
+            + (popularity_score * 0.10)
+            - (negative_rate / 0.12 * 0.35)
+        )
+        intent_score = _clamp_score(
+            0.46 * float(same_industry)
+            + 0.20 * float(same_city)
+            + 0.22 * _weighted_interest_lookup(intent_profile["industries"], post.industry_label or author.industry_label)
+            + 0.12 * _weighted_interest_lookup(intent_profile["cities"], author.city_name)
+        )
+        cold_start_boost = 0.08 if global_impressions < 18 and freshness_days <= 7 and quality_score >= 0.55 else 0.0
+        exposure_penalty = min(float(viewer_impression_7d_map.get(int(post.id), 0)) * 0.08, 0.34)
+        negative_penalty = min(float(viewer_negative_30d_map.get(int(post.id), 0)) * 0.16, 0.40)
+        positive_boost = min(float(viewer_positive_30d_map.get(int(post.id), 0)) * 0.05, 0.12)
 
         if safe_sort == "popular":
             score = (
-                0.40 * popularity_score
-                + 0.18 * float(same_industry)
-                + 0.10 * float(same_city)
+                0.34 * engagement_score
+                + 0.18 * quality_score
+                + 0.16 * intent_score
                 + 0.14 * freshness_score
                 + 0.08 * float(author_verified)
                 + pinned_bonus
                 + keyword_score
+                + cold_start_boost
+                + positive_boost
+                - exposure_penalty
+                - negative_penalty
             )
         else:
             score = (
-                0.34 * freshness_score
-                + 0.20 * popularity_score
-                + 0.18 * float(same_industry)
-                + 0.10 * float(same_city)
+                0.28 * freshness_score
+                + 0.20 * quality_score
+                + 0.18 * intent_score
+                + 0.16 * engagement_score
                 + 0.08 * float(author_verified)
                 + pinned_bonus
                 + keyword_score
+                + cold_start_boost
+                + positive_boost
+                - exposure_penalty
+                - negative_penalty
             )
+
+        reason_tags: list[str] = []
+        if keyword_score > 0:
+            reason_tags.append("匹配搜索")
+        if cold_start_boost > 0:
+            reason_tags.append("新内容")
+        if same_industry:
+            reason_tags.append("同行业")
+        if same_city:
+            reason_tags.append("同城")
+        if engagement_score >= 0.55:
+            reason_tags.append("近期热度高")
+        if quality_score >= 0.72:
+            reason_tags.append("信息完整")
+        if author_verified:
+            reason_tags.append("已认证")
+        meta = {
+            "score": round(float(score), 4),
+            "quality_score": round(float(quality_score), 4),
+            "freshness_score": round(float(freshness_score), 4),
+            "engagement_score": round(float(engagement_score), 4),
+            "intent_score": round(float(intent_score), 4),
+            "global_impressions_14d": global_impressions,
+            "viewer_impressions_7d": int(viewer_impression_7d_map.get(int(post.id), 0)),
+            "reason_tags": reason_tags[:3],
+        }
 
         scored_rows.append(
             (
@@ -614,6 +941,7 @@ def list_resource_posts(
                     same_industry,
                     same_city,
                     author_verified,
+                    meta,
                 ),
             )
         )
@@ -636,8 +964,8 @@ def list_resource_posts(
             key=lambda item: (
                 not bool(item[1][0].is_pinned),
                 -_datetime_timestamp(item[1][0].pinned_at),
-                -item[0],
                 -_datetime_timestamp(item[1][0].created_at),
+                -item[0],
                 -int(item[1][0].view_count or 0),
                 -int(item[1][0].like_count or 0),
                 -int(item[1][0].id or 0),
@@ -649,19 +977,24 @@ def list_resource_posts(
         excluded_post_codes=excluded_post_code_set if offset <= 0 else set(),
         window_size=min(max(safe_limit, 10), len(scored_rows)),
     )
-    scored_rows = _shuffle_resource_rows(
-        rows=scored_rows,
-        viewer_user_pk=int(viewer_user_pk),
-        request_salt=active_request_id,
-        window_size=min(max(safe_limit * 2, 10), len(scored_rows)),
-    )
+    if safe_sort == "popular":
+        scored_rows = _apply_resource_diversity_window(
+            scored_rows,
+            window_size=min(max(safe_limit * 2, 10), len(scored_rows)),
+        )
+        scored_rows = _shuffle_resource_rows(
+            rows=scored_rows,
+            viewer_user_pk=int(viewer_user_pk),
+            request_salt=active_request_id,
+            window_size=min(max(safe_limit * 2, 10), len(scored_rows)),
+        )
 
     total = len(scored_rows)
     has_more = total > (offset + safe_limit)
     page_rows = scored_rows[offset : offset + safe_limit]
     next_cursor = _encode_cursor(offset + safe_limit) if has_more else None
 
-    post_ids = [int(post.id) for _, (post, _, _, _, _) in page_rows]
+    post_ids = [int(post.id) for _, (post, _, _, _, _, _) in page_rows]
     liked_set: set[int] = set()
     if post_ids:
         liked_rows = db.execute(
@@ -674,15 +1007,18 @@ def list_resource_posts(
         ).all()
         liked_set = {int(item[0]) for item in liked_rows}
 
-    items = [
-        _serialize_post(
+    items = []
+    for score, (post, author, _, _, _, meta) in page_rows:
+        item = _serialize_post(
             post=post,
             author=author,
             liked=(int(post.id) in liked_set),
             viewer_user_pk=viewer_user_pk,
         )
-        for _, (post, author, _, _, _) in page_rows
-    ]
+        item["reco_score"] = round(float(score), 4)
+        item["reason_tags"] = list(meta.get("reason_tags") or [])
+        item["reason_detail"] = meta
+        items.append(item)
     return {
         "request_id": active_request_id,
         "items": items,
@@ -690,6 +1026,148 @@ def list_resource_posts(
         "has_more": bool(has_more),
         "next_cursor": next_cursor or "",
     }
+
+
+def save_resource_post_impressions(
+    db: Session,
+    *,
+    viewer_user_pk: int,
+    post_codes: list[str],
+    scene: str,
+    tab: str,
+    request_id: str | None,
+) -> int:
+    normalized_codes: list[str] = []
+    seen_codes: set[str] = set()
+    for item in post_codes or []:
+        code = _normalize_text(item).upper()[:16]
+        if not code or code in seen_codes:
+            continue
+        seen_codes.add(code)
+        normalized_codes.append(code)
+    if not normalized_codes:
+        return 0
+
+    rows = db.execute(
+        select(ResourcePost.id, ResourcePost.post_code)
+        .where(
+            ResourcePost.post_code.in_(normalized_codes),
+            ResourcePost.status == "active",
+            ResourcePost.author_user_pk != int(viewer_user_pk),
+        )
+    ).all()
+    post_pk_by_code = {_normalize_text(code).upper(): int(post_pk) for post_pk, code in rows}
+    post_pks = list(post_pk_by_code.values())
+    if not post_pks:
+        return 0
+
+    clean_scene = _normalize_text(scene)[:16] or "resources"
+    clean_tab = _normalize_text(tab)[:16] or "cooperate"
+    clean_request_id = _normalize_text(request_id)[:64] or None
+    existing_post_pks: set[int] = set()
+    if clean_request_id:
+        existing_rows = db.execute(
+            select(ResourcePostImpression.post_pk).where(
+                ResourcePostImpression.viewer_user_pk == int(viewer_user_pk),
+                ResourcePostImpression.scene == clean_scene,
+                ResourcePostImpression.tab_key == clean_tab,
+                ResourcePostImpression.request_id == clean_request_id,
+                ResourcePostImpression.post_pk.in_(post_pks),
+            )
+        ).all()
+        existing_post_pks = {int(item[0]) for item in existing_rows}
+
+    inserted = 0
+    for post_pk in post_pks:
+        if post_pk in existing_post_pks:
+            continue
+        db.add(
+            ResourcePostImpression(
+                viewer_user_pk=int(viewer_user_pk),
+                post_pk=int(post_pk),
+                scene=clean_scene,
+                tab_key=clean_tab,
+                request_id=clean_request_id,
+            )
+        )
+        inserted += 1
+    if inserted:
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return 0
+    return inserted
+
+
+def save_resource_post_feedback(
+    db: Session,
+    *,
+    viewer_user_pk: int,
+    post_code: str,
+    scene: str,
+    tab: str,
+    request_id: str | None,
+    event_type: str,
+    ext: dict[str, Any] | None = None,
+) -> bool:
+    clean_code = _normalize_text(post_code).upper()[:16]
+    clean_event_type = _normalize_text(event_type)[:24]
+    if not clean_code or not clean_event_type:
+        return False
+    post = db.execute(
+        select(ResourcePost)
+        .where(
+            ResourcePost.post_code == clean_code,
+            ResourcePost.status == "active",
+            ResourcePost.author_user_pk != int(viewer_user_pk),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if post is None:
+        return False
+
+    clean_scene = _normalize_text(scene)[:16] or "resources"
+    clean_tab = _normalize_text(tab)[:16] or "cooperate"
+    clean_request_id = _normalize_text(request_id)[:64] or None
+    if clean_request_id:
+        exists = db.execute(
+            select(ResourcePostRecoFeedback.id).where(
+                ResourcePostRecoFeedback.viewer_user_pk == int(viewer_user_pk),
+                ResourcePostRecoFeedback.post_pk == int(post.id),
+                ResourcePostRecoFeedback.scene == clean_scene,
+                ResourcePostRecoFeedback.tab_key == clean_tab,
+                ResourcePostRecoFeedback.request_id == clean_request_id,
+                ResourcePostRecoFeedback.event_type == clean_event_type,
+            )
+        ).scalar_one_or_none()
+        if exists is not None:
+            return False
+
+    ext_json = None
+    if isinstance(ext, dict) and ext:
+        try:
+            ext_json = json.dumps(ext, ensure_ascii=False)[:2000]
+        except Exception:  # noqa: BLE001
+            ext_json = None
+
+    db.add(
+        ResourcePostRecoFeedback(
+            viewer_user_pk=int(viewer_user_pk),
+            post_pk=int(post.id),
+            event_type=clean_event_type,
+            scene=clean_scene,
+            tab_key=clean_tab,
+            request_id=clean_request_id,
+            ext_json=ext_json,
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return False
+    return True
 
 
 def create_resource_post(

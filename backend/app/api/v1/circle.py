@@ -570,6 +570,151 @@ def toggle_circle_interest(
     )
 
 
+@router.get('/join-requests', summary='Get circle join requests for current user circles')
+def get_join_requests(
+    status: str | None = Query(None, description="Filter by status: pending, approved, rejected"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    """获取当前用户作为圈主收到的加入申请"""
+    from app.models.circle_join_request import CircleJoinRequest
+
+    # 获取当前用户拥有的圈子
+    user = _require_current_user(db=db, current_user_pk=user_id)
+    owned_circles = db.execute(
+        select(Circle).where(Circle.owner_user_pk == user.id)
+    ).scalars().all()
+
+    if not owned_circles:
+        return success_response(data={'items': [], 'total': 0, 'offset': offset, 'limit': limit})
+
+    circle_codes = [c.circle_code for c in owned_circles]
+
+    # 查询加入申请
+    query = select(CircleJoinRequest).where(CircleJoinRequest.circle_code.in_(circle_codes))
+
+    if status:
+        query = query.where(CircleJoinRequest.status == status)
+
+    query = query.order_by(CircleJoinRequest.created_at.desc())
+
+    # 获取总数（简化实现，直接用结果集长度）
+    all_requests = db.execute(query).scalars().all()
+    total = len(all_requests)
+
+    # 分页
+    paginated_requests = all_requests[offset:offset + limit]
+
+    # 构建响应
+    items = []
+    for req in paginated_requests:
+        # 获取申请人信息
+        applicant = db.execute(select(User).where(User.id == req.user_pk)).scalar_one_or_none()
+        # 获取圈子信息
+        circle = db.execute(select(Circle).where(Circle.circle_code == req.circle_code)).scalar_one_or_none()
+
+        items.append({
+            'id': req.id,
+            'user_pk': req.user_pk,
+            'circle_code': req.circle_code,
+            'status': req.status,
+            'message': req.message,
+            'reject_reason': req.reject_reason,
+            'reviewed_at': req.reviewed_at.isoformat() if req.reviewed_at else None,
+            'created_at': req.created_at.isoformat(),
+            'updated_at': req.updated_at.isoformat(),
+            'user': {
+                'user_id': applicant.user_id if applicant else '',
+                'nickname': applicant.nickname if applicant else '未知用户',
+                'avatar_url': applicant.avatar_url if applicant else '/static/logo.png',
+            } if applicant else None,
+            'circle': {
+                'circle_code': circle.circle_code if circle else req.circle_code,
+                'name': circle.name if circle else '',
+            } if circle else None,
+        })
+
+    return success_response(data={'items': items, 'total': total, 'offset': offset, 'limit': limit})
+
+
+@router.post('/join-requests/{request_id}/review', summary='Review circle join request')
+def review_join_request(
+    request_id: int,
+    payload: dict,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    """审批圈子加入申请"""
+    from app.models.circle_join_request import CircleJoinRequest
+    from app.models.user_circle_membership import UserCircleMembership
+
+    action = payload.get('action', '')
+    reject_reason = payload.get('reject_reason')
+
+    user = _require_current_user(db=db, current_user_pk=user_id)
+
+    # 获取申请
+    join_request = db.execute(
+        select(CircleJoinRequest).where(CircleJoinRequest.id == request_id)
+    ).scalar_one_or_none()
+
+    if not join_request:
+        raise BusinessException(code=404, message='申请不存在')
+
+    # 检查圈子是否属于当前用户
+    circle = db.execute(
+        select(Circle).where(Circle.circle_code == join_request.circle_code)
+    ).scalar_one_or_none()
+
+    if not circle or circle.owner_user_pk != user.id:
+        raise BusinessException(code=403, message='无权操作此申请')
+
+    # 检查申请状态
+    if join_request.status != 'pending':
+        raise BusinessException(code=400, message='该申请已处理')
+
+    # 处理申请
+    if action == 'approve':
+        # 通过申请 - 创建成员关系
+        join_request.status = 'approved'
+        join_request.reviewed_at = datetime.now(UTC)
+
+        # 检查是否已经是成员
+        existing_membership = db.execute(
+            select(UserCircleMembership).where(
+                UserCircleMembership.user_pk == join_request.user_pk,
+                UserCircleMembership.circle_code == join_request.circle_code
+            )
+        ).scalar_one_or_none()
+
+        if not existing_membership:
+            membership = UserCircleMembership(
+                user_pk=join_request.user_pk,
+                circle_code=join_request.circle_code,
+                role='member',
+                joined_at=datetime.now(UTC)
+            )
+            db.add(membership)
+
+            # 更新圈子成员数
+            circle.member_count = (circle.member_count or 0) + 1
+
+    elif action == 'reject':
+        # 拒绝申请
+        join_request.status = 'rejected'
+        join_request.reviewed_at = datetime.now(UTC)
+        join_request.reject_reason = reject_reason or '不符合圈子要求'
+
+    else:
+        raise BusinessException(code=400, message='无效的操作')
+
+    db.commit()
+
+    return success_response(message=f'申请已{"通过" if action == "approve" else "拒绝"}')
+
+
 @router.get('/{circle_code}', summary='Get circle detail')
 def get_circle_detail(
     circle_code: str,
@@ -714,3 +859,4 @@ def post_circle_sync_review(
         reject_reason=payload.reject_reason,
     )
     return success_response(data=result, message='审核处理成功')
+

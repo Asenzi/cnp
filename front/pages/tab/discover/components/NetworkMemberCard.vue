@@ -153,7 +153,7 @@ defineEmits(['view', 'verify', 'interest'])
   right: -4rpx;
   bottom: -4rpx;
   min-width: 28rpx;
-  height: 28rpx;
+  height: 40rpx;
   padding: 0 6rpx;
   border-radius: 999rpx;
   border: 3rpx solid #ffffff;

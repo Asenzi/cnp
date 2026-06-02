@@ -2,11 +2,13 @@ from .base import Base
 from .admin_user import AdminUser
 from .circle import Circle
 from .circle_interest import CircleInterest
+from .circle_join_request import CircleJoinRequest
 from .content_review import ContentReview
 from .member_order import MemberOrder
 from .network_reco_feedback import NetworkRecoFeedback
 from .network_reco_impression import NetworkRecoImpression
-from .resource_post import ResourcePost, ResourcePostLike
+from .notification import Notification
+from .resource_post import ResourcePost, ResourcePostImpression, ResourcePostLike, ResourcePostRecoFeedback
 from .resource_post_circle_sync import ResourcePostCircleSync
 from .system_notice import SystemNotice
 from .sys_config import SysConfig
@@ -33,12 +35,16 @@ __all__ = [
     "AdminUser",
     "Circle",
     "CircleInterest",
+    "CircleJoinRequest",
     "ContentReview",
     "MemberOrder",
     "NetworkRecoFeedback",
     "NetworkRecoImpression",
+    "Notification",
     "ResourcePost",
+    "ResourcePostImpression",
     "ResourcePostLike",
+    "ResourcePostRecoFeedback",
     "ResourcePostCircleSync",
     "SystemNotice",
     "SysConfig",

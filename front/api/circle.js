@@ -219,3 +219,43 @@ export function getInterestedCircles(params = {}) {
     method: 'GET'
   })
 }
+
+// 获取圈子加入申请列表
+export function getCircleJoinRequests(params = {}) {
+  const status = String(params.status || '').trim()
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (status) {
+    query.push(`status=${encodeURIComponent(status)}`)
+  }
+  return request({
+    url: `/api/v1/circle/join-requests?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+// 审批圈子加入申请
+export function reviewCircleJoinRequest(requestId, payload = {}) {
+  const safeRequestId = encodeURIComponent(String(requestId || '').trim())
+  return request({
+    url: `/api/v1/circle/join-requests/${safeRequestId}/review`,
+    method: 'POST',
+    data: {
+      action: String(payload.action || '').trim(), // 'approve' or 'reject'
+      reject_reason: String(payload.reject_reason || '').trim()
+    }
+  })
+}
+
+// 提交圈子加入申请
+export function submitCircleJoinRequest(circleCode, payload = {}) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  return request({
+    url: `/api/v1/circle/${safeCode}/join-request`,
+    method: 'POST',
+    data: {
+      message: String(payload.message || '').trim()
+    }
+  })
+}

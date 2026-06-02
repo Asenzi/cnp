@@ -36,6 +36,10 @@
               <text class="stat-num">{{ displayInterestCount }}</text>
               <text class="stat-name">感兴趣</text>
             </view>
+            <view class="stat" @tap="goMessages">
+              <text class="stat-num" :class="{ 'stat-num-message': unreadMessageCount > 0 }">{{ unreadMessageCountText }}</text>
+              <text class="stat-name">消息</text>
+            </view>
             <view class="stat" @tap="goWallet">
               <text class="stat-num">{{ displayBalance }}</text>
               <text class="stat-name">余额</text>
@@ -99,12 +103,14 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getCurrentUserProfile } from '../../../api/user'
+import { getUnreadNotificationCount } from '../../../api/notification'
 import { serviceList, settingList } from './modules/me-data'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
 const isLoggedIn = ref(false)
 const currentUser = ref({})
+const unreadMessageCount = ref(0)
 
 const DEFAULT_AVATAR = '/static/logo.png'
 
@@ -143,7 +149,14 @@ const displayCircleCount = computed(() => {
 })
 
 const displayInterestCount = computed(() => {
-  return '--'
+  const info = currentUser.value || {}
+  const count = info.follow_favorite_count
+    ?? info.favorite_count
+    ?? info.collect_count
+    ?? info.interest_count
+    ?? info.interested_count
+  const numericCount = Number(count)
+  return Number.isFinite(numericCount) && numericCount >= 0 ? String(numericCount) : '0'
 })
 
 const displayBalance = computed(() => {
@@ -152,6 +165,13 @@ const displayBalance = computed(() => {
     return `¥${balance.toFixed(2)}`
   }
   return '¥0.00'
+})
+
+const unreadMessageCountText = computed(() => {
+  const count = unreadMessageCount.value
+  if (count === 0) return '--'
+  if (count > 99) return '99+'
+  return String(count)
 })
 
 const isTruthyValue = (value) => {
@@ -250,6 +270,10 @@ const goInterests = () => {
   uni.navigateTo({ url: '/pages/me/interests/index' })
 }
 
+const goMessages = () => {
+  uni.navigateTo({ url: '/pages/me/messages/index' })
+}
+
 const onNeedLogin = () => {
   uni.showToast({ title: '请先登录', icon: 'none' })
 }
@@ -312,10 +336,24 @@ const refreshUserProfileFromServer = async () => {
     uni.setStorageSync('userInfo', profile || {})
     currentUser.value = profile || {}
     isLoggedIn.value = true
+
+    // 加载未读消息数量
+    loadUnreadMessageCount()
   } catch (err) {
     if (err?.statusCode === 401) {
       clearLoginState()
     }
+  }
+}
+
+const loadUnreadMessageCount = async () => {
+  try {
+    const data = await getUnreadNotificationCount()
+    const count = Number(data?.unread_count || data?.count || 0)
+    unreadMessageCount.value = count
+  } catch (err) {
+    console.error('加载未读消息数量失败:', err)
+    unreadMessageCount.value = 0
   }
 }
 
@@ -432,8 +470,8 @@ onShow(() => {
 }
 
 .edit-icon {
-  width: 28rpx;
-  height: 28rpx;
+  width: 40rpx;
+  height: 40rpx;
 }
 
 .intro {
@@ -467,6 +505,10 @@ onShow(() => {
   font-size: 32rpx;
   font-weight: 600;
   color: #172033;
+}
+
+.stat-num-message {
+  color: #ef4444;
 }
 
 .stat-name {
@@ -564,8 +606,8 @@ onShow(() => {
 }
 
 .service-icon {
-  width: 80rpx;
-  height: 80rpx;
+  width: 66rpx;
+  height: 66rpx;
 }
 
 .service-name {

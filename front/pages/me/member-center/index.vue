@@ -37,7 +37,7 @@
               <switch
                 v-if="selectedPlanOffer.enabled && selectedPlanOffer.canUse"
                 :checked="usePointsDiscount"
-                color="#1a57db"
+                color="#2f5fbd"
                 @change="onTogglePointsDiscount"
               />
               <button
@@ -154,12 +154,19 @@ const normalizeBenefitList = (list) => {
   if (!Array.isArray(list)) {
     return []
   }
+  const benefitIconPaths = [
+    '/static/icon/1.png',
+    '/static/icon/2.png',
+    '/static/icon/3.png',
+    '/static/icon/4.png',
+    '/static/icon/5.png'
+  ]
   return list
     .map((item, index) => ({
       key: String(item?.key || `benefit_${index + 1}`).trim(),
       title: String(item?.title || '').trim(),
       desc: String(item?.desc || '').trim(),
-      iconPath: String(item?.icon_path || item?.iconPath || '').trim(),
+      iconPath: benefitIconPaths[index] || String(item?.icon_path || item?.iconPath || '').trim(),
       iconText: String(item?.icon_text || item?.iconText || '').trim() || 'V',
       wide: Boolean(item?.wide)
     }))
@@ -771,8 +778,8 @@ onShow(async () => {
   margin-top: 18px;
   padding: 18px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #1a57db 0%, #2768ec 100%);
-  box-shadow: 0 12px 28px rgba(26, 87, 219, 0.18);
+  background: linear-gradient(135deg, #2f5fbd 0%, #315fa8 100%);
+  box-shadow: none;
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -836,11 +843,11 @@ onShow(async () => {
 
 .section-title {
   display: block;
-  margin-bottom: 24rpx;
+  margin-bottom: 40rpx;
   color: #0f172a;
-  font-size: 32rpx;
-  line-height: 44rpx;
-  font-weight: 700;
+  font-size: 30rpx;
+  line-height: 30rpx;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
@@ -865,7 +872,7 @@ onShow(async () => {
   padding: 18px;
   border-radius: 16px;
   background: #ffffff;
-  border: 1px solid #dbeafe;
+  border: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -878,7 +885,7 @@ onShow(async () => {
 
 .points-offer-title {
   display: block;
-  color: #1d4ed8;
+  color: #2f5fbd;
   font-size: 16px;
   line-height: 24px;
   font-weight: 700;
@@ -914,7 +921,7 @@ onShow(async () => {
   border-radius: 999px;
   border: 0;
   background: rgba(26, 87, 219, 0.1);
-  color: #1a57db;
+  color: #2f5fbd;
   font-size: 12px;
   font-weight: 700;
 }
@@ -953,9 +960,10 @@ onShow(async () => {
   right: 0;
   bottom: 0;
   z-index: 20;
-  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
-  border-top: 1rpx solid #e2e8f0;
+  padding: 23rpx 41rpx calc(env(safe-area-inset-bottom));
+  border-top: 0;
   background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
 
@@ -965,13 +973,13 @@ onShow(async () => {
   line-height: 96rpx;
   border: 0;
   border-radius: 24rpx;
-  background: linear-gradient(135deg, #1a57db 0%, #1548b8 100%);
+  background: #0676af;
   color: #ffffff;
   font-size: 32rpx;
   font-weight: 700;
   letter-spacing: 0.02em;
   font-family: var(--member-body-font);
-  box-shadow: 0 8rpx 24rpx rgba(26, 87, 219, 0.35), 0 2rpx 8rpx rgba(26, 87, 219, 0.2);
+  box-shadow: none;
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
@@ -1002,12 +1010,12 @@ onShow(async () => {
 
 .open-btn-active {
   transform: translateY(-2rpx);
-  box-shadow: 0 12rpx 32rpx rgba(26, 87, 219, 0.4), 0 4rpx 12rpx rgba(26, 87, 219, 0.25);
+  box-shadow: none;
 }
 
 .open-btn-disabled {
   opacity: 0.6;
-  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.15);
+  box-shadow: none;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1019,7 +1027,6 @@ onShow(async () => {
   .points-offer-price,
   .points-offer-card {
     background: #0f172a;
-    border-color: #1e3a8a;
   }
 
   .points-offer-desc,
@@ -1029,7 +1036,6 @@ onShow(async () => {
 
   .bottom-bar {
     background: rgba(17, 22, 33, 0.9);
-    border-top-color: #1e293b;
   }
 }
 </style>

@@ -125,3 +125,92 @@ class ResourcePostLike(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class ResourcePostImpression(Base):
+    __tablename__ = "resource_post_impressions"
+    __table_args__ = (
+        UniqueConstraint(
+            "viewer_user_pk",
+            "post_pk",
+            "scene",
+            "tab_key",
+            "request_id",
+            name="uq_resource_post_impressions_request_post",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    viewer_user_pk: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    post_pk: Mapped[int] = mapped_column(
+        ForeignKey("resource_posts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    scene: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="resources",
+    )
+    tab_key: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="cooperate",
+    )
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        index=True,
+    )
+
+
+class ResourcePostRecoFeedback(Base):
+    __tablename__ = "resource_post_reco_feedback"
+    __table_args__ = (
+        UniqueConstraint(
+            "viewer_user_pk",
+            "post_pk",
+            "scene",
+            "tab_key",
+            "request_id",
+            "event_type",
+            name="uq_resource_post_reco_feedback_request_event",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    viewer_user_pk: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    post_pk: Mapped[int] = mapped_column(
+        ForeignKey("resource_posts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    scene: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="resources",
+    )
+    tab_key: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="cooperate",
+    )
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ext_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        index=True,
+    )

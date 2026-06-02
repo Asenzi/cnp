@@ -188,7 +188,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onShareAppMessage } from '@dcloudio/uni-app'
-import { getResourceDetail, reportResourceView } from '../../../api/post'
+import { getResourceDetail, reportResourceFeedback, reportResourceView } from '../../../api/post'
 import { getUserProfileById } from '../../../api/user'
 
 const postCode = ref('')
@@ -374,6 +374,25 @@ const showToast = (title) => {
   })
 }
 
+const reportDetailFeedback = (eventType, ext = {}) => {
+  const normalizedCode = String(postCode.value || post.value?.post_code || '').trim()
+  const normalizedEvent = String(eventType || '').trim()
+  if (!normalizedCode || !normalizedEvent || isSelfPost.value) {
+    return
+  }
+  reportResourceFeedback({
+    post_code: normalizedCode,
+    event_type: normalizedEvent,
+    tab: String(post.value?.mode || 'cooperate').trim() || 'cooperate',
+    ext: {
+      source: 'resource_detail',
+      ...ext
+    }
+  }).catch(() => {
+    // 推荐反馈失败不影响详情页操作。
+  })
+}
+
 const formatNumber = (value) => {
   const num = Number(value || 0)
   if (!Number.isFinite(num) || num <= 0) {
@@ -435,6 +454,7 @@ const onTapProfile = () => {
 }
 
 const onShare = () => {
+  reportDetailFeedback('share')
   if (typeof uni.showShareMenu === 'function') {
     uni.showShareMenu({
       withShareTicket: false
@@ -471,6 +491,7 @@ const onChat = async () => {
     showToast('作者信息缺失')
     return
   }
+  reportDetailFeedback('contact')
   cardPopupVisible.value = true
   await loadCardProfile(targetUserId)
 }
@@ -481,6 +502,7 @@ const goChatFromCard = () => {
     showToast('作者信息缺失')
     return
   }
+  reportDetailFeedback('chat_start')
   cardPopupVisible.value = false
   const name = encodeURIComponent(cardName.value)
   const avatar = encodeURIComponent(cardAvatar.value)

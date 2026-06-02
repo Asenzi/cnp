@@ -86,6 +86,16 @@
       }
     },
     {
+      "path": "pages/me/messages/index",
+      "style": {
+        "navigationBarTitleText": "消息",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/me/points/index",
       "style": {
         "navigationBarTitleText": "获取积分",

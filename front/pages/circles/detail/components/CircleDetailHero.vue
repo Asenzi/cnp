@@ -49,7 +49,7 @@ const toggleDescription = () => {
 <style scoped>
 .banner-image {
   width: 100%;
-  height: 280rpx;
+  height: 400rpx;
   background: #e5e7eb;
 }
 

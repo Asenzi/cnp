@@ -1,9 +1,21 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 PostMode = Literal["cooperate", "resource", "venue"]
 PostSort = Literal["latest", "popular"]
+ResourceRecoScene = Literal["resources"]
+ResourceRecoTab = Literal["cooperate", "resource", "venue"]
+ResourceRecoEventType = Literal[
+    "click_detail",
+    "interest",
+    "cancel_interest",
+    "contact",
+    "chat_start",
+    "share",
+    "dismiss",
+    "report",
+]
 
 
 class ResourcePostCreateRequest(BaseModel):
@@ -68,3 +80,41 @@ class ResourcePostStatusPayload(BaseModel):
 
 class ResourcePostPinPayload(BaseModel):
     pinned: bool = True
+
+
+class ResourcePostImpressionsBatchRequest(BaseModel):
+    request_id: str | None = Field(default=None, max_length=64)
+    scene: ResourceRecoScene = "resources"
+    tab: ResourceRecoTab = "cooperate"
+    post_codes: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("post_codes", mode="before")
+    @classmethod
+    def normalize_post_codes(cls, value):  # noqa: ANN206
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("post_codes must be list")
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            code = str(item or "").strip().upper()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            normalized.append(code[:16])
+        return normalized[:100]
+
+
+class ResourcePostRecoFeedbackRequest(BaseModel):
+    request_id: str | None = Field(default=None, max_length=64)
+    scene: ResourceRecoScene = "resources"
+    tab: ResourceRecoTab = "cooperate"
+    post_code: str = Field(..., min_length=4, max_length=16)
+    event_type: ResourceRecoEventType
+    ext: dict[str, Any] | None = None
+
+    @field_validator("post_code", mode="before")
+    @classmethod
+    def normalize_post_code(cls, value):  # noqa: ANN206
+        return str(value or "").strip().upper()[:16]

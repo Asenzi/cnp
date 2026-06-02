@@ -17,14 +17,12 @@
 
     <view class="field-block">
       <text class="field-label">所属行业/分类</text>
-      <picker :range="industryOptions" :value="industryIndex" @change="onChangeIndustry">
-        <view class="picker-wrap">
-          <text class="picker-text" :class="{ 'picker-text-placeholder': !industry }">
-            {{ industry || '请选择行业' }}
-          </text>
-          <image class="picker-arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
-        </view>
-      </picker>
+      <view class="picker-wrap" @tap="emit('openIndustryPicker')">
+        <text class="picker-text" :class="{ 'picker-text-placeholder': !industry }">
+          {{ industry || '请选择行业' }}
+        </text>
+        <image class="picker-arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+      </view>
     </view>
 
     <view class="field-block">
@@ -42,8 +40,6 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-
 const props = defineProps({
   name: {
     type: String,
@@ -56,29 +52,10 @@ const props = defineProps({
   description: {
     type: String,
     default: ''
-  },
-  industryOptions: {
-    type: Array,
-    default: () => []
   }
 })
 
-const emit = defineEmits(['update:name', 'update:industry', 'update:description'])
-
-const industryIndex = computed(() => {
-  if (!props.industry) {
-    return 0
-  }
-  const idx = props.industryOptions.findIndex((item) => item === props.industry)
-  return idx < 0 ? 0 : idx
-})
-
-const onChangeIndustry = (event) => {
-  const index = Number(event?.detail?.value ?? -1)
-  if (index >= 0 && index < props.industryOptions.length) {
-    emit('update:industry', props.industryOptions[index])
-  }
-}
+const emit = defineEmits(['update:name', 'update:industry', 'update:description', 'openIndustryPicker'])
 </script>
 
 <style scoped>

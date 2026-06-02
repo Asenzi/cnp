@@ -39,6 +39,37 @@ export function getResourceFeed(params = {}) {
   })
 }
 
+export function reportResourceImpressions(payload = {}) {
+  const postCodes = Array.isArray(payload.post_codes)
+    ? payload.post_codes.map((item) => String(item || '').trim()).filter(Boolean)
+    : []
+  return request({
+    url: '/api/v1/post/impressions/batch',
+    method: 'POST',
+    data: {
+      request_id: String(payload.request_id || '').trim(),
+      scene: String(payload.scene || 'resources').trim() || 'resources',
+      tab: String(payload.tab || 'cooperate').trim() || 'cooperate',
+      post_codes: postCodes
+    }
+  })
+}
+
+export function reportResourceFeedback(payload = {}) {
+  return request({
+    url: '/api/v1/post/feedback',
+    method: 'POST',
+    data: {
+      request_id: String(payload.request_id || '').trim(),
+      scene: String(payload.scene || 'resources').trim() || 'resources',
+      tab: String(payload.tab || 'cooperate').trim() || 'cooperate',
+      post_code: String(payload.post_code || '').trim(),
+      event_type: String(payload.event_type || '').trim(),
+      ext: payload.ext && typeof payload.ext === 'object' ? payload.ext : {}
+    }
+  })
+}
+
 export function getMyResourceFeed(params = {}) {
   const query = buildQuery({
     status: String(params.status || '').trim(),

@@ -116,7 +116,6 @@ const openCircle = () => {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
-  border: 1rpx solid rgba(15, 23, 42, 0.06);
 }
 
 .circle-card-active {
@@ -138,7 +137,6 @@ const openCircle = () => {
 }
 
 .circle-cover-placeholder {
-  border: 1rpx dashed #cbd5e1;
   background:
     linear-gradient(135deg, rgba(148, 163, 184, 0.12), rgba(226, 232, 240, 0.35)),
     #f8fafc;

@@ -14,10 +14,10 @@
           :name="form.name"
           :industry="form.industry"
           :description="form.description"
-          :industry-options="industryOptions"
           @update:name="form.name = $event"
           @update:industry="form.industry = $event"
           @update:description="form.description = $event"
+          @openIndustryPicker="industryPickerVisible = true"
         />
 
         <CreateJoinMechanismCard
@@ -36,6 +36,13 @@
     </scroll-view>
 
     <CreateBottomAction :loading="submitting" :text="submitButtonText" @submit="onSubmit" />
+
+    <IndustryPickerPanel
+      :visible="industryPickerVisible"
+      :value="form.industry"
+      @close="industryPickerVisible = false"
+      @confirm="onConfirmIndustry"
+    />
   </view>
 </template>
 
@@ -50,14 +57,15 @@ import CreateBottomAction from './components/CreateBottomAction.vue'
 import CreateCoverUploader from './components/CreateCoverUploader.vue'
 import CreateJoinMechanismCard from './components/CreateJoinMechanismCard.vue'
 import CreateRulesCard from './components/CreateRulesCard.vue'
+import IndustryPickerPanel from './components/IndustryPickerPanel.vue'
 import {
   defaultCircleAvatar,
   defaultCoverImage,
-  industryOptions,
   joinTypeOptions
 } from './modules/create-circle-form'
 
 const submitting = ref(false)
+const industryPickerVisible = ref(false)
 
 const form = reactive({
   coverUrl: defaultCoverImage,
@@ -188,6 +196,11 @@ const validateForm = () => {
 onShow(() => {
   loadCurrentUserProfile()
 })
+
+const onConfirmIndustry = (industry) => {
+  form.industry = industry
+  industryPickerVisible.value = false
+}
 
 const onSubmit = async () => {
   if (submitting.value) {

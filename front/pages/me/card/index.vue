@@ -14,7 +14,7 @@
         <ProfileHeroSection :profile="pageData.profile" :show-action="true" action-type="share" />
         <ProfileBioSection :bio="pageData.profile.bio" />
         <ProfileContactSection :contact="contactSectionData" />
-        <ProfileStatsSection :stats="pageData.stats" />
+        <!-- <ProfileStatsSection :stats="pageData.stats" /> -->
 
         <view class="tab-divider"></view>
         <view class="tabs-sticky">

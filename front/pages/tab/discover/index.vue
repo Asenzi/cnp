@@ -829,7 +829,6 @@ const mapMemberCard = (item = {}) => {
   const cityName = String(item.city_name || '').trim()
   const intro = String(item.intro || '').trim()
   const industryLabel = String(item.industry_label || '').trim()
-  const companyName = String(item.company_name || '').trim()
   const jobTitle = String(item.job_title || '').trim()
   const reasonTags = Array.isArray(item.reason_tags)
     ? item.reason_tags.map((tag) => normalizeTag(tag)).filter(Boolean)
@@ -858,7 +857,7 @@ const mapMemberCard = (item = {}) => {
     name: String(item.nickname || '').trim() || uiText.unnamedUser,
     verifyType: Boolean(item.is_verified) ? 'lv1' : '',
     verifyText: Boolean(item.is_verified) ? uiText.verifyLv1 : '',
-    detailLine: joinNonEmpty(industryLabel, companyName, jobTitle) || industryLabel || cityName || uiText.defaultRole,
+    detailLine: joinNonEmpty(industryLabel, jobTitle) || industryLabel || cityName || uiText.defaultRole,
     circleTags: visibleCircleTags,
     reasonTags,
     activeText: String(item.active_text || '').trim() || uiText.activeFallback,

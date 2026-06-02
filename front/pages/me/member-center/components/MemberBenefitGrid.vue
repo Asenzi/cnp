@@ -36,19 +36,19 @@ defineProps({
 
 .benefit-card {
   background: #ffffff;
-  border: 1rpx solid #e5e7eb;
+  border: 0;
   border-radius: 16rpx;
   padding: 28rpx;
   display: flex;
   flex-direction: column;
   gap: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04), 0 1rpx 2rpx rgba(0, 0, 0, 0.02);
+  box-shadow: none;
   transition: all 0.2s ease;
 }
 
 .benefit-card:active {
   transform: scale(0.98);
-  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.06);
+  box-shadow: none;
 }
 
 .is-wide {
@@ -60,13 +60,13 @@ defineProps({
 .benefit-icon {
   width: 72rpx;
   height: 72rpx;
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  background: linear-gradient(135deg, #e8f1ff 0%, #d7e6fb 100%);
   border-radius: 14rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2rpx 8rpx rgba(59, 130, 246, 0.15), inset 0 1rpx 0 rgba(255, 255, 255, 0.5);
+  box-shadow: none;
 }
 
 .icon-img {
@@ -75,7 +75,7 @@ defineProps({
 }
 
 .icon-text {
-  color: #1a57db;
+  color: #2f5fbd;
   font-size: 28rpx;
   font-weight: 700;
 }
@@ -88,16 +88,16 @@ defineProps({
 .benefit-title {
   display: block;
   color: #111827;
-  font-size: 28rpx;
-  line-height: 36rpx;
-  font-weight: 600;
+  font-size: 24rpx;
+  line-height: 32rpx;
+  font-weight: 500;
   margin-bottom: 6rpx;
 }
 
 .benefit-desc {
   display: block;
   color: #6b7280;
-  font-size: 24rpx;
+  font-size: 22rpx;
   line-height: 32rpx;
 }
 </style>

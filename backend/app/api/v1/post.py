@@ -22,6 +22,8 @@ from app.post import (
     list_resource_filter_options,
     list_resource_posts,
     list_user_resource_posts,
+    save_resource_post_feedback,
+    save_resource_post_impressions,
     set_resource_post_like,
     set_resource_post_pin,
     set_resource_post_status,
@@ -30,7 +32,9 @@ from app.post import (
 from app.review import submit_post_review
 from app.schemas.post import (
     ResourcePostCreateRequest,
+    ResourcePostImpressionsBatchRequest,
     ResourcePostPinPayload,
+    ResourcePostRecoFeedbackRequest,
     ResourcePostStatusPayload,
 )
 
@@ -142,6 +146,50 @@ def get_post_filters(
     _require_current_user(db=db, current_user_pk=user_id)
     payload = list_resource_filter_options(db=db)
     return success_response(data=payload)
+
+
+@router.post("/impressions/batch", summary="上报资源推荐曝光")
+def report_post_impressions_batch(
+    payload: ResourcePostImpressionsBatchRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+    recorded = save_resource_post_impressions(
+        db=db,
+        viewer_user_pk=user_id,
+        post_codes=payload.post_codes,
+        scene=payload.scene,
+        tab=payload.tab,
+        request_id=payload.request_id,
+    )
+    return success_response(
+        data={"recorded": recorded},
+        message="impressions recorded",
+    )
+
+
+@router.post("/feedback", summary="上报资源推荐行为反馈")
+def report_post_reco_feedback(
+    payload: ResourcePostRecoFeedbackRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    _require_current_user(db=db, current_user_pk=user_id)
+    saved = save_resource_post_feedback(
+        db=db,
+        viewer_user_pk=user_id,
+        post_code=payload.post_code,
+        scene=payload.scene,
+        tab=payload.tab,
+        request_id=payload.request_id,
+        event_type=payload.event_type,
+        ext=payload.ext,
+    )
+    return success_response(
+        data={"saved": bool(saved)},
+        message="feedback recorded" if saved else "feedback ignored",
+    )
 
 
 @router.get("/feed", summary="获取资源列表")

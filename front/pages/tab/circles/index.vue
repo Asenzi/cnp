@@ -885,6 +885,7 @@ onUnmounted(() => {
 .circle-scroll {
   flex: 1;
   box-sizing: border-box;
+  background: #f6f6f8;
 }
 
 /* 骨架屏样式 */

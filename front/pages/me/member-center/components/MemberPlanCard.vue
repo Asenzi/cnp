@@ -66,23 +66,22 @@ const formatAmount = (value) => {
 .plan-card {
   position: relative;
   background: #ffffff;
-  border: 2rpx solid #e5e7eb;
+  border: 0;
   border-radius: 16rpx;
   padding: 32rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04), 0 1rpx 2rpx rgba(0, 0, 0, 0.02);
+  box-shadow: none;
   transition: all 0.3s ease;
 }
 
 .plan-hover {
   transform: translateY(-4rpx);
-  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.1), 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  box-shadow: none;
 }
 
 .is-selected {
-  border-color: #1a57db;
-  border-width: 3rpx;
-  background: linear-gradient(to bottom, #ffffff 0%, #f0f7ff 100%);
-  box-shadow: 0 4rpx 16rpx rgba(26, 87, 219, 0.25), 0 2rpx 8rpx rgba(26, 87, 219, 0.15), inset 0 1rpx 0 rgba(26, 87, 219, 0.05);
+  border: 0;
+  background: linear-gradient(to bottom, #ffffff 0%, #f4f8ff 100%);
+  box-shadow: none;
 }
 
 .recommend-tag {
@@ -96,7 +95,7 @@ const formatAmount = (value) => {
   font-size: 22rpx;
   line-height: 28rpx;
   font-weight: 600;
-  box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.35), 0 2rpx 4rpx rgba(251, 191, 36, 0.2);
+  box-shadow: none;
 }
 
 .card-body {
@@ -114,7 +113,7 @@ const formatAmount = (value) => {
 .plan-name {
   display: block;
   color: #111827;
-  font-size: 32rpx;
+  font-size: 28rpx;
   line-height: 40rpx;
   font-weight: 600;
   margin-bottom: 8rpx;
@@ -157,7 +156,7 @@ const formatAmount = (value) => {
 
 .is-selected .currency,
 .is-selected .amount {
-  color: #1a57db;
+  color: #2f5fbd;
 }
 
 .price-original {
