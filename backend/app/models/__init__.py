@@ -8,6 +8,7 @@ from .member_order import MemberOrder
 from .network_reco_feedback import NetworkRecoFeedback
 from .network_reco_impression import NetworkRecoImpression
 from .notification import Notification
+from .payment_notify_log import PaymentNotifyLog
 from .resource_post import ResourcePost, ResourcePostImpression, ResourcePostLike, ResourcePostRecoFeedback
 from .resource_post_circle_sync import ResourcePostCircleSync
 from .system_notice import SystemNotice
@@ -29,6 +30,7 @@ from .user_real_name_verification_session import UserRealNameVerificationSession
 from .user_verification import UserVerification
 from .user_wallet import UserWallet
 from .wallet_recharge_order import WalletRechargeOrder
+from .wallet_transaction import WalletTransaction
 
 __all__ = [
     "Base",
@@ -41,6 +43,7 @@ __all__ = [
     "NetworkRecoFeedback",
     "NetworkRecoImpression",
     "Notification",
+    "PaymentNotifyLog",
     "ResourcePost",
     "ResourcePostImpression",
     "ResourcePostLike",
@@ -65,4 +68,5 @@ __all__ = [
     "UserVerification",
     "UserWallet",
     "WalletRechargeOrder",
+    "WalletTransaction",
 ]

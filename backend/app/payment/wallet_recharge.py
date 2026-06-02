@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import BusinessException
-from app.crud import ensure_user_wallet, get_sys_config_values, get_user_by_id
+from app.crud import ensure_user_wallet, get_sys_config_values, get_user_by_id, create_wallet_transaction, create_payment_notify_log
 from app.models.wallet_recharge_order import WalletRechargeOrder
 from app.payment.service import (
     PAY_CHANNEL_WXPAY,
@@ -155,7 +155,8 @@ def _confirm_paid_recharge_order(
     now = _utc_now_naive()
     recharge_amount = Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))
     wallet_balance = Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))
-    wallet.balance = (wallet_balance + recharge_amount).quantize(Decimal("0.01"))
+    new_balance = (wallet_balance + recharge_amount).quantize(Decimal("0.01"))
+    wallet.balance = new_balance
 
     order.status = ORDER_STATUS_PAID
     order.paid_at = now
@@ -167,6 +168,20 @@ def _confirm_paid_recharge_order(
         order.remark = json.dumps(ext, ensure_ascii=False)[:4000]
     db.add(order)
     db.add(wallet)
+
+    # 记录钱包交易流水
+    create_wallet_transaction(
+        db=db,
+        user_pk=int(order.user_pk),
+        change_amount=recharge_amount,
+        balance_after=new_balance,
+        biz_type="recharge",
+        biz_key=str(order.order_no),
+        title=f"钱包充值 ¥{recharge_amount}",
+        remark=f"充值订单号: {order.order_no}",
+        commit=False,
+    )
+
     db.commit()
     db.refresh(order)
     db.refresh(wallet)
@@ -455,14 +470,72 @@ def handle_wechat_pay_notify_xml(
     try:
         payload = _xml_to_dict(xml_text)
     except Exception:  # noqa: BLE001
+        # 记录解析失败的日志
+        create_payment_notify_log(
+            db=db,
+            order_no="unknown",
+            notify_type="wxpay",
+            raw_body=xml_text[:2000],  # 只保存前2000字符
+            result="failed",
+            result_message="INVALID_XML",
+            commit=True,
+        )
         return False, "INVALID_XML"
 
     out_trade_no = str(payload.get("out_trade_no") or "").strip().upper()
     if out_trade_no.startswith("R"):
         try:
-            return _handle_wallet_wechat_notify(db=db, payload=payload)
+            success, message = _handle_wallet_wechat_notify(db=db, payload=payload)
+            # 记录回调处理结果
+            create_payment_notify_log(
+                db=db,
+                order_no=out_trade_no,
+                notify_type="wxpay_wallet",
+                raw_body=xml_text[:2000],
+                result="success" if success else "failed",
+                result_message=message,
+                commit=False,
+            )
+            db.commit()
+            return success, message
         except SQLAlchemyError:
             db.rollback()
+            # 记录数据库错误
+            create_payment_notify_log(
+                db=db,
+                order_no=out_trade_no,
+                notify_type="wxpay_wallet",
+                raw_body=xml_text[:2000],
+                result="failed",
+                result_message="DB_ERROR",
+                commit=True,
+            )
             return False, "DB_ERROR"
 
-    return _handle_member_wechat_pay_notify_xml(db=db, raw_xml=xml_text)
+    # 会员订阅订单的回调处理
+    try:
+        success, message = _handle_member_wechat_pay_notify_xml(db=db, raw_xml=xml_text)
+        # 记录回调处理结果
+        create_payment_notify_log(
+            db=db,
+            order_no=out_trade_no or "unknown",
+            notify_type="wxpay_member",
+            raw_body=xml_text[:2000],
+            result="success" if success else "failed",
+            result_message=message,
+            commit=False,
+        )
+        db.commit()
+        return success, message
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        create_payment_notify_log(
+            db=db,
+            order_no=out_trade_no or "unknown",
+            notify_type="wxpay_member",
+            raw_body=xml_text[:2000],
+            result="failed",
+            result_message=str(e)[:255],
+            commit=True,
+        )
+        return False, str(e)[:100]

@@ -15,6 +15,7 @@ from app.payment import (
     list_wallet_recharge_orders,
     subscribe_member_plan,
 )
+from app.payment.statistics import get_payment_statistics, get_user_payment_summary
 from app.schemas.payment import (
     MemberOrderConfirmRequest,
     MemberSubscribeRequest,
@@ -198,3 +199,45 @@ async def post_wechat_notify(
     )
     xml = _wechat_notify_xml(success=success, message=message)
     return Response(content=xml, media_type="application/xml")
+
+
+@router.get("/statistics/summary", summary="Get payment statistics summary")
+def get_payment_stats_summary(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    """获取当前用户的支付统计汇总"""
+    payload = get_user_payment_summary(db=db, user_pk=user_id)
+    return success_response(data=payload)
+
+
+@router.get("/statistics/overview", summary="Get payment overview statistics (Admin)", include_in_schema=True)
+def get_payment_stats_overview(
+    start_date: str | None = Query(default=None, description="开始日期 ISO格式"),
+    end_date: str | None = Query(default=None, description="结束日期 ISO格式"),
+    db: Session = Depends(db_session),
+):
+    """获取支付概览统计（管理员接口）"""
+    from datetime import datetime
+
+    parsed_start = None
+    parsed_end = None
+
+    if start_date:
+        try:
+            parsed_start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+
+    if end_date:
+        try:
+            parsed_end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+
+    payload = get_payment_statistics(
+        db=db,
+        start_date=parsed_start,
+        end_date=parsed_end,
+    )
+    return success_response(data=payload)

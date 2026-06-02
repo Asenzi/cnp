@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.exceptions import BusinessException
-from app.crud import ensure_user_points_account, ensure_user_wallet, get_sys_config_values, get_user_by_id
+from app.crud import ensure_user_points_account, ensure_user_wallet, get_sys_config_values, get_user_by_id, create_wallet_transaction
 from app.models.member_order import MemberOrder
 from app.models.sys_config import SysConfig
 from app.models.user_membership import UserMembership
@@ -1183,8 +1183,13 @@ def subscribe_member_plan(
         )
 
         if normalized_pay_channel == PAY_CHANNEL_WALLET:
+            new_balance = Decimal("0.00")
             if price_amount > Decimal("0.00"):
-                wallet.balance = (wallet_balance - price_amount).quantize(Decimal("0.01"))
+                new_balance = (wallet_balance - price_amount).quantize(Decimal("0.01"))
+                wallet.balance = new_balance
+            else:
+                new_balance = wallet_balance
+
             points_status = POINTS_STATUS_NONE
             if wants_points_discount and points_cost > 0:
                 consume_points_for_member_order(
@@ -1215,6 +1220,20 @@ def subscribe_member_plan(
                 paid_at=now,
             )
             db.add(order)
+
+            # 记录钱包交易流水
+            if price_amount > Decimal("0.00"):
+                create_wallet_transaction(
+                    db=db,
+                    user_pk=user_pk,
+                    change_amount=-price_amount,  # 负数表示支出
+                    balance_after=new_balance,
+                    biz_type="member_subscribe" if product_type == "member" else "contact_package",
+                    biz_key=order_no,
+                    title=f"购买{str(selected_plan['name'])}",
+                    remark=f"订单号: {order_no}",
+                    commit=False,
+                )
 
             if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
                 package_snapshot = grant_contact_package_views(

@@ -1,6 +1,8 @@
 """CRUD layer package."""
 from .user_stats import ensure_user_wallet, get_user_realtime_stats
 from .user_points import ensure_user_points_account, get_user_points_account
+from .wallet_transaction import create_wallet_transaction
+from .payment_notify_log import create_payment_notify_log
 from .circle import (
     count_circle_members,
     count_discover_circles,
@@ -83,6 +85,8 @@ __all__ = [
     "ensure_user_wallet",
     "ensure_user_points_account",
     "get_user_points_account",
+    "create_wallet_transaction",
+    "create_payment_notify_log",
     "get_user_realtime_stats",
     "list_user_verifications",
     "list_verifications_for_admin",
