@@ -18,18 +18,8 @@
       <view class="brand-section">
         <view class="logo-container">
           <view class="logo-glow"></view>
-          <view class="hub-icon">
-            <view class="hub-center"></view>
-            <view class="hub-ring"></view>
-            <view class="hub-line hub-line-1"></view>
-            <view class="hub-line hub-line-2"></view>
-            <view class="hub-line hub-line-3"></view>
-            <view class="hub-dot hub-dot-1"></view>
-            <view class="hub-dot hub-dot-2"></view>
-            <view class="hub-dot hub-dot-3"></view>
-          </view>
+          <image class="brand-logo-image" src="https://cos.cnptec.site/static/icon/cpn-logo.png" mode="aspectFit" />
         </view>
-        <text class="brand-title">圈脉链</text>
         <text class="brand-tagline">构建更高效的商业脉络</text>
       </view>
 
@@ -38,32 +28,17 @@
         <view class="login-card">
           <view class="card-glow"></view>
 
-          <button
-            class="wechat-login-btn"
-            :class="{ 'btn-loading': isLoading }"
-            :disabled="isLoading"
-            hover-class="btn-hover"
-            @tap="handleWechatLogin"
-          >
+          <button class="wechat-login-btn" :class="{ 'btn-loading': isLoading }" :disabled="isLoading"
+            hover-class="btn-hover" @tap="handleWechatLogin">
             <view class="btn-glow"></view>
             <view class="btn-content">
-              <view class="wechat-icon">
-                <view class="wechat-bubble bubble-main">
-                  <view class="bubble-dot dot-1"></view>
-                  <view class="bubble-dot dot-2"></view>
-                </view>
-                <view class="wechat-bubble bubble-sub"></view>
-              </view>
               <text class="btn-text">{{ isLoading ? '登录中...' : '微信一键登录' }}</text>
             </view>
             <view class="btn-shine"></view>
           </button>
 
           <view class="agreement-section">
-            <view
-              class="checkbox-wrapper"
-              @tap="toggleAgreement"
-            >
+            <view class="checkbox-wrapper" @tap="toggleAgreement">
               <view class="checkbox" :class="{ 'checkbox-checked': agreed }">
                 <view v-if="agreed" class="checkbox-mark"></view>
               </view>
@@ -250,10 +225,9 @@ page {
   position: absolute;
   height: 1rpx;
   background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(59, 130, 246, 0.3) 50%,
-    transparent 100%
-  );
+      transparent 0%,
+      rgba(59, 130, 246, 0.3) 50%,
+      transparent 100%);
   transform-origin: left center;
 }
 
@@ -272,10 +246,13 @@ page {
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.4;
     transform: scale(1);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.3);
@@ -309,6 +286,9 @@ page {
   width: 160rpx;
   height: 160rpx;
   margin-bottom: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .logo-glow {
@@ -323,109 +303,26 @@ page {
 }
 
 @keyframes glow-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.5;
     transform: translate(-50%, -50%) scale(1);
   }
+
   50% {
     opacity: 0.8;
     transform: translate(-50%, -50%) scale(1.1);
   }
 }
 
-.hub-icon {
+.brand-logo-image {
   position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hub-center {
-  position: absolute;
-  width: 24rpx;
-  height: 24rpx;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #d4a574 100%);
-  box-shadow:
-    0 0 20rpx rgba(37, 99, 235, 0.5),
-    0 0 40rpx rgba(37, 99, 235, 0.25);
-  z-index: 3;
-}
-
-.hub-ring {
-  position: absolute;
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 50%;
-  border: 2rpx solid rgba(37, 99, 235, 0.25);
-  animation: ring-rotate 8s linear infinite;
-}
-
-@keyframes ring-rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.hub-line {
-  position: absolute;
-  width: 48rpx;
-  height: 3rpx;
-  background: linear-gradient(90deg,
-    rgba(37, 99, 235, 0.6) 0%,
-    rgba(212, 165, 116, 0.4) 50%,
-    rgba(37, 99, 235, 0.2) 100%
-  );
-  border-radius: 2rpx;
-  transform-origin: left center;
-}
-
-.hub-line-1 {
-  top: 50%;
-  left: 50%;
-  transform: translateY(-50%) rotate(0deg);
-}
-
-.hub-line-2 {
-  top: 50%;
-  left: 50%;
-  transform: translateY(-50%) rotate(120deg);
-}
-
-.hub-line-3 {
-  top: 50%;
-  left: 50%;
-  transform: translateY(-50%) rotate(240deg);
-}
-
-.hub-dot {
-  position: absolute;
-  width: 12rpx;
-  height: 12rpx;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%);
-  box-shadow: 0 0 12rpx rgba(37, 99, 235, 0.5);
-}
-
-.hub-dot-1 {
-  top: 50%;
-  right: 16rpx;
-  transform: translateY(-50%);
-}
-
-.hub-dot-2 {
-  bottom: 28rpx;
-  left: 28rpx;
-}
-
-.hub-dot-3 {
-  top: 28rpx;
-  left: 28rpx;
+  z-index: 2;
+  width: 160rpx;
+  height: 160rpx;
+  display: block;
+  border-radius: 40rpx;
 }
 
 .brand-title {
@@ -499,10 +396,9 @@ page {
   bottom: -2rpx;
   border-radius: 56rpx;
   background: linear-gradient(135deg,
-    rgba(37, 99, 235, 0.3) 0%,
-    rgba(212, 165, 116, 0.3) 50%,
-    rgba(37, 99, 235, 0.3) 100%
-  );
+      rgba(37, 99, 235, 0.3) 0%,
+      rgba(212, 165, 116, 0.3) 50%,
+      rgba(37, 99, 235, 0.3) 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
@@ -523,41 +419,10 @@ page {
 }
 
 .wechat-icon {
-  position: relative;
   width: 52rpx;
   height: 48rpx;
-}
-
-.wechat-bubble {
-  position: absolute;
-  border-radius: 50% 50% 50% 0;
-  background: #ffffff;
-}
-
-.bubble-main {
-  left: 0;
-  top: 10rpx;
-  width: 34rpx;
-  height: 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6rpx;
-  padding-left: 6rpx;
-}
-
-.bubble-sub {
-  right: 0;
-  top: 0;
-  width: 26rpx;
-  height: 22rpx;
-}
-
-.bubble-dot {
-  width: 5rpx;
-  height: 5rpx;
-  border-radius: 50%;
-  background: #07c160;
+  display: block;
+  flex-shrink: 0;
 }
 
 .btn-text {
@@ -574,10 +439,9 @@ page {
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.3) 50%,
-    transparent 100%
-  );
+      transparent 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      transparent 100%);
   animation: shine 3s ease-in-out infinite;
 }
 
@@ -585,7 +449,9 @@ page {
   0% {
     left: -100%;
   }
-  50%, 100% {
+
+  50%,
+  100% {
     left: 100%;
   }
 }
@@ -665,10 +531,9 @@ page {
   flex: 1;
   height: 1rpx;
   background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(37, 99, 235, 0.2) 50%,
-    transparent 100%
-  );
+      transparent 0%,
+      rgba(37, 99, 235, 0.2) 50%,
+      transparent 100%);
 }
 
 .footer-text {

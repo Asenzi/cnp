@@ -11,7 +11,7 @@
       ></canvas>
       <cover-view v-if="showAccessMask" class="business-card-cover-mask">
         <cover-view class="cover-title-row">
-          <cover-image class="cover-mask-icon" src="/static/icon/suo.png" />
+          <cover-image class="cover-mask-icon" src="https://cos.cnptec.site/static/icon/suo.png" />
           <cover-view class="cover-mask-title">{{ maskTitle }}</cover-view>
         </cover-view>
         <cover-view v-if="maskDesc" class="cover-mask-desc">{{ maskDesc }}</cover-view>
@@ -293,10 +293,6 @@ function drawCardAvatar(ctx, x, y, size) {
     return
   }
   ctx.restore()
-  ctx.setStrokeStyle('rgba(37, 99, 235, 0.16)')
-  ctx.setLineWidth(2)
-  drawRoundRect(ctx, x + 1, y + 1, size - 2, size - 2, 11)
-  ctx.stroke()
 }
 
 function drawContactIcon(ctx, type, x, y) {
@@ -836,4 +832,3 @@ watch(
   font-weight: 600;
 }
 </style>
-

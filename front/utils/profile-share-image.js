@@ -178,13 +178,6 @@ export async function generateProfileShareImage(userData) {
         ctx.drawImage(localAvatarPath, offsetX, offsetY, scaledWidth, scaledHeight)
 
         ctx.restore()
-
-        // 头像边框
-        ctx.strokeStyle = '#e5e7eb'
-        ctx.lineWidth = 4
-        ctx.beginPath()
-        ctx.arc(centerX, centerY, radius + 2, 0, 2 * Math.PI)
-        ctx.stroke()
       } else {
         // 占位头像
         ctx.fillStyle = '#f3f4f6'

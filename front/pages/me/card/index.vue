@@ -1,8 +1,8 @@
-﻿<template>
+<template>
   <view class="profile-home-page">
     <view class="page-shell">
       <view v-if="loading && !hasProfileData" class="status-wrap">
-        <text class="status-text">鍔犺浇涓?..</text>
+          <text class="status-text">加载中...</text>
       </view>
 
       <view v-else-if="loadError && !hasProfileData" class="status-wrap">
@@ -24,7 +24,7 @@
         <view class="content-list-wrap">
           <template v-if="activeTab === 'feed'">
             <view v-if="feedLoading && !hasFeedAny" class="section-status-wrap">
-              <text class="section-status-text">鍔犺浇涓?..</text>
+            <text class="section-status-text">加载中...</text>
             </view>
             <view v-else-if="feedError && !hasFeedAny" class="section-status-wrap">
               <text class="section-status-text">{{ feedError }}</text>
@@ -33,21 +33,21 @@
             <template v-else>
               <ProfilePostCard v-for="item in feedPosts" :key="item.id" :item="item" @detail="onTapPostDetail" />
               <view v-if="feedLoaded && !hasFeedAny" class="section-status-wrap section-empty-wrap">
-                <image class="section-empty-icon" src="/static/icon/block.png" mode="aspectFit" />
+                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
                 <text class="section-status-text section-empty-text">暂无动态资源</text>
               </view>
               <view v-if="feedLoadingMore" class="load-more-wrap">
-                <text class="load-more-text">鍔犺浇涓?..</text>
+            <text class="load-more-text">加载中...</text>
               </view>
               <view v-else-if="feedHasMore && hasFeedAny" class="load-more-wrap">
-                <text class="load-more-text">涓婃媺鍔犺浇鏇村</text>
+                <text class="load-more-text">上拉加载更多</text>
               </view>
             </template>
           </template>
 
           <template v-else>
             <view v-if="circlesLoading && !hasCircleAny" class="section-status-wrap">
-              <text class="section-status-text">鍔犺浇涓?..</text>
+            <text class="section-status-text">加载中...</text>
             </view>
             <view v-else-if="circlesError && !hasCircleAny" class="section-status-wrap">
               <text class="section-status-text">{{ circlesError }}</text>
@@ -55,14 +55,15 @@
             </view>
             <template v-else>
               <ProfileCircleCard v-for="item in joinedCircles" :key="item.id" :item="item" @enter="onEnterCircle" />
-              <view v-if="circlesLoaded && !hasCircleAny" class="section-status-wrap">
-                <text class="section-status-text">暂无加入的圈子</text>
+              <view v-if="circlesLoaded && !hasCircleAny" class="section-status-wrap section-empty-wrap">
+                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+                <text class="section-status-text section-empty-text">暂无加入的圈子</text>
               </view>
               <view v-if="circlesLoadingMore" class="load-more-wrap">
-                <text class="load-more-text">鍔犺浇涓?..</text>
+            <text class="load-more-text">加载中...</text>
               </view>
               <view v-else-if="circlesHasMore && hasCircleAny" class="load-more-wrap">
-                <text class="load-more-text">涓婃媺鍔犺浇鏇村</text>
+                <text class="load-more-text">上拉加载更多</text>
               </view>
             </template>
           </template>
@@ -72,7 +73,7 @@
     </view>
 
     <!-- 隐藏的Canvas用于生成分享图 -->
-    <canvas canvas-id="shareCanvas" style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 900px;"></canvas>
+    <canvas canvas-id="shareCanvas" style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 900px; border: none;"></canvas>
   </view>
 </template>
 
@@ -137,11 +138,6 @@ const ensureLogin = () => {
   }
 
   showToast('请先登录')
-  setTimeout(() => {
-    uni.navigateTo({
-      url: '/pages/auth/login/index'
-    })
-  }, 220)
   return false
 }
 
@@ -208,7 +204,9 @@ const syncPageData = () => {
 }
 
 const loadProfile = async () => {
-  if (!ensureLogin()) {
+  const target = String(targetUserId.value || '').trim()
+  if (!target && !ensureLogin()) {
+    loadError.value = '请先登录查看自己的名片'
     return
   }
 
@@ -216,7 +214,6 @@ const loadProfile = async () => {
   loadError.value = ''
 
   try {
-    const target = String(targetUserId.value || '').trim()
     const profile = target
       ? await getUserProfileById(target)
       : await getCurrentUserProfile()
@@ -232,7 +229,7 @@ const loadProfile = async () => {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
-      ensureLogin()
+      loadError.value = target ? '名片加载失败，请稍后重试' : '请先登录查看自己的名片'
       return
     }
     loadError.value = err?.message || '个人名片加载失败，请稍后重试'
@@ -242,7 +239,8 @@ const loadProfile = async () => {
 }
 
 const fetchProfileFeed = async (reset = false) => {
-  if (!ensureLogin()) {
+  const target = String(targetUserId.value || '').trim()
+  if (!target && !ensureLogin()) {
     return
   }
   if (feedLoading.value || feedLoadingMore.value) {
@@ -260,7 +258,6 @@ const fetchProfileFeed = async (reset = false) => {
   }
 
   try {
-    const target = String(targetUserId.value || '').trim()
     const payload = target
       ? await getUserResourceFeed(target, {
         cursor: reset ? '' : feedCursor.value,
@@ -296,7 +293,9 @@ const fetchProfileFeed = async (reset = false) => {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
-      ensureLogin()
+      if (!target) {
+        feedError.value = '请先登录查看自己的动态'
+      }
       return
     }
     const message = err?.message || '动态资源加载失败，请稍后重试'
@@ -311,7 +310,8 @@ const fetchProfileFeed = async (reset = false) => {
 }
 
 const fetchJoinedCircles = async (reset = false) => {
-  if (!ensureLogin()) {
+  const target = String(targetUserId.value || '').trim()
+  if (!target && !ensureLogin()) {
     return
   }
   if (circlesLoading.value || circlesLoadingMore.value) {
@@ -330,7 +330,6 @@ const fetchJoinedCircles = async (reset = false) => {
   }
 
   try {
-    const target = String(targetUserId.value || '').trim()
     const payload = target
       ? await getUserCircles(target, {
         offset: nextOffset,
@@ -362,7 +361,9 @@ const fetchJoinedCircles = async (reset = false) => {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
-      ensureLogin()
+      if (!target) {
+        circlesError.value = '请先登录查看自己的圈子'
+      }
       return
     }
     const message = err?.message || '加入圈子加载失败，请稍后重试'
@@ -446,6 +447,8 @@ onLoad((query = {}) => {
 })
 
 onShow(() => {
+  // 清除分享图缓存，确保使用最新的分享图生成逻辑
+  shareImageUrl.value = ''
   loadAllData()
 })
 
@@ -570,15 +573,16 @@ onReachBottom(() => {
 }
 
 .section-empty-wrap {
-  padding: 28rpx 20rpx;
+  padding: 80rpx 20rpx 60rpx;
   border: none;
-  background: #ffffff;
+  background: transparent;
 }
 
 .section-empty-icon {
-  width: 88rpx;
-  height: 88rpx;
+  width: 200rpx;
+  height: 200rpx;
   display: block;
+  margin: 0 auto 12rpx;
 }
 
 .section-empty-text {
@@ -642,6 +646,10 @@ onReachBottom(() => {
   .section-status-wrap {
     background: #0f172a;
     border-color: #334155;
+  }
+
+  .section-empty-wrap {
+    background: transparent;
   }
 }
 </style>

@@ -21,4 +21,23 @@
 
 <style>
 	/*每个页面公共css */
+
+	/* 禁止滚动条 */
+	page {
+		scrollbar-width: none; /* Firefox */
+		-ms-overflow-style: none; /* IE */
+	}
+
+	page::-webkit-scrollbar {
+		display: none; /* WebKit */
+		width: 0;
+		height: 0;
+	}
+
+	view::-webkit-scrollbar,
+	scroll-view::-webkit-scrollbar {
+		display: none;
+		width: 0;
+		height: 0;
+	}
 </style>

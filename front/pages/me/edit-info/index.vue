@@ -1,9 +1,9 @@
-﻿<template>
+<template>
   <view class="edit-page">
     <view class="page-shell">
       <view class="top-nav" :style="navStyle">
         <view class="back-btn" hover-class="back-btn-hover" @tap="goBack">
-          <image class="back-icon" mode="aspectFit" src="/static/me-icons/arrow-back-dark.png" />
+          <image class="back-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/arrow-back-dark.png" />
         </view>
         <text class="nav-title">编辑个人资料</text>
         <view class="nav-placeholder"></view>
@@ -18,7 +18,7 @@
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuBv9YKCNjpwt1WC_48xYSN3N4YEpDhhyvw_aVkDmEWdVG7lGGTHR1QGrn657-jukxQE2Z7YC6iOe9d8bRKAiZQm6OdW-TZrSdkZjw9sqB4MzYzWw5yFBmMJ3UfXoL4wg5HvBfdlSFLO0joC5ss07Py9JOKQTsOem00Dow4VYev6AnZInfJZWKr2eOz_F9HEZ343esMbKqzGP4XaZrvXQxUtB5hqyFOxqyeijBkF3uuZuWTP4COt2DkHeHMgjJypLHSfdNppuBokLl3o"
             />
             <view class="camera-badge">
-              <image class="camera-icon" mode="aspectFit" src="/static/me-icons/camera-white.png" />
+              <image class="camera-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/camera-white.png" />
             </view>
           </view>
           <text class="avatar-tip">点击更换头像</text>
@@ -44,7 +44,7 @@
             >
               <view class="picker-text">{{ industryOptions[industryIndex].label }}</view>
             </picker>
-            <image class="expand-icon" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+            <image class="expand-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
           </view>
         </view>
 
@@ -64,7 +64,7 @@
 
           <view class="upload-area" hover-class="upload-area-hover" @tap="onUploadCard">
             <view class="upload-inner">
-              <image class="upload-icon" mode="aspectFit" src="/static/me-icons/upload-primary.png" />
+              <image class="upload-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/upload-primary.png" />
               <text class="upload-text">点击或拖拽上传名片 (JPG, PNG, PDF)</text>
             </view>
           </view>
@@ -72,14 +72,14 @@
           <view class="file-list">
             <view v-for="(file, index) in attachedFiles" :key="file.name" class="file-item">
               <view class="file-left">
-                <image class="file-type-icon" mode="aspectFit" src="/static/me-icons/image-primary.png" />
+                <image class="file-type-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/image-primary.png" />
                 <view class="file-meta">
                   <text class="file-name">{{ file.name }}</text>
                   <text class="file-size">{{ file.size }}</text>
                 </view>
               </view>
               <view class="file-remove" hover-class="file-remove-hover" @tap="removeFile(index)">
-                <image class="cancel-icon" mode="aspectFit" src="/static/me-icons/cancel-slate.png" />
+                <image class="cancel-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/cancel-slate.png" />
               </view>
             </view>
           </view>
