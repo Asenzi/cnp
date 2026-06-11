@@ -248,6 +248,14 @@ export function reviewCircleJoinRequest(requestId, payload = {}) {
   })
 }
 
+export function cancelCircleJoinRequest(requestId) {
+  const safeRequestId = encodeURIComponent(String(requestId || '').trim())
+  return request({
+    url: `/api/v1/circle/join-requests/${safeRequestId}/cancel`,
+    method: 'POST'
+  })
+}
+
 // 提交圈子加入申请
 export function submitCircleJoinRequest(circleCode, payload = {}) {
   const safeCode = encodeURIComponent(String(circleCode || '').trim())
@@ -255,7 +263,27 @@ export function submitCircleJoinRequest(circleCode, payload = {}) {
     url: `/api/v1/circle/${safeCode}/join-request`,
     method: 'POST',
     data: {
-      message: String(payload.message || '').trim()
+      message: String(payload.message || '').trim(),
+      pay_channel: String(payload.pay_channel || '').trim() || undefined
     }
+  })
+}
+
+export function confirmCircleJoinPayment(orderNo, payload = {}) {
+  const safeOrderNo = encodeURIComponent(String(orderNo || '').trim())
+  return request({
+    url: `/api/v1/circle/join-orders/${safeOrderNo}/confirm`,
+    method: 'POST',
+    data: {
+      transaction_id: String(payload.transaction_id || '').trim() || undefined
+    }
+  })
+}
+
+export function getCircleJoinOrderStatus(orderNo) {
+  const safeOrderNo = encodeURIComponent(String(orderNo || '').trim())
+  return request({
+    url: `/api/v1/circle/join-orders/${safeOrderNo}`,
+    method: 'GET'
   })
 }

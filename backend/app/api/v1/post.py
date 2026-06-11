@@ -1,15 +1,15 @@
-from datetime import UTC, datetime
+import json
 from pathlib import Path as FsPath
-from secrets import token_hex
 
 from fastapi import APIRouter, Depends, File, Path, Query, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import db_session, get_current_user_id
+from app.api.deps import db_session, get_current_user_id, get_optional_current_user_id
 from app.core.asset_urls import normalize_persisted_asset_url, sanitize_public_asset_url
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
+from app.core.storage import upload_public_asset
 from app.crud import get_user_by_business_user_id, get_user_by_id
 from app.models.resource_post import ResourcePost, ResourcePostLike
 from app.models.user import User
@@ -138,12 +138,145 @@ def post_ping():
     return success_response(message="post module ready")
 
 
+def _parse_images_json(images_json: str | None) -> list[str]:
+    if not images_json:
+        return []
+    try:
+        parsed = json.loads(images_json)
+    except Exception:  # noqa: BLE001
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item or "").strip() for item in parsed if str(item or "").strip()]
+
+
+def _encode_public_cursor(offset: int) -> str:
+    return str(max(int(offset or 0), 0))
+
+
+def _decode_public_cursor(cursor: str | None) -> int:
+    try:
+        return max(int(str(cursor or "").strip() or "0"), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _serialize_public_post(post: ResourcePost, author: User, request: Request) -> dict:
+    payload = {
+        "post_code": str(post.post_code or "").strip(),
+        "mode": str(post.mode or "cooperate").strip() or "cooperate",
+        "industry_label": str(post.industry_label or "").strip(),
+        "title": str(post.title or "").strip(),
+        "description": str(post.description or "").strip(),
+        "images": _parse_images_json(post.images_json),
+        "view_count": int(post.view_count or 0),
+        "like_count": int(post.like_count or 0),
+        "comment_count": int(post.comment_count or 0),
+        "status": str(post.status or "active"),
+        "is_pinned": bool(post.is_pinned),
+        "pinned_at": post.pinned_at.isoformat() if post.pinned_at else None,
+        "liked": False,
+        "interested": False,
+        "is_author": False,
+        "created_at": post.created_at.isoformat() if post.created_at else None,
+        "author": {
+            "user_id": str(author.user_id or "").strip(),
+            "company_name": str(author.company_name or "").strip(),
+            "job_title": str(author.job_title or "").strip(),
+            "nickname": str(author.nickname or "").strip() or "未命名用户",
+            "avatar_url": str(author.avatar_url or "").strip() or "/static/logo.png",
+            "role": str(author.industry_label or "").strip() or "商务人士",
+            "is_verified": bool(author.is_verified),
+        },
+    }
+    if str(post.mode or "").strip().lower() == "venue":
+        payload.update({
+            "event_date": str(post.event_date or "").strip(),
+            "event_time": str(post.event_time or "").strip(),
+            "duration": int(post.duration or 1),
+            "capacity": int(post.capacity or 0),
+            "location": str(post.location or "").strip(),
+            "address": str(post.address or "").strip(),
+            "payment_type": str(post.payment_type or "free").strip() or "free",
+            "price": str(post.price or "").strip(),
+            "contact": str(post.contact or "").strip(),
+            "detail_content": str(post.detail_content or "").strip(),
+            "participant_count": int(post.participant_count or 0),
+        })
+    return _publicize_post_payload(payload, request=request)
+
+
+def _list_public_resource_posts(
+    db: Session,
+    *,
+    request: Request,
+    mode: str | None,
+    sort: str,
+    keyword: str | None,
+    industry_label: str | None,
+    cursor: str | None,
+    limit: int,
+) -> dict:
+    safe_mode = str(mode or "").strip().lower()
+    safe_sort = str(sort or "latest").strip().lower()
+    safe_keyword = str(keyword or "").strip()
+    safe_industry = str(industry_label or "").strip()
+    safe_limit = min(max(int(limit or 20), 1), 50)
+    offset = _decode_public_cursor(cursor)
+
+    conditions = [
+        ResourcePost.status == "active",
+        User.is_active.is_(True),
+    ]
+    if safe_mode in {"resource", "cooperate", "venue"}:
+        conditions.append(ResourcePost.mode == safe_mode)
+    if safe_industry:
+        conditions.append(ResourcePost.industry_label == safe_industry)
+    if safe_keyword:
+        like_keyword = f"%{safe_keyword}%"
+        conditions.append(
+            (ResourcePost.title.like(like_keyword))
+            | (ResourcePost.description.like(like_keyword))
+            | (ResourcePost.industry_label.like(like_keyword))
+            | (User.nickname.like(like_keyword))
+        )
+
+    order_by = (
+        ResourcePost.is_pinned.desc(),
+        ResourcePost.pinned_at.desc(),
+        ResourcePost.like_count.desc(),
+        ResourcePost.view_count.desc(),
+        ResourcePost.created_at.desc(),
+        ResourcePost.id.desc(),
+    ) if safe_sort == "popular" else (
+        ResourcePost.is_pinned.desc(),
+        ResourcePost.pinned_at.desc(),
+        ResourcePost.created_at.desc(),
+        ResourcePost.id.desc(),
+    )
+    rows = db.execute(
+        select(ResourcePost, User)
+        .join(User, User.id == ResourcePost.author_user_pk)
+        .where(*conditions)
+        .order_by(*order_by)
+        .offset(offset)
+        .limit(safe_limit + 1)
+    ).all()
+    page_rows = rows[:safe_limit]
+    has_more = len(rows) > safe_limit
+    return {
+        "request_id": "",
+        "items": [_serialize_public_post(post=post, author=author, request=request) for post, author in page_rows],
+        "total": offset + len(page_rows) + (1 if has_more else 0),
+        "has_more": has_more,
+        "next_cursor": _encode_public_cursor(offset + len(page_rows)) if has_more else "",
+    }
+
+
 @router.get("/filters", summary="获取资源筛选项")
 def get_post_filters(
-    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
     payload = list_resource_filter_options(db=db)
     return success_response(data=payload)
 
@@ -203,9 +336,22 @@ def get_post_feed(
     exclude_post_codes: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=50),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
+    if user_id is None:
+        payload = _list_public_resource_posts(
+            db=db,
+            request=request,
+            mode=mode,
+            sort=sort,
+            keyword=keyword,
+            industry_label=industry_label,
+            cursor=cursor,
+            limit=limit,
+        )
+        return success_response(data=payload)
+
     _require_current_user(db=db, current_user_pk=user_id)
     normalized_excluded_post_codes = [
         str(item or "").strip()
@@ -255,10 +401,11 @@ def get_user_post_feed(
     target_user_id: str,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=50),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
 
     normalized_target_user_id = str(target_user_id or "").strip()
     if len(normalized_target_user_id) != 8:
@@ -493,10 +640,11 @@ def update_post(
 def get_post_detail(
     request: Request,
     post_code: str = Path(..., min_length=4),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
     payload = get_resource_post_detail(
         db=db,
         viewer_user_pk=user_id,
@@ -508,10 +656,11 @@ def get_post_detail(
 @router.post("/{post_code}/view", summary="资源浏览计数+1")
 def post_view(
     post_code: str = Path(..., min_length=4),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
     payload = increase_resource_post_view(
         db=db,
         post_code=post_code,
@@ -672,18 +821,19 @@ async def upload_post_image(
     if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
         suffix = IMAGE_CONTENT_TYPE_EXTENSION_MAP.get(content_type, ".jpg")
 
-    POST_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{token_hex(4)}{suffix}"
-    save_path = POST_UPLOAD_DIR / file_name
-    save_path.write_bytes(file_bytes)
-
-    relative_url = f"/static/uploads/post-images/{file_name}"
-    public_url = _to_public_file_url(relative_url, request)
+    stored = upload_public_asset(
+        prefix="uploads/post-images",
+        file_bytes=file_bytes,
+        suffix=suffix,
+        content_type=content_type,
+        request=request,
+    )
+    display_name = (file.filename or FsPath(stored.key).name).strip() or FsPath(stored.key).name
     return success_response(
         data={
-            "name": (file.filename or file_name).strip() or file_name,
-            "path": relative_url,
-            "url": public_url,
+            "name": display_name,
+            "path": stored.path,
+            "url": stored.url,
             "size": len(file_bytes),
             "mime_type": content_type or "application/octet-stream",
         },

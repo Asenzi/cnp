@@ -61,3 +61,8 @@ class BlockedUserListData(BaseModel):
     total: int = 0
     offset: int = 0
     limit: int = 20
+
+
+class CircleOwnerApplicationRequest(BaseModel):
+    reason: str = Field(..., min_length=20, max_length=500)
+    experience: str | None = Field(default=None, max_length=500)

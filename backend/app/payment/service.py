@@ -54,6 +54,16 @@ PAY_CHANNEL_WALLET = "wallet"
 PAY_CHANNEL_MOCK = "mock"
 PAY_CHANNEL_WXPAY = "wxpay"
 
+CIRCLE_OWNER_PRODUCT_TYPE = "circle_owner"
+CIRCLE_OWNER_PLAN_ID = "circle_owner_lifetime"
+DEFAULT_CIRCLE_OWNER_PLAN = {
+    "id": CIRCLE_OWNER_PLAN_ID,
+    "name": "永久圈主",
+    "subtitle": "一次开通，永久有效",
+    "price": Decimal("198"),
+    "original_price": Decimal("298"),
+}
+
 DEFAULT_MEMBER_BENEFITS = [
     {
         "key": "badge",
@@ -140,6 +150,11 @@ def ensure_default_payment_configs() -> None:
         ("member.payment.wallet_enabled", "1", "会员订阅是否启用钱包支付"),
         ("member.payment.mock_enabled", "1", "会员订阅是否启用模拟支付"),
         ("member.payment.wxpay_enabled", "1" if settings.WECHAT_PAY_ENABLED else "0", "会员订阅是否启用微信支付"),
+        ("circle_owner.enabled", "1", "永久圈主商品是否启用"),
+        ("circle_owner.name", str(DEFAULT_CIRCLE_OWNER_PLAN["name"]), "永久圈主商品名称"),
+        ("circle_owner.subtitle", str(DEFAULT_CIRCLE_OWNER_PLAN["subtitle"]), "永久圈主商品副标题"),
+        ("circle_owner.price", str(DEFAULT_CIRCLE_OWNER_PLAN["price"]), "永久圈主售价"),
+        ("circle_owner.original_price", str(DEFAULT_CIRCLE_OWNER_PLAN["original_price"]), "永久圈主原价"),
     ]
     for plan in DEFAULT_MEMBER_PLANS:
         plan_id = str(plan["id"])
@@ -298,6 +313,11 @@ def _load_member_config_values(db: Session) -> dict[str, str]:
         "member.payment.wallet_enabled",
         "member.payment.mock_enabled",
         "member.payment.wxpay_enabled",
+        "circle_owner.enabled",
+        "circle_owner.name",
+        "circle_owner.subtitle",
+        "circle_owner.price",
+        "circle_owner.original_price",
     }
     for plan in DEFAULT_MEMBER_PLANS:
         plan_id = str(plan["id"])
@@ -337,9 +357,54 @@ def _serialize_plan(plan: dict, *, points_offer: dict | None = None) -> dict:
 
 
 def _resolve_order_product_type(order: MemberOrder) -> str:
+    if str(order.plan_id or "").strip() == CIRCLE_OWNER_PLAN_ID:
+        return CIRCLE_OWNER_PRODUCT_TYPE
     if is_contact_package_plan_id(str(order.plan_id or "").strip()):
         return CONTACT_PACKAGE_PRODUCT_TYPE
     return "member"
+
+
+def _resolve_circle_owner_plan(db: Session, *, include_disabled: bool = False) -> dict | None:
+    config_values = _load_member_config_values(db=db)
+    enabled = _to_bool(config_values.get("circle_owner.enabled"), True)
+    if not enabled and not include_disabled:
+        return None
+    price = _to_decimal(
+        config_values.get("circle_owner.price"),
+        DEFAULT_CIRCLE_OWNER_PLAN["price"],
+    )
+    original_price = _to_decimal(
+        config_values.get("circle_owner.original_price"),
+        DEFAULT_CIRCLE_OWNER_PLAN["original_price"],
+    )
+    if original_price < price:
+        original_price = price
+    return {
+        "id": CIRCLE_OWNER_PLAN_ID,
+        "name": str(
+            config_values.get("circle_owner.name") or DEFAULT_CIRCLE_OWNER_PLAN["name"]
+        ).strip()
+        or str(DEFAULT_CIRCLE_OWNER_PLAN["name"]),
+        "subtitle": str(
+            config_values.get("circle_owner.subtitle") or DEFAULT_CIRCLE_OWNER_PLAN["subtitle"]
+        ).strip(),
+        "price": price,
+        "original_price": original_price,
+        "duration_days": 0,
+        "enabled": enabled,
+        "product_type": CIRCLE_OWNER_PRODUCT_TYPE,
+    }
+
+
+def _grant_circle_owner(db: Session, *, user_pk: int) -> bool:
+    user = get_user_by_id(db=db, user_id=user_pk)
+    if user is None:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+    already_owned = bool(user.is_circle_owner)
+    if not already_owned:
+        user.is_circle_owner = True
+        db.add(user)
+    return already_owned
 
 
 def _extract_contact_package_view_count(db: Session, *, order: MemberOrder) -> int:
@@ -598,6 +663,15 @@ def _confirm_paid_member_order(
     user_pk = int(order.user_pk)
     product_type = _resolve_order_product_type(order)
     if str(order.status or "").strip().lower() == ORDER_STATUS_PAID:
+        if product_type == CIRCLE_OWNER_PRODUCT_TYPE:
+            user = get_user_by_id(db=db, user_id=user_pk)
+            return {
+                "order_no": str(order.order_no),
+                "already_paid": True,
+                "product_type": CIRCLE_OWNER_PRODUCT_TYPE,
+                "is_circle_owner": bool(user and user.is_circle_owner),
+                "lifetime": True,
+            }
         if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
             package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=user_pk)
             return {
@@ -642,6 +716,19 @@ def _confirm_paid_member_order(
     ext["transaction_id"] = str(transaction_id or "").strip()
     order.remark = json.dumps(ext, ensure_ascii=False)[:4000]
     db.add(order)
+
+    if product_type == CIRCLE_OWNER_PRODUCT_TYPE:
+        already_owned = _grant_circle_owner(db=db, user_pk=user_pk)
+        db.commit()
+        db.refresh(order)
+        return {
+            "order_no": str(order.order_no),
+            "already_paid": False,
+            "already_owned": already_owned,
+            "product_type": CIRCLE_OWNER_PRODUCT_TYPE,
+            "is_circle_owner": True,
+            "lifetime": True,
+        }
 
     if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
         granted_view_count = _extract_contact_package_view_count(db=db, order=order)
@@ -724,6 +811,51 @@ def resolve_member_snapshot(db: Session, *, user_pk: int) -> dict:
         "vip_expire_at": expire_at_iso if opened else None,
         "member_plan_id": plan_id if opened else "",
         "member_plan_name": plan_name if opened else "",
+    }
+
+
+def get_circle_owner_overview(db: Session, *, user_pk: int) -> dict:
+    user = get_user_by_id(db=db, user_id=user_pk)
+    if user is None:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+
+    plan = _resolve_circle_owner_plan(db=db, include_disabled=True)
+    if plan is None:
+        plan = {
+            **DEFAULT_CIRCLE_OWNER_PLAN,
+            "enabled": False,
+            "product_type": CIRCLE_OWNER_PRODUCT_TYPE,
+        }
+
+    wallet = ensure_user_wallet(db=db, user_pk=user_pk, default_balance=user.balance or 0)
+    paid_order = db.scalar(
+        select(MemberOrder)
+        .where(
+            MemberOrder.user_pk == user_pk,
+            MemberOrder.plan_id == CIRCLE_OWNER_PLAN_ID,
+            MemberOrder.status == ORDER_STATUS_PAID,
+        )
+        .order_by(MemberOrder.paid_at.desc(), MemberOrder.id.desc())
+        .limit(1)
+    )
+    price = _to_decimal(plan.get("price"), Decimal("0.00"))
+    original_price = _to_decimal(plan.get("original_price"), price)
+
+    return {
+        "is_circle_owner": bool(user.is_circle_owner),
+        "lifetime": True,
+        "opened_at": paid_order.paid_at.isoformat() if paid_order and paid_order.paid_at else None,
+        "plan": {
+            "id": str(plan["id"]),
+            "name": str(plan["name"]),
+            "subtitle": str(plan.get("subtitle") or ""),
+            "price": float(price),
+            "original_price": float(max(original_price, price)),
+            "enabled": bool(plan.get("enabled", True)),
+            "product_type": CIRCLE_OWNER_PRODUCT_TYPE,
+        },
+        "wallet_balance": float(Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))),
+        "payment": _resolve_payment_options(db=db),
     }
 
 
@@ -1097,13 +1229,31 @@ def subscribe_member_plan(
         cleanup_expired_member_points_orders(db=db, user_pk=user_pk)
         member_plans = _resolve_member_plans(db=db)
         contact_package_plans = resolve_contact_package_plans(db=db)
+        circle_owner_plan = _resolve_circle_owner_plan(db=db)
         selected_member_plan = {str(item["id"]): item for item in member_plans}.get(normalized_plan_id)
         selected_contact_package_plan = {str(item["id"]): item for item in contact_package_plans}.get(normalized_plan_id)
-        if selected_member_plan is None and selected_contact_package_plan is None:
+        selected_circle_owner_plan = (
+            circle_owner_plan
+            if circle_owner_plan is not None and normalized_plan_id == CIRCLE_OWNER_PLAN_ID
+            else None
+        )
+        if (
+            selected_member_plan is None
+            and selected_contact_package_plan is None
+            and selected_circle_owner_plan is None
+        ):
             raise BusinessException(message="订阅方案不存在或已下线", code=4512, status_code=400)
 
-        product_type = CONTACT_PACKAGE_PRODUCT_TYPE if selected_contact_package_plan is not None else "member"
-        selected_plan = selected_contact_package_plan or selected_member_plan or {}
+        if selected_circle_owner_plan is not None:
+            product_type = CIRCLE_OWNER_PRODUCT_TYPE
+        elif selected_contact_package_plan is not None:
+            product_type = CONTACT_PACKAGE_PRODUCT_TYPE
+        else:
+            product_type = "member"
+        selected_plan = selected_circle_owner_plan or selected_contact_package_plan or selected_member_plan or {}
+
+        if product_type == CIRCLE_OWNER_PRODUCT_TYPE and bool(user.is_circle_owner):
+            raise BusinessException(message="您已经是永久圈主，无需重复购买", code=4529, status_code=409)
 
         payment_options = _resolve_payment_options(db=db)
         enabled_channels = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
@@ -1158,7 +1308,7 @@ def subscribe_member_plan(
                 else plan_price_amount
             )
             original_amount = plan_price_amount
-        else:
+        elif product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
             contact_package_view_count = max(int(selected_plan.get("view_count") or 0), 0)
             if contact_package_view_count <= 0:
                 raise BusinessException(message="人群包查看次数配置无效", code=4528, status_code=400)
@@ -1176,7 +1326,7 @@ def subscribe_member_plan(
         order_no = _generate_order_no()
         package_remark = json.dumps(
             {
-                "product_type": CONTACT_PACKAGE_PRODUCT_TYPE,
+                "product_type": product_type,
                 "view_count": contact_package_view_count,
             },
             ensure_ascii=False,
@@ -1216,7 +1366,7 @@ def subscribe_member_plan(
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_WALLET,
                 status=ORDER_STATUS_PAID,
-                remark=package_remark if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else "member subscribe by wallet",
+                remark=package_remark if product_type != "member" else "member subscribe by wallet",
                 paid_at=now,
             )
             db.add(order)
@@ -1228,12 +1378,40 @@ def subscribe_member_plan(
                     user_pk=user_pk,
                     change_amount=-price_amount,  # 负数表示支出
                     balance_after=new_balance,
-                    biz_type="member_subscribe" if product_type == "member" else "contact_package",
+                    biz_type=(
+                        "member_subscribe"
+                        if product_type == "member"
+                        else CIRCLE_OWNER_PRODUCT_TYPE
+                        if product_type == CIRCLE_OWNER_PRODUCT_TYPE
+                        else CONTACT_PACKAGE_PRODUCT_TYPE
+                    ),
                     biz_key=order_no,
                     title=f"购买{str(selected_plan['name'])}",
                     remark=f"订单号: {order_no}",
                     commit=False,
                 )
+
+            if product_type == CIRCLE_OWNER_PRODUCT_TYPE:
+                _grant_circle_owner(db=db, user_pk=user_pk)
+                db.commit()
+                db.refresh(order)
+                db.refresh(wallet)
+                return {
+                    "action": "wallet_paid",
+                    "product_type": CIRCLE_OWNER_PRODUCT_TYPE,
+                    "order_no": str(order.order_no),
+                    "plan_id": str(order.plan_id),
+                    "plan_name": str(order.plan_name),
+                    "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                    "original_amount": float(
+                        Decimal(str(order.original_amount or 0)).quantize(Decimal("0.01"))
+                    ),
+                    "saved_amount": float(saved_amount),
+                    "pay_channel": str(order.pay_channel),
+                    "wallet_balance": float(Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))),
+                    "is_circle_owner": True,
+                    "lifetime": True,
+                }
 
             if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
                 package_snapshot = grant_contact_package_views(
@@ -1324,10 +1502,30 @@ def subscribe_member_plan(
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_MOCK,
                 status=ORDER_STATUS_PAID,
-                remark=package_remark if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else "member subscribe by mock",
+                remark=package_remark if product_type != "member" else "member subscribe by mock",
                 paid_at=now,
             )
             db.add(order)
+
+            if product_type == CIRCLE_OWNER_PRODUCT_TYPE:
+                _grant_circle_owner(db=db, user_pk=user_pk)
+                db.commit()
+                db.refresh(order)
+                return {
+                    "action": "mock_paid",
+                    "product_type": CIRCLE_OWNER_PRODUCT_TYPE,
+                    "order_no": str(order.order_no),
+                    "plan_id": str(order.plan_id),
+                    "plan_name": str(order.plan_name),
+                    "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                    "original_amount": float(
+                        Decimal(str(order.original_amount or 0)).quantize(Decimal("0.01"))
+                    ),
+                    "saved_amount": float(saved_amount),
+                    "pay_channel": str(order.pay_channel),
+                    "is_circle_owner": True,
+                    "lifetime": True,
+                }
 
             if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
                 package_snapshot = grant_contact_package_views(
@@ -1436,7 +1634,7 @@ def subscribe_member_plan(
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_WXPAY,
                 status=ORDER_STATUS_PENDING,
-                remark=package_remark if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else "member subscribe by wxpay pending",
+                remark=package_remark if product_type != "member" else "member subscribe by wxpay pending",
                 paid_at=None,
             )
             db.add(order)

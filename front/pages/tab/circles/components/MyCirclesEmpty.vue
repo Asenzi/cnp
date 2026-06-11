@@ -1,5 +1,6 @@
 <template>
   <view class="empty-wrap">
+    <image class="empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
     <text class="empty-title">未找到匹配圈子</text>
     <text class="empty-subtitle">试试其他关键词</text>
   </view>
@@ -8,14 +9,19 @@
 <style scoped>
 .empty-wrap {
   margin-top: 28rpx;
-  border-radius: 16rpx;
-  border: 1rpx dashed #cbd5e1;
-  background: #ffffff;
-  min-height: 180rpx;
+  background: transparent;
+  min-height: 280rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 60rpx 32rpx;
+}
+
+.empty-icon {
+  width: 200rpx;
+  height: 200rpx;
+  margin-bottom: 12rpx;
 }
 
 .empty-title {
@@ -34,8 +40,7 @@
 
 @media (prefers-color-scheme: dark) {
   .empty-wrap {
-    background: #0f172a;
-    border-color: #334155;
+    background: transparent;
   }
 
   .empty-title {

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from secrets import token_hex
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,7 @@ from app.crud.network import (
     get_shared_circle_names,
     get_shared_connection_names,
     get_user_circle_codes,
+    get_user_follows,
     get_user_interests,
     list_candidate_users,
     list_filter_option_values,
@@ -41,6 +42,8 @@ from app.crud.network import (
 from app.crud.sys_config import get_sys_config_values
 from app.models.user import User
 from app.models.user_verification import UserVerification
+from app.models.resource_post import ResourcePost
+from app.payment import resolve_member_snapshot
 from app.verification.constants import VerificationStatus, VerificationType
 
 SUPPORTED_TABS = {"recommend", "nearby", "latest"}
@@ -1136,8 +1139,21 @@ def list_network_recommendations(
     candidate_user_pks = {int(row.user.id) for row in page_rows if row.user and row.user.id}
     candidate_profile_map = _load_candidate_profile_lines(db=db, candidate_user_pks=candidate_user_pks)
 
-    # 获取感兴趣状态
-    interest_map = get_user_interests(db=db, user_pk=viewer.id, target_user_pks=candidate_user_pks)
+    # 获取关注状态
+    interest_map = get_user_follows(db=db, follower_user_pk=viewer.id, following_user_pks=candidate_user_pks)
+
+    # 批量查询用户发布的资源数量
+    post_count_map: dict[int, int] = {}
+    if candidate_user_pks:
+        post_count_results = db.execute(
+            select(ResourcePost.author_user_pk, func.count(ResourcePost.id))
+            .where(
+                ResourcePost.author_user_pk.in_(candidate_user_pks),
+                ResourcePost.status == "active"
+            )
+            .group_by(ResourcePost.author_user_pk)
+        ).all()
+        post_count_map = {int(user_pk): int(count) for user_pk, count in post_count_results}
 
     if offset <= 0 and page_rows:
         _FIRST_PAGE_RECENT_CACHE[refresh_context_key] = (
@@ -1168,6 +1184,7 @@ def list_network_recommendations(
             if name
         ][:3]
         safe_reason_detail["shared_connection_source"] = _clean_reason_text(safe_reason_detail.get("shared_connection_source"))
+        member_snapshot = resolve_member_snapshot(db=db, user_pk=int(row.user.id))
 
         items.append(
             {
@@ -1181,11 +1198,25 @@ def list_network_recommendations(
                 "job_title": str(row.user.job_title or candidate_profile_map.get(int(row.user.id), {}).get("job_title", "")).strip(),
                 "circle_names": list(safe_reason_detail["circle_names"]),
                 "is_verified": bool(row.user.is_verified),
-                "is_interested": interest_map.get(int(row.user.id), False),
+                "is_member": bool(member_snapshot["is_member"]),
+                "member_opened": bool(member_snapshot["member_opened"]),
+                "is_vip": bool(member_snapshot["is_vip"]),
+                "vip_opened": bool(member_snapshot["vip_opened"]),
+                "member_status": str(member_snapshot["member_status"]),
+                "vip_status": str(member_snapshot["vip_status"]),
+                "member_expire_at": member_snapshot["member_expire_at"],
+                "vip_expire_at": member_snapshot["vip_expire_at"],
+                "member_plan_id": str(member_snapshot["member_plan_id"]),
+                "member_plan_name": str(member_snapshot["member_plan_name"]),
+                "is_followed": interest_map.get(int(row.user.id), False),
+                "followed": interest_map.get(int(row.user.id), False),
                 "active_text": row.active_text,
                 "reason_tags": safe_reason_tags,
                 "reason_detail": safe_reason_detail,
                 "score": round(row.score, 4),
+                "post_count": post_count_map.get(int(row.user.id), 0),
+                "postCount": post_count_map.get(int(row.user.id), 0),
+                "posts_count": post_count_map.get(int(row.user.id), 0),
             }
         )
 

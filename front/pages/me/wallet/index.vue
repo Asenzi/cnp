@@ -7,7 +7,7 @@
         <view class="action-wrap">
           <view class="recharge-btn" hover-class="recharge-btn-hover" @tap="onTapRecharge">
             <view class="recharge-btn-inner">
-              <image class="recharge-icon" mode="aspectFit" src="/static/icon/recharge.png" />
+              <image class="recharge-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/recharge.png" />
               <text class="recharge-text">充值</text>
             </view>
           </view>
@@ -24,7 +24,7 @@
               @tap.stop="onTapTimeFilter"
             >
               <text class="filter-text">{{ timeFilterButtonText }}</text>
-              <image class="filter-icon" mode="aspectFit" src="/static/me-icons/tune-gray.png" />
+              <image class="filter-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/tune-gray.png" />
             </view>
 
             <view
@@ -34,7 +34,7 @@
               @tap.stop="onTapTypeFilter"
             >
               <text class="filter-text">{{ typeFilterButtonText }}</text>
-              <image class="filter-icon" mode="aspectFit" src="/static/me-icons/tune-gray.png" />
+              <image class="filter-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/tune-gray.png" />
             </view>
 
             <view v-if="showTimeFilterMenu" class="filter-dropdown time-filter-dropdown" @tap.stop>
@@ -72,7 +72,7 @@
         </view>
         <view v-else class="empty-wrap">
           <view class="empty-icon-wrap">
-            <image class="empty-icon" mode="aspectFit" src="/static/icon/block.png" />
+            <image class="empty-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/block.png" />
           </view>
           <text class="empty-text">{{ emptyTipText }}</text>
         </view>

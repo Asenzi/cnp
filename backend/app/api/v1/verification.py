@@ -4,13 +4,14 @@ from pathlib import Path
 from secrets import token_hex
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id, get_current_user_id_from_header_or_query
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
+from app.core.storage import upload_public_asset
 from app.crud import get_user_by_id, get_user_real_name_profile, get_user_verification
 from app.schemas.verification import (
     BusinessCardVerificationSubmitRequest,
@@ -163,6 +164,7 @@ async def upload_real_name_id_card_file(
 
 @router.post('/enterprise/license-file', summary='Upload enterprise license file')
 async def upload_enterprise_license_file(
+    request: Request,
     file: UploadFile = File(...),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
@@ -184,12 +186,13 @@ async def upload_enterprise_license_file(
     if suffix not in {'.jpg', '.jpeg', '.png', '.pdf'}:
         suffix = CONTENT_TYPE_EXTENSION_MAP.get(content_type, '.pdf')
 
-    LICENSE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{token_hex(4)}{suffix}"
-    save_path = LICENSE_UPLOAD_DIR / file_name
-    save_path.write_bytes(file_bytes)
-
-    relative_url = f'/static/uploads/licenses/{file_name}'
+    stored = upload_public_asset(
+        prefix='uploads/licenses',
+        file_bytes=file_bytes,
+        suffix=suffix,
+        content_type=content_type,
+        request=request,
+    )
     display_name = (file.filename or '营业执照').strip() or '营业执照'
     if len(display_name) > 128:
         display_name = display_name[:128]
@@ -197,7 +200,8 @@ async def upload_enterprise_license_file(
     return success_response(
         data={
             'name': display_name,
-            'url': relative_url,
+            'url': stored.url,
+            'path': stored.path,
             'size': len(file_bytes),
         },
         message='营业执照上传成功',

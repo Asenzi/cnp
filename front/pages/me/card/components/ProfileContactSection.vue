@@ -94,7 +94,7 @@ const maskDesc = computed(() => {
   if (canUnlockWithContactPackage.value) {
     return ''
   }
-  return '（完成实名认证，开通年度会员，或者购买人群包）'
+  return '开通年度会员即可解锁'
 })
 
 const lockedTitle = computed(() => {
@@ -794,14 +794,14 @@ watch(
 }
 
 .cover-mask-icon {
-  width: 30rpx;
-  height: 30rpx;
+  width: 46rpx;
+  height: 46rpx;
   margin-right: 10rpx;
 }
 
 .cover-mask-title {
   color: #172033;
-  font-size: 26rpx;
+  font-size: 30rpx;
   line-height: 34rpx;
   font-weight: 700;
   text-align: center;
@@ -810,11 +810,11 @@ watch(
 
 .cover-mask-desc {
   max-width: 88%;
-  margin-top: 10rpx;
-  color: #66758a;
-  font-size: 22rpx;
+  margin-top: 20rpx;
+  color: #333;
+  font-size: 28rpx;
   line-height: 32rpx;
-  font-weight: 500;
+  font-weight: 600;
   text-align: center;
   white-space: normal;
 }

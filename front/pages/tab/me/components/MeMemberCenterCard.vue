@@ -2,7 +2,7 @@
   <view class="member-card-wrap" @tap="$emit('open')">
     <view class="member-card">
       <view class="member-icon">
-        <image class="member-badge-img" mode="aspectFit" src="/static/icon/huiyuan.png" />
+        <image class="member-badge-img" mode="aspectFit" src="https://cos.cnptec.site/static/icon/huiyuan.png" />
       </view>
 
       <view class="member-main">

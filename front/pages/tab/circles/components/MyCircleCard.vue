@@ -37,7 +37,7 @@
         @tap="onEnter"
       >
         <text class="enter-btn-text">进入圈子</text>
-        <image class="enter-chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+        <image class="enter-chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
       </button>
     </view>
   </view>

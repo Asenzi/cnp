@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="security-page">
     <view class="page-shell">
       <view class="main-content">
@@ -21,7 +21,7 @@
 
               <view class="row-right">
                 <text v-if="item.valueText" class="row-value" :class="item.valueClass">{{ item.valueText }}</text>
-                <image class="row-chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+                <image class="row-chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
               </view>
             </view>
           </view>
@@ -69,24 +69,24 @@ const securityItems = computed(() => [
   {
     key: 'phone',
     label: '手机号',
-    iconPath: '/static/icon/phone.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/phone.png',
     valueText: phoneMasked.value
   },
   {
     key: 'password',
     label: '修改密码',
-    iconPath: '/static/icon/chage-pws.png'
+    iconPath: 'https://cos.cnptec.site/static/icon/chage-pws.png'
   },
   {
     key: 'wechat',
     label: '微信绑定',
-    iconPath: '/static/icon/wechat-link.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/wechat-link.png',
     valueText: wechatBindText.value
   },
   {
     key: 'realname',
     label: '实名认证',
-    iconPath: '/static/icon/certification.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/certification.png',
     valueText: realnameStatusText.value,
     valueClass: realnameApproved.value ? 'row-value-primary' : ''
   }

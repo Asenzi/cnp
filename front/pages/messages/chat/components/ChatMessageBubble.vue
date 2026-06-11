@@ -3,7 +3,7 @@
     <image
       v-if="!message.isSelf"
       class="avatar"
-      :src="peerAvatar || '/static/logo.png'"
+      :src="peerAvatar || 'https://cos.cnptec.site/static/logo.png'"
       mode="aspectFill"
     />
 
@@ -72,7 +72,7 @@
     <image
       v-if="message.isSelf"
       class="avatar"
-      :src="selfAvatar || '/static/logo.png'"
+      :src="selfAvatar || 'https://cos.cnptec.site/static/logo.png'"
       mode="aspectFill"
     />
   </view>
@@ -96,11 +96,11 @@ const props = defineProps({
   },
   peerAvatar: {
     type: String,
-    default: '/static/logo.png'
+    default: 'https://cos.cnptec.site/static/logo.png'
   },
   selfAvatar: {
     type: String,
-    default: '/static/logo.png'
+    default: 'https://cos.cnptec.site/static/logo.png'
   }
 })
 

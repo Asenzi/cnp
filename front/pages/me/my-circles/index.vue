@@ -133,10 +133,10 @@ const formatCount = (value) => {
 const sanitizeCircleImage = (value) => {
   const normalized = String(value || '').trim()
   if (!normalized) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   return normalized
 }

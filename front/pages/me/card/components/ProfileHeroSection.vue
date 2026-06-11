@@ -36,7 +36,7 @@
       >
         <image
           class="message-icon"
-          :src="actionType === 'share' ? '/static/icon/share.png' : '/static/icon/chat.png'"
+          :src="actionType === 'share' ? 'https://cos.cnptec.site/static/icon/share.png' : 'https://cos.cnptec.site/static/icon/chat.png'"
           mode="aspectFit"
         />
       </button>
@@ -46,7 +46,6 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { getApiBaseUrl } from '../../../../utils/request'
 import ProfileSymbol from './ProfileSymbol.vue'
 
 const props = defineProps({
@@ -64,17 +63,13 @@ const props = defineProps({
   }
 })
 
-const LOCAL_MEMBER_ICON_URL = '/static/icon/mennber.png'
+const LOCAL_MEMBER_ICON_URL = 'https://cos.cnptec.site/static/icon/mennber1.png'
 
 const memberIconLoadFailed = ref(false)
 const memberIconUrl = ref(LOCAL_MEMBER_ICON_URL)
 
 const remoteMemberIconUrl = computed(() => {
-  const baseUrl = String(getApiBaseUrl() || '').replace(/\/$/, '')
-  if (!baseUrl || !/^https:\/\//i.test(baseUrl)) {
-    return ''
-  }
-  return `${baseUrl}/static/icon/mennber.png`
+  return LOCAL_MEMBER_ICON_URL
 })
 
 const onMemberIconError = () => {

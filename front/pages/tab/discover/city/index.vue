@@ -1,14 +1,6 @@
 <template>
   <view class="city-page">
     <view class="page-shell">
-      <view class="top-nav" :style="navStyle">
-        <view class="back-btn" hover-class="back-btn-hover" @tap="goBack">
-          <image class="back-icon" mode="aspectFit" src="/static/me-icons/arrow-back-dark.png" />
-        </view>
-        <text class="nav-title">{{ uiText.title }}</text>
-        <view class="nav-placeholder"></view>
-      </view>
-
       <view class="search-wrap">
         <view class="search-box">
           <view class="search-icon">
@@ -161,15 +153,6 @@ const FALLBACK_HOT_CITIES = [
   '\u91cd\u5e86',
   '\u5357\u4eac'
 ]
-
-const systemInfo = uni.getSystemInfoSync()
-const statusBarHeight = Number(systemInfo?.statusBarHeight || 0)
-const capsuleRect = typeof uni.getMenuButtonBoundingClientRect === 'function'
-  ? uni.getMenuButtonBoundingClientRect()
-  : null
-const navHeight = Number(capsuleRect?.height || 32)
-const navTop = Number(capsuleRect?.top || 0)
-const navStyle = `padding-top:${navTop > 0 ? navTop : statusBarHeight + 6}px;min-height:${navHeight}px;`
 
 const openerEventChannel = ref(null)
 const keyword = ref('')
@@ -390,44 +373,6 @@ onLoad((query) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.top-nav {
-  padding-left: 24rpx;
-  padding-right: 24rpx;
-  padding-bottom: 14rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  background: #ffffff;
-}
-
-.back-btn,
-.nav-placeholder {
-  width: 72rpx;
-  height: 72rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.back-btn-hover {
-  opacity: 0.72;
-}
-
-.back-icon {
-  width: 40rpx;
-  height: 40rpx;
-}
-
-.nav-title {
-  flex: 1;
-  text-align: center;
-  color: #0f172a;
-  font-size: 38rpx;
-  line-height: 52rpx;
-  font-weight: 700;
 }
 
 .search-wrap {

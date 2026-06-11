@@ -53,7 +53,7 @@
           <text class="cell-title">谁可以向我发送好友请求</text>
           <text class="cell-subtitle cell-subtitle-primary">{{ friendRequestScopeLabel }}</text>
         </view>
-        <image class="chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+        <image class="chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
       </view>
 
       <view class="cell cell-border cell-click" hover-class="cell-active" @tap="selectMessageScope">
@@ -61,7 +61,7 @@
           <text class="cell-title">私信接收范围</text>
           <text class="cell-subtitle cell-subtitle-primary">{{ messageScopeLabel }}</text>
         </view>
-        <image class="chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+        <image class="chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
       </view>
 
       <view class="cell cell-border cell-compact">
@@ -81,12 +81,12 @@
 
       <view class="cell cell-border cell-click" hover-class="cell-active" @tap="openBlockedUsers">
         <view class="cell-left-inline">
-          <image class="block-icon" mode="aspectFit" src="/static/me-icons/cancel-slate.png" />
+          <image class="block-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/cancel-slate.png" />
           <text class="cell-title">已屏蔽的用户</text>
         </view>
         <view class="cell-right-inline">
           <text class="cell-count">{{ blockedCount }} 人</text>
-          <image class="chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+          <image class="chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
         </view>
       </view>
 

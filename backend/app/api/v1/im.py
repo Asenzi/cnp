@@ -21,6 +21,7 @@ from app.api.deps import db_session, get_current_user_id
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
 from app.core.security import decode_access_token
+from app.core.storage import upload_public_asset
 from app.crud import get_user_by_id
 from app.models.user import User
 from app.im import (
@@ -473,14 +474,14 @@ async def post_im_asset_upload(
     if provided_suffix and len(provided_suffix) <= 10:
         suffix = provided_suffix
 
-    save_dir = IM_UPLOAD_DIR / safe_kind
-    save_dir.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{token_hex(4)}{suffix}"
-    save_path = save_dir / file_name
-    save_path.write_bytes(file_bytes)
-
-    relative_url = f"/static/uploads/im/{safe_kind}/{file_name}"
-    display_name = (file.filename or file_name).strip() or file_name
+    stored = upload_public_asset(
+        prefix=f"uploads/im/{safe_kind}",
+        file_bytes=file_bytes,
+        suffix=suffix,
+        content_type=content_type,
+        request=request,
+    )
+    display_name = (file.filename or FsPath(stored.key).name).strip() or FsPath(stored.key).name
     if len(display_name) > 128:
         display_name = display_name[:128]
 
@@ -490,8 +491,8 @@ async def post_im_asset_upload(
             "name": display_name,
             "size": len(file_bytes),
             "mime_type": content_type or "application/octet-stream",
-            "path": relative_url,
-            "url": _to_public_file_url(relative_url, request),
+            "path": stored.path,
+            "url": stored.url,
         },
         message="上传成功",
     )

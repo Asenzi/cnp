@@ -1,6 +1,6 @@
 <template>
   <view class="safety-card">
-    <image class="safety-icon" mode="aspectFit" src="/static/me-icons/shield-person-primary.png" />
+    <image class="safety-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/shield-person-primary.png" />
     <text class="safety-text">资金由 Sapphire Ledger 保护</text>
   </view>
 </template>

@@ -12,6 +12,10 @@ class MemberOrderConfirmRequest(BaseModel):
     ext: dict | None = None
 
 
+class CircleOwnerPurchaseRequest(BaseModel):
+    pay_channel: str | None = Field(default=None, max_length=16)
+
+
 class WalletRechargeRequest(BaseModel):
     amount: float = Field(..., gt=0, le=200000)
     pay_channel: str | None = Field(default=None, max_length=16)

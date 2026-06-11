@@ -25,7 +25,7 @@ const props = defineProps({
 
 defineEmits(['detail'])
 
-const defaultAvatar = '/static/logo.png'
+const defaultAvatar = 'https://cos.cnptec.site/static/logo.png'
 
 const memberMetaText = computed(() => {
   const company = String(props.member?.company || props.member?.company_name || '').trim()

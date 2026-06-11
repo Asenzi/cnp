@@ -30,7 +30,7 @@
             <view class="points-offer-copy">
               <text class="points-offer-title">{{ pointsOfferTitle }}</text>
               <text class="points-offer-desc">{{ pointsOfferDescription }}</text>
-              <text class="points-offer-price">实付 ¥{{ payableAmountText }}</text>
+              <text class="points-offer-price">瀹炰粯 楼{{ payableAmountText }}</text>
             </view>
 
             <view class="points-offer-action">
@@ -62,7 +62,7 @@
           </view>
         </view>
 
-        <view v-if="showContactPackageSection" class="section">
+        <view v-if="false && showContactPackageSection" class="section">
           <view class="section-head">
             <text class="section-title section-title-plan">人群包订阅</text>
           </view>
@@ -155,11 +155,11 @@ const normalizeBenefitList = (list) => {
     return []
   }
   const benefitIconPaths = [
-    '/static/icon/1.png',
-    '/static/icon/2.png',
-    '/static/icon/3.png',
-    '/static/icon/4.png',
-    '/static/icon/5.png'
+    'https://cos.cnptec.site/static/icon/1.png',
+    'https://cos.cnptec.site/static/icon/2.png',
+    'https://cos.cnptec.site/static/icon/3.png',
+    'https://cos.cnptec.site/static/icon/4.png',
+    'https://cos.cnptec.site/static/icon/5.png'
   ]
   return list
     .map((item, index) => ({
@@ -196,7 +196,7 @@ const isYearlyPlan = (plan = {}) => {
   const id = String(plan?.id || '').trim().toLowerCase()
   const name = String(plan?.name || '').trim()
   const durationDays = Number(plan?.duration_days ?? plan?.durationDays ?? 0)
-  return id === 'yearly' || name.includes('年度') || durationDays >= 360
+  return id === 'yearly' || name.includes('骞村害') || durationDays >= 360
 }
 
 const normalizePlanList = (list) => {
@@ -354,7 +354,7 @@ const displaySubmitButtonText = computed(() => {
   if (isLoading.value) {
     return '加载中...'
   }
-  return `${effectiveOpenButtonText.value} ￥${payableAmountText.value}`
+  return `${effectiveOpenButtonText.value} ${payableAmountText.value}元`
 })
 
 const showToast = (title) => {
@@ -468,7 +468,7 @@ const loadMemberCenterOverview = async () => {
     syncSelectedPlan()
     syncPointsToggle()
   } catch (err) {
-    showToast(err?.message || '会员信息加载失败')
+    showToast(err?.message || '浼氬憳淇℃伅鍔犺浇澶辫触')
   } finally {
     isLoading.value = false
   }
@@ -544,7 +544,7 @@ const onTapOpenMember = async () => {
 
   const token = String(uni.getStorageSync('token') || '').trim()
   if (!token) {
-    showToast('请先登录')
+    showToast('璇峰厛鐧诲綍')
     return
   }
 
@@ -636,7 +636,7 @@ const onTapOpenSelectedPlan = async () => {
 
   const token = String(uni.getStorageSync('token') || '').trim()
   if (!token) {
-    showToast('请先登录')
+    showToast('璇峰厛鐧诲綍')
     return
   }
 

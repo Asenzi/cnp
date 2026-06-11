@@ -16,12 +16,11 @@
 	      "navigationBarTitleText": "Debug"
 	    }
 	  },
-   
+
     {
       "path": "pages/tab/discover/city/index",
       "style": {
         "navigationBarTitleText": "选择城市",
-        "navigationStyle": "custom",
         "navigationBarBackgroundColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "disableScroll": true
@@ -77,6 +76,24 @@
       }
     },
     {
+      "path": "pages/me/following/index",
+      "style": {
+        "navigationBarTitleText": "我的关注",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f8f9fa"
+      }
+    },
+    {
+      "path": "pages/me/followers/index",
+      "style": {
+        "navigationBarTitleText": "我的粉丝",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f8f9fa"
+      }
+    },
+    {
       "path": "pages/me/interests/index",
       "style": {
         "navigationBarTitleText": "感兴趣",
@@ -115,6 +132,14 @@
       "path": "pages/me/member-center/index",
       "style": {
         "navigationBarTitleText": "会员中心",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/me/circle-owner/apply/index",
+      "style": {
+        "navigationBarTitleText": "成为圈主",
         "navigationBarBackgroundColor": "#f6f6f8",
         "backgroundColor": "#f6f6f8"
       }
@@ -189,7 +214,7 @@
     {
       "path": "pages/me/about/index",
       "style": {
-        "navigationBarTitleText": "鍏充簬鎴戜滑",
+        "navigationBarTitleText": "关于我们",
         "navigationStyle": "custom",
         "navigationBarBackgroundColor": "#0d1320",
         "backgroundColor": "#0d1320"
@@ -366,9 +391,7 @@
       "style": {
         "navigationBarTitleText": "圈子详情",
         "navigationBarBackgroundColor": "#f6f6f8",
-        "backgroundColor": "#f6f6f8",
-        "enableShareAppMessage": true,
-        "enableShareTimeline": true
+        "backgroundColor": "#f6f6f8"
       }
     }
     
@@ -400,14 +423,14 @@
       {
         "pagePath": "pages/tab/circles/index",
         "text": "圈子",
-        "iconPath": "static/quan.png",
+        "iconPath": "/static/quan.png",
         "selectedIconPath": "/static/quan-s.png"
       },
       
       {
         "pagePath": "pages/tab/me/index",
         "text": "我的",
-        "iconPath": "static/my.png",
+        "iconPath": "/static/my.png",
         "selectedIconPath": "/static/my-s.png"
       }
     ]

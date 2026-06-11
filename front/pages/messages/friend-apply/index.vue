@@ -150,7 +150,7 @@ const ensureLoggedIn = () => {
 const resolveAvatarUrl = (url) => {
   const normalized = String(url || '').trim()
   if (!normalized) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   if (/^https?:\/\//.test(normalized)) {
     return normalized
@@ -159,7 +159,7 @@ const resolveAvatarUrl = (url) => {
     if (normalized.startsWith('/static/')) {
       return normalized
     }
-    const base = String(getApiBaseUrl() || 'http://172.20.10.3:8001').trim()
+    const base = String(getApiBaseUrl() || 'https://www.cnptec.site').trim()
     return `${base}${normalized}`
   }
   return normalized

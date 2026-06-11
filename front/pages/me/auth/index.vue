@@ -18,11 +18,11 @@
 
               <view class="status-row">
                 <view v-if="card.status === VERIFICATION_STATUS.PENDING" class="status-pending">
-                  <image class="status-verified-icon" mode="aspectFit" src="/static/me-icons/verified-emerald.png" />
+                  <image class="status-verified-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/verified-emerald.png" />
                   <text class="status-pending-text">{{ card.statusText }}</text>
                 </view>
                 <view v-else-if="card.status === VERIFICATION_STATUS.APPROVED" class="status-approved">
-                  <image class="status-verified-icon" mode="aspectFit" src="/static/me-icons/verified-emerald.png" />
+                  <image class="status-verified-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/verified-emerald.png" />
                   <text class="status-approved-text">{{ card.statusText }}</text>
                 </view>
                 <text v-else-if="card.status === VERIFICATION_STATUS.REJECTED" class="status-rejected">
@@ -46,7 +46,7 @@
         </view>
 
         <view class="notice-card">
-          <image class="notice-icon" mode="aspectFit" src="/static/me-icons/shield-person-primary.png" />
+          <image class="notice-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/shield-person-primary.png" />
           <view class="notice-copy">
             <text class="notice-title">隐私安全承诺</text>
             <text class="notice-desc">

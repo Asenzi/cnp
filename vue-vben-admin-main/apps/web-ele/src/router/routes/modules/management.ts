@@ -50,6 +50,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'CircleOwnerApplicationManagement',
+        path: '/reviews/circle-owners',
+        component: () => import('#/views/admin/circle-owner-applications/index.vue'),
+        meta: {
+          icon: 'lucide:crown',
+          title: '圈主申请',
+        },
+      },
+      {
         name: 'ProfileReviewManagement',
         path: '/reviews/profiles',
         component: () => import('#/views/admin/content-reviews/index.vue'),

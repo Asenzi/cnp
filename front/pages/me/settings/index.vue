@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="settings-page">
     <view class="page-shell">
       <view class="group-wrap first-group">
@@ -21,7 +21,7 @@
             <view class="row-right">
               <text v-if="item.extraText" class="row-extra">{{ item.extraText }}</text>
               <view v-if="item.showDot" class="row-dot"></view>
-              <image class="row-chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+              <image class="row-chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
             </view>
           </view>
         </view>
@@ -47,7 +47,7 @@
             <view class="row-right">
               <text v-if="item.extraText" class="row-extra">{{ item.extraText }}</text>
               <view v-if="item.showDot" class="row-dot"></view>
-              <image class="row-chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+              <image class="row-chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
             </view>
           </view>
         </view>
@@ -73,7 +73,7 @@
             <view class="row-right">
               <text v-if="item.extraText" class="row-extra">{{ item.extraText }}</text>
               <view v-if="item.showDot" class="row-dot"></view>
-              <image class="row-chevron" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+              <image class="row-chevron" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
             </view>
           </view>
         </view>
@@ -101,12 +101,12 @@ const accountSecurityItems = computed(() => [
   {
     key: 'account-security',
     label: '账号与安全',
-    iconPath: '/static/me-icons/shield-person-primary.png'
+    iconPath: 'https://cos.cnptec.site/static/me-icons/shield-person-primary.png'
   },
   {
     key: 'privacy',
     label: '隐私设置',
-    iconPath: '/static/me-icons/tune-gray.png'
+    iconPath: 'https://cos.cnptec.site/static/me-icons/tune-gray.png'
   }
 ])
 
@@ -114,23 +114,23 @@ const systemItems = computed(() => [
   {
     key: 'general',
     label: '通用设置',
-    iconPath: '/static/me-icons/tune-gray.png'
+    iconPath: 'https://cos.cnptec.site/static/me-icons/tune-gray.png'
   },
   {
     key: 'clear-cache',
     label: '清除缓存',
-    iconPath: '/static/me-icons/cancel-slate.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/cancel-slate.png',
     extraText: cacheSizeText.value
   },
   {
     key: 'about',
     label: '关于圈脉链',
-    iconPath: '/static/me-icons/info-gray.png'
+    iconPath: 'https://cos.cnptec.site/static/me-icons/info-gray.png'
   },
   {
     key: 'check-update',
     label: '检查更新',
-    iconPath: '/static/me-icons/event-orange.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/event-orange.png',
     showDot: true
   }
 ])
@@ -139,7 +139,7 @@ const otherItems = computed(() => [
   {
     key: 'help',
     label: '反馈与帮助',
-    iconPath: '/static/me-icons/help-gray.png'
+    iconPath: 'https://cos.cnptec.site/static/me-icons/help-gray.png'
   }
 ])
 

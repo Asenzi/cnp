@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func, text
+from decimal import Decimal
+
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -29,6 +31,31 @@ class CircleJoinRequest(Base):
     )
     message: Mapped[str | None] = mapped_column(Text, nullable=True, comment="申请留言")
     reject_reason: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="拒绝原因")
+    order_no: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default=text("0.00"),
+    )
+    pay_channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    payment_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="unpaid",
+        server_default=text("'unpaid'"),
+        index=True,
+    )
+    transaction_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    refund_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="none",
+        server_default=text("'none'"),
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    auto_approve_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="审核时间")
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

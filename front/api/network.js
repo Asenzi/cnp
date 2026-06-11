@@ -82,6 +82,16 @@ export function toggleUserInterest(targetUserId, desiredInterested) {
   })
 }
 
+export function toggleUserFollow(targetUserId, desiredFollow) {
+  const desiredQuery = typeof desiredFollow === 'boolean'
+    ? `&desired=${desiredFollow ? 'true' : 'false'}`
+    : ''
+  return request({
+    url: `/api/v1/network/follow/toggle?target_user_id=${encodeURIComponent(targetUserId)}${desiredQuery}`,
+    method: 'POST'
+  })
+}
+
 export function getInterestedUsers(params = {}) {
   const query = []
   const appendQuery = (key, value) => {

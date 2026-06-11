@@ -44,7 +44,7 @@ const props = defineProps({
 defineEmits(['detail'])
 
 const author = computed(() => (props.post?.author && typeof props.post.author === 'object' ? props.post.author : {}))
-const authorAvatar = computed(() => String(author.value.avatar_url || '/static/logo.png').trim() || '/static/logo.png')
+const authorAvatar = computed(() => String(author.value.avatar_url || 'https://cos.cnptec.site/static/logo.png').trim() || 'https://cos.cnptec.site/static/logo.png')
 const authorName = computed(() => String(author.value.nickname || '\u672a\u547d\u540d\u7528\u6237').trim() || '\u672a\u547d\u540d\u7528\u6237')
 const authorRole = computed(() => String(author.value.role || '\u5546\u52a1\u4eba\u58eb').trim() || '\u5546\u52a1\u4eba\u58eb')
 const industryLabel = computed(() => String(props.post?.industry_label || '').trim())

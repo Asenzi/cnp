@@ -59,6 +59,18 @@ def get_current_user_id(
     return user_id
 
 
+def get_optional_current_user_id(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(db_session),
+) -> int | None:
+    if not authorization:
+        return None
+    try:
+        return get_current_user_id(authorization=authorization, db=db)
+    except HTTPException:
+        return None
+
+
 def get_current_user_id_from_header_or_query(
     authorization: str | None = Header(default=None, alias="Authorization"),
     access_token: str | None = Query(default=None, alias="access_token"),

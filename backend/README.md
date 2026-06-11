@@ -26,6 +26,7 @@ https://apis.map.qq.com。
 - Pydantic v2 + pydantic-settings
 - MySQL
 - Redis
+- Celery（异步任务队列）
 - Uvicorn
 - python-dotenv
 - loguru
@@ -69,10 +70,41 @@ cp .env.example .env
 
 4. 启动服务
 
+**启动 FastAPI 服务器：**
+
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
+# 或使用绝对路径
 python -m uvicorn app.main:app --app-dir F:\项目区\friends\backend --host 0.0.0.0 --port 8001 --reload
+```
+
+**启动 Celery Worker（异步任务处理）：**
+
+```bash
+# 在新的终端窗口中运行
+celery -A app.core.celery_app worker --loglevel=info
+
+# Windows 需要添加 --pool=solo
+celery -A app.core.celery_app worker --loglevel=info --pool=solo
+```
+
+**启动 Celery Beat（定时任务调度，可选）：**
+
+```bash
+# 在新的终端窗口中运行
+celery -A app.core.celery_app beat --loglevel=info
+```
+
+**监控 Celery 任务（可选）：**
+
+```bash
+# 安装 flower
+pip install flower
+
+# 启动 flower
+celery -A app.core.celery_app flower
+# 访问 http://localhost:5555
 ```
 
 WECHAT_PAY_ENABLED=true
@@ -113,12 +145,65 @@ alembic downgrade -1
 - 环境变量配置读取
 - MySQL 连接与 Session 依赖
 - Redis 初始化与关闭钩子
+- Celery 异步任务队列
 - 全局日志配置（loguru）
 - 统一响应结构
 - 统一异常处理
 - `/api/v1` 路由前缀
 - 健康检查接口
 - 业务模块路由占位（auth/user/circle/network/post/event/im/payment/admin）
+
+## Celery 任务使用示例
+
+### 在代码中调用异步任务
+
+```python
+from app.tasks.email import send_verification_email, send_welcome_email
+from app.tasks.notification import send_push_notification
+
+# 立即执行（异步）
+send_verification_email.delay("user@example.com", "123456")
+
+# 延迟 60 秒后执行
+send_welcome_email.apply_async(
+    args=["user@example.com", "张三"],
+    countdown=60
+)
+
+# 指定时间执行
+from datetime import datetime, timedelta
+send_push_notification.apply_async(
+    args=[123, "提醒", "您有新消息"],
+    eta=datetime.now() + timedelta(hours=1)
+)
+```
+
+### 创建新的异步任务
+
+在 `app/tasks/` 目录下创建新文件，例如 `app/tasks/cleanup.py`：
+
+```python
+from app.core.celery_app import celery_app
+from app.core.logger import logger
+
+@celery_app.task(name="app.tasks.cleanup.cleanup_expired_sessions")
+def cleanup_expired_sessions() -> dict[str, int]:
+    """清理过期会话"""
+    try:
+        # 实现清理逻辑
+        deleted_count = 0
+        logger.info(f"Cleaned up {deleted_count} expired sessions")
+        return {"deleted": deleted_count}
+    except Exception as exc:
+        logger.error(f"Failed to cleanup sessions: {exc}")
+        raise
+```
+
+然后在 `app/core/celery_app.py` 的 `include` 列表中添加新模块：
+
+```python
+include=["app.tasks.email", "app.tasks.notification", "app.tasks.cleanup"]
+```
 
 .\.venv\Scripts\alembic.exe upgrade head
 .\.venv\Scripts\alembic.exe current

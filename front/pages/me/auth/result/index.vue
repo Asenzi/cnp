@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="result-page">
     <view class="page-shell">
       <view class="main-content">
@@ -6,7 +6,7 @@
           <view class="icon-wrap">
             <view class="icon-glow"></view>
             <view class="icon-core">
-              <image class="icon-image" mode="aspectFit" src="/static/me-icons/verified-white.png" />
+              <image class="icon-image" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/verified-white.png" />
             </view>
           </view>
 
@@ -17,7 +17,7 @@
 
           <view class="status-card">
             <view class="status-icon-box">
-              <image class="status-icon" mode="aspectFit" src="/static/me-icons/shield-person-primary.png" />
+              <image class="status-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/shield-person-primary.png" />
             </view>
             <view class="status-copy">
               <text class="status-name">{{ typeMeta.title }}</text>

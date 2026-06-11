@@ -837,5 +837,112 @@ def get_user_interests(
         UserInterest.target_user_pk.in_(target_user_pks),
     )
     interested_pks = {row[0] for row in db.execute(stmt).all()}
-    
+
     return {pk: (pk in interested_pks) for pk in target_user_pks}
+
+
+def toggle_user_follow(
+    db: Session,
+    *,
+    follower_user_pk: int,
+    following_user_pk: int,
+    desired_state: bool | None = None,
+) -> bool:
+    """切换或设置用户关注状态，返回最新状态。"""
+    from app.models.user_follow import UserFollow
+
+    if follower_user_pk == following_user_pk:
+        return False
+
+    stmt = select(UserFollow).where(
+        UserFollow.follower_user_pk == follower_user_pk,
+        UserFollow.following_user_pk == following_user_pk,
+    )
+
+    normalized_desired = desired_state if isinstance(desired_state, bool) else None
+
+    if normalized_desired is False:
+        existing = db.execute(stmt).scalar_one_or_none()
+        if existing is None:
+            return False
+        db.delete(existing)
+        db.commit()
+        return False
+
+    if normalized_desired is True:
+        existing = db.execute(stmt).scalar_one_or_none()
+        if existing is not None:
+            return True
+        follow = UserFollow(
+            follower_user_pk=follower_user_pk,
+            following_user_pk=following_user_pk,
+        )
+        db.add(follow)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+        return True
+
+    existing = db.execute(stmt).scalar_one_or_none()
+    if existing is not None:
+        db.delete(existing)
+        db.commit()
+        return False
+
+    follow = UserFollow(
+        follower_user_pk=follower_user_pk,
+        following_user_pk=following_user_pk,
+    )
+    db.add(follow)
+    try:
+        db.commit()
+        return True
+    except IntegrityError:
+        db.rollback()
+        return True
+
+
+def get_user_follows(
+    db: Session,
+    *,
+    follower_user_pk: int,
+    following_user_pks: set[int],
+) -> dict[int, bool]:
+    """批量查询用户对目标用户的关注状态"""
+    from app.models.user_follow import UserFollow
+
+    if not following_user_pks:
+        return {}
+
+    stmt = select(UserFollow.following_user_pk).where(
+        UserFollow.follower_user_pk == follower_user_pk,
+        UserFollow.following_user_pk.in_(following_user_pks),
+    )
+    followed_pks = {row[0] for row in db.execute(stmt).all()}
+
+    return {pk: (pk in followed_pks) for pk in following_user_pks}
+
+
+def get_user_following_count(db: Session, user_pk: int) -> int:
+    """获取用户关注的人数"""
+    from app.models.user_follow import UserFollow
+
+    count = db.scalar(
+        select(func.count(UserFollow.id)).where(
+            UserFollow.follower_user_pk == user_pk
+        )
+    )
+    return count or 0
+
+
+def get_user_fans_count(db: Session, user_pk: int) -> int:
+    """获取用户粉丝数"""
+    from app.models.user_follow import UserFollow
+
+    count = db.scalar(
+        select(func.count(UserFollow.id)).where(
+            UserFollow.following_user_pk == user_pk
+        )
+    )
+    return count or 0

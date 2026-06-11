@@ -3,7 +3,7 @@
     <!-- 导航栏 -->
     <view class="navbar" :style="{ paddingTop: statusBarHeight + 'px' }">
       <view class="navbar-back" @tap="goBack">
-        <image class="back-icon" src="/static/me-icons/arrow-back-dark.png" mode="aspectFit" />
+        <image class="back-icon" src="https://cos.cnptec.site/static/me-icons/arrow-back-dark.png" mode="aspectFit" />
       </view>
       <text class="navbar-title">帮助与反馈</text>
       <view class="navbar-placeholder"></view>
@@ -24,7 +24,7 @@
             @tap="openFaq(item)"
           >
             <text class="faq-title">{{ item.title }}</text>
-            <image class="chevron" src="/static/me-icons/chevron-light.png" mode="aspectFit" />
+            <image class="chevron" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" mode="aspectFit" />
           </view>
         </view>
 
@@ -38,7 +38,7 @@
                   <text class="select-text" :class="{ 'select-placeholder': feedbackTypeIndex < 0 }">
                     {{ selectedFeedbackTypeLabel || '请选择反馈类型' }}
                   </text>
-                  <image class="select-icon" src="/static/me-icons/expand-more-slate.png" mode="aspectFit" />
+                  <image class="select-icon" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" mode="aspectFit" />
                 </view>
               </picker>
             </view>
@@ -63,7 +63,7 @@
                   hover-class="upload-tile-active"
                   @tap="chooseImages"
                 >
-                  <image class="upload-icon" src="/static/me-icons/image-primary.png" mode="aspectFit" />
+                  <image class="upload-icon" src="https://cos.cnptec.site/static/me-icons/image-primary.png" mode="aspectFit" />
                   <text class="upload-text">添加图片</text>
                 </view>
                 <view v-for="(image, index) in images" :key="image.id" class="preview-wrap">
@@ -101,7 +101,7 @@
           <!-- <button class="support-card support-card-primary" open-type="contact" hover-class="support-card-active">
             <view class="support-left">
               <view class="support-icon support-icon-primary">
-                <image class="support-icon-img support-icon-invert" src="/static/me-icons/help-gray.png" mode="aspectFit" />
+                <image class="support-icon-img support-icon-invert" src="https://cos.cnptec.site/static/me-icons/help-gray.png" mode="aspectFit" />
               </view>
               <view class="support-copy">
                 <text class="support-title support-title-primary">在线客服</text>
@@ -114,7 +114,7 @@
           <view class="support-card" hover-class="support-card-active" @tap="copySupportEmail">
             <view class="support-left">
               <view class="support-icon">
-                <image class="support-icon-img" src="/static/me-icons/contact-page-primary.png" mode="aspectFit" />
+                <image class="support-icon-img" src="https://cos.cnptec.site/static/me-icons/contact-page-primary.png" mode="aspectFit" />
               </view>
               <view class="support-copy">
                 <text class="support-title">复制邮箱</text>

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="card">
     <text class="card-title">基本信息</text>
 
@@ -21,7 +21,7 @@
         <text class="picker-text" :class="{ 'picker-text-placeholder': !industry }">
           {{ industry || '请选择行业' }}
         </text>
-        <image class="picker-arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+        <image class="picker-arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
       </view>
     </view>
 

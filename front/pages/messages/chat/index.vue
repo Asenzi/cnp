@@ -96,8 +96,8 @@ const DELIVERY_PRIORITY = {
 const targetUserId = ref('')
 const selfUserId = ref('')
 const peerName = ref('\u804a\u5929')
-const peerAvatar = ref('/static/logo.png')
-const selfAvatar = ref('/static/logo.png')
+const peerAvatar = ref('https://cos.cnptec.site/static/logo.png')
+const selfAvatar = ref('https://cos.cnptec.site/static/logo.png')
 const peerOnline = ref(null)
 
 const messages = ref([])
@@ -185,7 +185,7 @@ const ensureLoggedIn = () => {
 const resolveAvatarUrl = (url) => {
   const normalized = String(url || '').trim()
   if (!normalized) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   if (/^https?:\/\//.test(normalized)) {
     return normalized
@@ -194,7 +194,7 @@ const resolveAvatarUrl = (url) => {
     if (normalized.startsWith('/static/')) {
       return normalized
     }
-    const base = String(getApiBaseUrl() || 'http://172.20.10.3:8001').trim()
+    const base = String(getApiBaseUrl() || 'https://www.cnptec.site').trim()
     return `${base}${normalized}`
   }
   return normalized
@@ -202,7 +202,7 @@ const resolveAvatarUrl = (url) => {
 
 const refreshSelfProfile = () => {
   const userInfo = uni.getStorageSync('userInfo') || {}
-  const avatar = userInfo.avatar_url || userInfo.avatarUrl || userInfo.avatar || '/static/logo.png'
+  const avatar = userInfo.avatar_url || userInfo.avatarUrl || userInfo.avatar || 'https://cos.cnptec.site/static/logo.png'
   selfAvatar.value = resolveAvatarUrl(avatar)
   selfUserId.value = String(userInfo.user_id || userInfo.userId || '').trim()
 }
@@ -832,7 +832,7 @@ const sendCardMessage = async () => {
     user_id: String(userInfo.userId || userInfo.user_id || '').trim(),
     name: String(userInfo.nickname || '').trim() || '\u5708\u8109\u94fe\u7528\u6237',
     subtitle: [userInfo.industry_label, userInfo.city_name].filter(Boolean).join(' | ') || '\u5708\u8109\u94fe\u7528\u6237',
-    avatar_url: resolveAvatarUrl(userInfo.avatar_url || userInfo.avatarUrl || userInfo.avatar || '/static/logo.png')
+    avatar_url: resolveAvatarUrl(userInfo.avatar_url || userInfo.avatarUrl || userInfo.avatar || 'https://cos.cnptec.site/static/logo.png')
   }
   await sendMessageWithLocalState({
     content: JSON.stringify(payload),
@@ -1113,7 +1113,7 @@ onLoad((query = {}) => {
     return
   }
   peerName.value = decodeURIComponent(String(query?.name || '\u804a\u5929').trim())
-  peerAvatar.value = resolveAvatarUrl(decodeURIComponent(String(query?.avatar || '/static/logo.png').trim()))
+  peerAvatar.value = resolveAvatarUrl(decodeURIComponent(String(query?.avatar || 'https://cos.cnptec.site/static/logo.png').trim()))
   if (peerName.value) {
     uni.setNavigationBarTitle({
       title: peerName.value

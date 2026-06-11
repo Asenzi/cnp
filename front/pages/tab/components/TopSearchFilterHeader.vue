@@ -2,11 +2,10 @@
   <view class="header-wrap" :style="topStyle">
     <view class="search-wrap" :style="searchWrapStyle">
       <view class="search-bar" :style="searchBarStyle">
-        <image class="search-icon" src="/static/icon/search.png" mode="aspectFit" />
+        <image class="search-icon" src="https://cos.cnptec.site/static/icon/search.png" mode="aspectFit" />
         <input
           :value="modelValue"
           class="search-input"
-          :style="searchBarStyle"
           type="text"
           :placeholder="searchPlaceholder"
           placeholder-class="search-placeholder"
@@ -56,7 +55,7 @@ const props = defineProps({
   },
   searchPlaceholder: {
     type: String,
-    default: '搜索'
+    default: '鎼滅储'
   },
   topPaddingPx: {
     type: Number,
@@ -113,7 +112,6 @@ const onInput = (event) => {
   z-index: 20;
   background: #ffffff;
   border-bottom: 1rpx solid #f1f5f9;
-  padding-bottom: 10rpx;
 }
 
 .search-wrap {

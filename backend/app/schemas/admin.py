@@ -33,6 +33,11 @@ class AdminCircleStatusPayload(BaseModel):
     status: Literal["active", "inactive"] = "active"
 
 
+class AdminCircleOwnerReviewPayload(BaseModel):
+    action: Literal["approve", "reject"]
+    reject_reason: str | None = Field(default=None, max_length=500)
+
+
 class AdminResourcePostStatusPayload(BaseModel):
     status: Literal["active", "offline"] = "active"
 

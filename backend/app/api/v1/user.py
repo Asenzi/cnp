@@ -8,17 +8,18 @@ from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request as UrlRequest, urlopen
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import db_session, get_current_user_id
+from app.api.deps import db_session, get_current_user_id, get_optional_current_user_id
 from app.core.asset_urls import normalize_persisted_asset_url, sanitize_public_asset_url
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
 from app.core.response import success_response
+from app.core.storage import upload_public_asset
 from app.crud import (
     add_user_block,
     count_user_blocks,
@@ -34,11 +35,14 @@ from app.schemas.user import (
     BlockedUserItem,
     BlockedUserListData,
     BlockUserRequest,
+    CircleOwnerApplicationRequest,
     PrivacySettingsData,
     UpdateCurrentUserProfileRequest,
     UpdatePrivacySettingsRequest,
 )
 from app.payment import consume_contact_package_view, resolve_contact_package_snapshot, resolve_member_snapshot
+from app.models.circle_owner_application import CircleOwnerApplication
+from app.models.user import User
 from app.models.circle_interest import CircleInterest
 from app.models.resource_post import ResourcePostLike
 from app.models.user_interest import UserInterest
@@ -480,10 +484,39 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
     interest_stats = _resolve_interest_stats(db=db, user_pk=int(user.id))
     member_snapshot = resolve_member_snapshot(db=db, user_pk=int(user.id))
     contact_package_snapshot = resolve_contact_package_snapshot(db=db, user_pk=int(user.id))
+    circle_owner_application = db.scalar(
+        select(CircleOwnerApplication).where(CircleOwnerApplication.user_pk == int(user.id))
+    )
     real_name_verified = _has_approved_real_name_verification(db=db, user=user)
     display_phone = _normalize_optional_text(user.display_phone, 20)
     display_wechat = _normalize_optional_text(user.display_wechat, 64)
     email = _normalize_optional_text(user.email, 100)
+
+    # 获取关注数和粉丝数（如果表不存在则返回0）
+    following_count = 0
+    fans_count = 0
+    try:
+        from app.crud.network import get_user_following_count, get_user_fans_count
+        following_count = get_user_following_count(db=db, user_pk=int(user.id))
+        fans_count = get_user_fans_count(db=db, user_pk=int(user.id))
+    except Exception as e:
+        # 如果user_follows表还不存在，忽略错误
+        pass
+
+    # 获取用户发布的活动数量
+    activity_count = 0
+    try:
+        from app.models.resource_post import ResourcePost
+        activity_count = db.scalar(
+            select(func.count(ResourcePost.id))
+            .where(
+                ResourcePost.author_user_pk == user.id,
+                ResourcePost.mode == "venue",
+                ResourcePost.status == "active"
+            )
+        ) or 0
+    except Exception:
+        pass
 
     return {
         "userId": user.user_id,
@@ -499,6 +532,10 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
         "avatar_url": _to_public_avatar_url(user.avatar_url, request),
         "miniapp_code_url": _get_profile_miniapp_code_url(target_user_id=user.user_id, request=request),
         "is_verified": bool(user.is_verified),
+        "is_circle_owner": bool(user.is_circle_owner),
+        "circle_owner_application_status": (
+            str(circle_owner_application.status) if circle_owner_application is not None else ""
+        ),
         "intro": user.intro,
         "industry_code": user.industry_code,
         "industry_label": user.industry_label,
@@ -521,6 +558,12 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
         "network_interest_count": int(interest_stats["network_interest_count"] or 0),
         "resource_interest_count": int(interest_stats["resource_interest_count"] or 0),
         "circle_interest_count": int(interest_stats["circle_interest_count"] or 0),
+        "following_count": int(following_count),
+        "follow_count": int(following_count),
+        "fans_count": int(fans_count),
+        "follower_count": int(fans_count),
+        "activity_count": int(activity_count),
+        "event_count": int(activity_count),
         "points": int(stats.get("points") or 0),
         "available_points": int(stats.get("available_points") or 0),
         "frozen_points": int(stats.get("frozen_points") or 0),
@@ -557,16 +600,31 @@ def _serialize_public_user_profile(
     request: Request,
     db: Session,
     *,
-    viewer_user_pk: int,
+    viewer_user_pk: int | None,
 ) -> dict:
     stats = _resolve_user_stats(db=db, user=target_user)
     member_snapshot = resolve_member_snapshot(db=db, user_pk=int(target_user.id))
-    viewer = _require_current_user(db=db, current_user_pk=viewer_user_pk)
-    contact_state = _resolve_contact_view_state(
-        db=db,
-        viewer_user=viewer,
-        target_user=target_user,
-    )
+    if viewer_user_pk is not None:
+        viewer = _require_current_user(db=db, current_user_pk=viewer_user_pk)
+        contact_state = _resolve_contact_view_state(
+            db=db,
+            viewer_user=viewer,
+            target_user=target_user,
+        )
+    else:
+        contact_state = {
+            "display_phone": "",
+            "display_wechat": "",
+            "contact_visible": False,
+            "contact_locked_reason": "登录后可查看联系方式",
+            "target_has_contact": bool(
+                str(target_user.display_phone or "").strip()
+                or str(target_user.display_wechat or "").strip()
+            ),
+            "target_contact_enabled": bool(target_user.show_contact),
+            "viewer_contact_package_remaining_views": 0,
+            "viewer_contact_package_used_for_view": False,
+        }
     return {
         "userId": target_user.user_id,
         "user_id": target_user.user_id,
@@ -584,7 +642,7 @@ def _serialize_public_user_profile(
         "circle_count": int(stats["circle_count"] or 0),
         "network_count": int(stats["network_count"] or 0),
         "is_active": bool(target_user.is_active),
-        "is_self": bool(int(target_user.id) == int(viewer_user_pk)),
+        "is_self": bool(viewer_user_pk is not None and int(target_user.id) == int(viewer_user_pk)),
         "created_at": target_user.created_at.isoformat() if target_user.created_at else None,
         "last_login_at": target_user.last_login_at.isoformat() if target_user.last_login_at else None,
         "is_member": bool(member_snapshot["is_member"]),
@@ -619,14 +677,72 @@ def get_current_user_profile(
     return success_response(data=_serialize_user(user, request, db))
 
 
+def _serialize_circle_owner_application(
+    *,
+    user: User,
+    application: CircleOwnerApplication | None,
+    db: Session,
+) -> dict:
+    member_snapshot = resolve_member_snapshot(db=db, user_pk=int(user.id))
+    yearly_member = bool(member_snapshot["is_member"]) and str(
+        member_snapshot.get("member_plan_id") or member_snapshot.get("plan_id") or ""
+    ).strip() == "yearly"
+
+    return {
+        "is_circle_owner": bool(user.is_circle_owner),
+        "is_yearly_member": yearly_member,
+        "member_plan_id": str(member_snapshot.get("member_plan_id") or ""),
+        "member_plan_name": str(member_snapshot.get("member_plan_name") or ""),
+        "status": (
+            "approved"
+            if bool(user.is_circle_owner)
+            else str(application.status or "") if application is not None else ""
+        ),
+        "reason": str(application.reason or "") if application is not None else "",
+        "experience": str(application.experience or "") if application is not None else "",
+        "reject_reason": str(application.reject_reason or "") if application is not None else "",
+        "submitted_at": application.created_at.isoformat() if application and application.created_at else None,
+        "reviewed_at": application.reviewed_at.isoformat() if application and application.reviewed_at else None,
+    }
+
+
+@router.get("/me/circle-owner-application", summary="Get circle owner application status")
+def get_circle_owner_application(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    user = _require_current_user(db=db, current_user_pk=user_id)
+    application = db.scalar(
+        select(CircleOwnerApplication).where(CircleOwnerApplication.user_pk == int(user.id))
+    )
+    return success_response(
+        data=_serialize_circle_owner_application(user=user, application=application, db=db)
+    )
+
+
+@router.post("/me/circle-owner-application", summary="Apply to become a circle owner")
+def apply_for_circle_owner(
+    payload: CircleOwnerApplicationRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    del payload, user_id, db
+    raise BusinessException(
+        message="圈主已改为一次付费永久开通，请前往圈主开通页面购买",
+        code=4367,
+        status_code=410,
+    )
+
+
 @router.get("/profiles/{target_user_id}", summary="Get public profile by business user id")
 def get_public_user_profile(
     target_user_id: str,
     request: Request,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
 
     normalized_target_user_id = str(target_user_id or "").strip()
     if len(normalized_target_user_id) != 8:
@@ -675,10 +791,11 @@ def unlock_public_user_profile_contact(
 def get_profile_miniapp_code(
     target_user_id: str,
     request: Request,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
 
     normalized_target_user_id = str(target_user_id or "").strip()
     if len(normalized_target_user_id) != 8:
@@ -996,15 +1113,16 @@ async def upload_current_user_avatar(
     if suffix not in ALLOWED_IMAGE_EXTENSIONS:
         suffix = CONTENT_TYPE_EXTENSION_MAP.get(content_type, ".jpg")
 
-    AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{token_hex(4)}{suffix}"
-    save_path = AVATAR_UPLOAD_DIR / file_name
-    save_path.write_bytes(file_bytes)
-
-    avatar_path = f"/static/uploads/avatars/{file_name}"
+    stored = upload_public_asset(
+        prefix="uploads/avatars",
+        file_bytes=file_bytes,
+        suffix=suffix,
+        content_type=content_type,
+        request=request,
+    )
 
     try:
-        user = update_user_profile(db=db, user=user, avatar_url=avatar_path)
+        user = update_user_profile(db=db, user=user, avatar_url=stored.path)
     except SQLAlchemyError as exc:
         db.rollback()
         raise BusinessException(message="头像更新失败，请稍后重试", code=5005, status_code=500) from exc
@@ -1041,12 +1159,13 @@ async def upload_current_user_card_file(
     if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".pdf"}:
         suffix = CONTENT_TYPE_EXTENSION_MAP.get(content_type, ".pdf")
 
-    CARD_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{token_hex(4)}{suffix}"
-    save_path = CARD_UPLOAD_DIR / file_name
-    save_path.write_bytes(file_bytes)
-
-    relative_url = f"/static/uploads/cards/{file_name}"
+    stored = upload_public_asset(
+        prefix="uploads/cards",
+        file_bytes=file_bytes,
+        suffix=suffix,
+        content_type=content_type,
+        request=request,
+    )
     display_name = (file.filename or "附件").strip() or "附件"
     if len(display_name) > 128:
         display_name = display_name[:128]
@@ -1054,7 +1173,8 @@ async def upload_current_user_card_file(
     return success_response(
         data={
             "name": display_name,
-            "url": _to_public_file_url(relative_url, request),
+            "url": stored.url,
+            "path": stored.path,
             "size": len(file_bytes),
         },
         message="附件上传成功",
@@ -1064,3 +1184,126 @@ async def upload_current_user_card_file(
 @router.get("/ping", summary="User module placeholder endpoint")
 def user_ping():
     return success_response(message="user module placeholder")
+
+
+@router.get("/me/following", summary="Get my following list")
+def get_my_following_list(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=50),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    """获取当前用户的关注列表"""
+    from app.models.user_follow import UserFollow
+
+    viewer = _require_current_user(db=db, current_user_pk=user_id)
+
+    # 查询关注的用户
+    stmt = (
+        select(User)
+        .join(UserFollow, UserFollow.following_user_pk == User.id)
+        .where(
+            UserFollow.follower_user_pk == viewer.id,
+            User.is_active.is_(True)
+        )
+        .order_by(UserFollow.created_at.desc())
+        .offset(offset)
+        .limit(limit + 1)
+    )
+
+    users = list(db.execute(stmt).scalars().all())
+    has_more = len(users) > limit
+    if has_more:
+        users = users[:limit]
+
+    # 序列化用户信息
+    items = []
+    for user in users:
+        items.append({
+            "user_id": user.user_id,
+            "userId": user.user_id,
+            "nickname": user.nickname,
+            "avatar_url": _to_public_avatar_url(user.avatar_url, request),
+            "intro": user.intro,
+            "industry_label": user.industry_label,
+            "city_name": user.city_name,
+            "company_name": user.company_name,
+            "job_title": user.job_title,
+            "is_verified": bool(user.is_verified),
+        })
+
+    return success_response(
+        data={
+            "items": items,
+            "has_more": has_more,
+            "total": len(items)
+        }
+    )
+
+
+@router.get("/me/followers", summary="Get my followers list")
+def get_my_followers_list(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=50),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    """获取当前用户的粉丝列表"""
+    from app.models.user_follow import UserFollow
+    from app.crud.network import get_user_follows
+
+    viewer = _require_current_user(db=db, current_user_pk=user_id)
+
+    # 查询粉丝（关注我的用户）
+    stmt = (
+        select(User)
+        .join(UserFollow, UserFollow.follower_user_pk == User.id)
+        .where(
+            UserFollow.following_user_pk == viewer.id,
+            User.is_active.is_(True)
+        )
+        .order_by(UserFollow.created_at.desc())
+        .offset(offset)
+        .limit(limit + 1)
+    )
+
+    users = list(db.execute(stmt).scalars().all())
+    has_more = len(users) > limit
+    if has_more:
+        users = users[:limit]
+
+    # 查询我是否关注了这些粉丝（判断是否互相关注）
+    user_pks = {int(user.id) for user in users}
+    follow_back_status = get_user_follows(
+        db=db,
+        follower_user_pk=viewer.id,
+        following_user_pks=user_pks
+    )
+
+    # 序列化用户信息
+    items = []
+    for user in users:
+        items.append({
+            "user_id": user.user_id,
+            "userId": user.user_id,
+            "nickname": user.nickname,
+            "avatar_url": _to_public_avatar_url(user.avatar_url, request),
+            "intro": user.intro,
+            "industry_label": user.industry_label,
+            "city_name": user.city_name,
+            "company_name": user.company_name,
+            "job_title": user.job_title,
+            "is_verified": bool(user.is_verified),
+            "is_followed_back": follow_back_status.get(int(user.id), False),
+            "followed": follow_back_status.get(int(user.id), False),
+        })
+
+    return success_response(
+        data={
+            "items": items,
+            "has_more": has_more,
+            "total": len(items)
+        }
+    )

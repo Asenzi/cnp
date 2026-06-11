@@ -37,7 +37,7 @@
           <view class="summary-row">
             <text class="summary-label">支付方式</text>
             <view class="summary-value-wrap">
-              <image class="summary-icon" src="/static/me-icons/payments-green.png" mode="aspectFit" />
+              <image class="summary-icon" src="https://cos.cnptec.site/static/me-icons/payments-green.png" mode="aspectFit" />
               <text class="summary-value">微信支付</text>
             </view>
           </view>
@@ -48,7 +48,7 @@
         </view>
 
         <view class="safe-tip">
-          <image class="safe-icon" src="/static/me-icons/shield-person-primary.png" mode="aspectFit" />
+          <image class="safe-icon" src="https://cos.cnptec.site/static/me-icons/shield-person-primary.png" mode="aspectFit" />
           <text class="safe-text">支付全程加密，充值成功后余额实时到账</text>
         </view>
       </view>

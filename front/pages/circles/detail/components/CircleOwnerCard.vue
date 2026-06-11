@@ -7,10 +7,6 @@
         <text class="owner-intro">{{ owner.intro }}</text>
       </view>
     </view>
-
-    <button class="share-btn" open-type="share" hover-class="share-btn-active">
-      <image class="share-icon" mode="aspectFit" src="/static/icon/share.png" />
-    </button>
   </view>
 </template>
 
@@ -28,15 +24,9 @@ defineProps({
   margin: 0 32rpx;
   padding: 20rpx 0;
   border-bottom: 1rpx solid #f3f4f6;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
 }
 
 .owner-main {
-  flex: 1;
-  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12rpx;
@@ -76,32 +66,6 @@ defineProps({
   line-height: 30rpx;
 }
 
-.share-btn {
-  width: 56rpx;
-  height: 56rpx;
-  padding: 0;
-  border: 0;
-  border-radius: 8rpx;
-  background: #eff6ff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.share-btn::after {
-  border: 0;
-}
-
-.share-icon {
-  width: 32rpx;
-  height: 32rpx;
-}
-
-.share-btn-active {
-  opacity: 0.6;
-}
-
 @media (prefers-color-scheme: dark) {
   .owner-wrap {
     border-bottom-color: #1f2937;
@@ -121,10 +85,6 @@ defineProps({
 
   .owner-intro {
     color: #6b7280;
-  }
-
-  .share-btn {
-    background: rgba(37, 99, 235, 0.15);
   }
 }
 </style>

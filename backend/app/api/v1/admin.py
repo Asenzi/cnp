@@ -1,8 +1,9 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import FileResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.admin.service import (
@@ -27,9 +28,12 @@ from app.core.exceptions import BusinessException
 from app.core.response import success_response
 from app.crud import get_user_real_name_profile, get_user_verification_by_id
 from app.models.admin_user import AdminUser
+from app.models.circle_owner_application import CircleOwnerApplication
+from app.models.user import User
 from app.review import list_admin_content_reviews, review_content_submission
 from app.schemas.admin import (
     AdminCircleStatusPayload,
+    AdminCircleOwnerReviewPayload,
     AdminContactPackageConfigPayload,
     AdminConfigUpsertPayload,
     AdminLoginRequest,
@@ -161,6 +165,71 @@ def admin_update_circle_status(
             status=payload.status,
         ),
         message="圈子状态已更新",
+    )
+
+
+@router.get("/circle-owner-applications", summary="List circle owner applications")
+def admin_list_circle_owner_applications(
+    status: str | None = Query(default="pending"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    conditions = []
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status:
+        conditions.append(CircleOwnerApplication.status == normalized_status)
+
+    total = int(
+        db.scalar(select(func.count(CircleOwnerApplication.id)).where(*conditions)) or 0
+    )
+    rows = db.execute(
+        select(CircleOwnerApplication, User)
+        .join(User, User.id == CircleOwnerApplication.user_pk)
+        .where(*conditions)
+        .order_by(CircleOwnerApplication.updated_at.desc(), CircleOwnerApplication.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    return success_response(
+        data={
+            "items": [
+                {
+                    "id": int(application.id),
+                    "user_pk": int(user.id),
+                    "user_id": str(user.user_id or ""),
+                    "nickname": str(user.nickname or ""),
+                    "is_circle_owner": bool(user.is_circle_owner),
+                    "reason": str(application.reason or ""),
+                    "experience": str(application.experience or ""),
+                    "status": str(application.status or ""),
+                    "reject_reason": str(application.reject_reason or ""),
+                    "submitted_at": application.created_at.isoformat() if application.created_at else None,
+                    "reviewed_at": application.reviewed_at.isoformat() if application.reviewed_at else None,
+                }
+                for application, user in rows
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    )
+
+
+@router.post("/circle-owner-applications/{application_id}/review", summary="Review circle owner application")
+def admin_review_circle_owner_application(
+    application_id: int,
+    payload: AdminCircleOwnerReviewPayload,
+    admin: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    del application_id, payload, admin, db
+    raise BusinessException(
+        message="圈主已改为一次付费永久开通，不再支持人工审核",
+        code=4368,
+        status_code=410,
     )
 
 

@@ -132,16 +132,10 @@ const ensureLoggedIn = () => {
 
   chatItems.value = []
   hasMore.value = false
-  loadError.value = ''
+  loadError.value = '登录后查看消息'
 
   if (!hasPromptedLogin.value) {
     hasPromptedLogin.value = true
-    showToast('请先登录')
-    setTimeout(() => {
-      uni.navigateTo({
-        url: '/pages/auth/login/index'
-      })
-    }, 220)
   }
   return false
 }
@@ -149,7 +143,7 @@ const ensureLoggedIn = () => {
 const resolveAvatarUrl = (url) => {
   const normalized = String(url || '').trim()
   if (!normalized) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   if (/^https?:\/\//.test(normalized)) {
     return normalized
@@ -158,7 +152,7 @@ const resolveAvatarUrl = (url) => {
     if (normalized.startsWith('/static/')) {
       return normalized
     }
-    const base = String(getApiBaseUrl() || 'http://172.20.10.3:8001').trim()
+    const base = String(getApiBaseUrl() || 'https://www.cnptec.site').trim()
     return `${base}${normalized}`
   }
   return normalized
@@ -208,7 +202,6 @@ const fetchOverview = async () => {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
-      hasPromptedLogin.value = false
       ensureLoggedIn()
       return
     }
@@ -252,7 +245,6 @@ const fetchConversations = async (reset = false) => {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
-      hasPromptedLogin.value = false
       ensureLoggedIn()
       return
     }
@@ -396,6 +388,11 @@ const onRetry = () => {
 }
 
 const onTapAction = (item) => {
+  if (!ensureLoggedIn()) {
+    showToast('请先登录')
+    return
+  }
+
   if (item?.id === 'friend-apply') {
     uni.navigateTo({
       url: '/pages/messages/friend-apply/index'
@@ -412,6 +409,11 @@ const onTapAction = (item) => {
 }
 
 const onTapChat = (item) => {
+  if (!ensureLoggedIn()) {
+    showToast('请先登录')
+    return
+  }
+
   const targetUserId = String(item?.targetUserId || '').trim()
   if (!targetUserId) {
     showToast('会话目标缺失')

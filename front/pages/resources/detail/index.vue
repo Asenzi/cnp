@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="detail-page">
     <scroll-view class="detail-scroll" :class="{ 'detail-scroll-self': isSelfPost }" scroll-y :show-scrollbar="false">
       <view class="detail-main">
@@ -32,7 +32,7 @@
               open-type="share"
               @tap="onShare"
             >
-              <image class="publisher-share-icon" src="/static/icon/share.png" mode="aspectFit" />
+              <image class="publisher-share-icon" src="https://cos.cnptec.site/static/icon/share.png" mode="aspectFit" />
             </button>
             <button v-else class="profile-btn" hover-class="profile-btn-active" @tap="onTapProfile">查看主页</button>
           </view>
@@ -73,11 +73,11 @@
               <view class="stats-top">
                 <view class="stats-left">
                   <view class="stat-item">
-                    <image class="stat-icon" src="/static/icon/see.png" mode="aspectFit" />
+                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/see.png" mode="aspectFit" />
                     <text class="stat-text">{{ formatNumber(post.view_count) }}</text>
                   </view>
                   <view class="stat-item">
-                    <image class="stat-icon" src="/static/icon/like.png" mode="aspectFit" />
+                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/like.png" mode="aspectFit" />
                     <text class="stat-text">{{ formatNumber(post.like_count) }}</text>
                   </view>
                 </view>
@@ -115,11 +115,11 @@
 
     <view v-if="!isSelfPost" class="bottom-nav">
       <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
-        <image class="btn-icon-image" src="/static/icon/share.png" mode="aspectFit" />
+        <image class="btn-icon-image" src="https://cos.cnptec.site/static/icon/share.png" mode="aspectFit" />
         <text class="btn-label">分享</text>
       </button>
       <button class="bottom-btn bottom-btn-primary" hover-class="bottom-btn-hover" @tap="onChat">
-        <image class="btn-icon-image btn-icon-image-primary" src="/static/icon/chat-he.png" mode="aspectFit" />
+        <image class="btn-icon-image btn-icon-image-primary" src="https://cos.cnptec.site/static/icon/chat-he.png" mode="aspectFit" />
         <text class="btn-label-primary">联系方式</text>
       </button>
     </view>
@@ -209,7 +209,7 @@ const imageList = computed(() => {
 
 const subImages = computed(() => imageList.value.slice(1, 3))
 const authorName = computed(() => String(post.value?.author?.nickname || '未命名用户').trim())
-const authorAvatar = computed(() => String(post.value?.author?.avatar_url || '/static/logo.png').trim() || '/static/logo.png')
+const authorAvatar = computed(() => String(post.value?.author?.avatar_url || 'https://cos.cnptec.site/static/logo.png').trim() || 'https://cos.cnptec.site/static/logo.png')
 const authorRole = computed(() => {
   const companyName = String(post.value?.author?.company_name || '').trim()
   const jobTitle = String(post.value?.author?.job_title || '').trim()
@@ -244,7 +244,7 @@ const cardSource = computed(() => {
   }
 })
 const cardName = computed(() => String(cardSource.value?.nickname || authorName.value || '未命名用户').trim())
-const cardAvatar = computed(() => String(cardSource.value?.avatar_url || authorAvatar.value || '/static/logo.png').trim() || '/static/logo.png')
+const cardAvatar = computed(() => String(cardSource.value?.avatar_url || authorAvatar.value || 'https://cos.cnptec.site/static/logo.png').trim() || 'https://cos.cnptec.site/static/logo.png')
 const cardVerified = computed(() => Boolean(cardSource.value?.is_verified || authorVerified.value))
 const cardRole = computed(() => {
   const companyName = String(cardSource.value?.company_name || '').trim()
@@ -374,6 +374,10 @@ const showToast = (title) => {
   })
 }
 
+const isLoggedIn = () => {
+  return Boolean(String(uni.getStorageSync('token') || '').trim())
+}
+
 const reportDetailFeedback = (eventType, ext = {}) => {
   const normalizedCode = String(postCode.value || post.value?.post_code || '').trim()
   const normalizedEvent = String(eventType || '').trim()
@@ -497,6 +501,10 @@ const onChat = async () => {
 }
 
 const goChatFromCard = () => {
+  if (!isLoggedIn()) {
+    showToast('\u8bf7\u5148\u767b\u5f55')
+    return
+  }
   const targetUserId = authorUserId.value
   if (!targetUserId) {
     showToast('作者信息缺失')

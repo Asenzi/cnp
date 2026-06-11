@@ -100,6 +100,13 @@ class User(Base):
         default=False,
         server_default=text("0"),
     )
+    is_circle_owner: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("0"),
+        index=True,
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

@@ -119,7 +119,7 @@ const onApply = () => {
   width: 100%;
   border-radius: 28rpx 28rpx 0 0;
   background: #ffffff;
-  padding: 32rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  padding: 52rpx 24rpx calc(env(safe-area-inset-bottom));
 }
 
 .panel-head {

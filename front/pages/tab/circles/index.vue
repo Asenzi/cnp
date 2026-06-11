@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="discover-page">
     <view class="page-shell">
       <view class="header-fixed">
@@ -59,10 +59,8 @@
         </view>
 
         <template v-else>
-          <view v-if="showEmpty" class="status-wrap empty-state">
-            <view class="empty-icon-wrap">
-              <text class="empty-icon">🎯</text>
-            </view>
+          <view v-if="showEmpty" class="empty-state">
+            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
             <text class="empty-title">{{ texts.empty }}</text>
             <text class="empty-desc">试试调整筛选条件或搜索关键词</text>
           </view>
@@ -399,30 +397,9 @@ const ensureLoggedIn = () => {
     return true
   }
 
-  circles.value = []
-  hasMore.value = false
-  loaded.value = true
-  loadError.value = ''
-
   if (!hasPromptedLogin.value) {
     hasPromptedLogin.value = true
     showToast(texts.pleaseLogin)
-
-    // 清除之前的定时器
-    if (loginRedirectTimer.value) {
-      clearTimeout(loginRedirectTimer.value)
-      loginRedirectTimer.value = null
-    }
-
-    // 设置新的定时器并保存引用
-    loginRedirectTimer.value = setTimeout(() => {
-      if (isPageAlive.value) {
-        uni.navigateTo({
-          url: '/pages/auth/login/index'
-        })
-      }
-      loginRedirectTimer.value = null
-    }, 220)
   }
 
   return false
@@ -446,7 +423,7 @@ const sanitizeCircleImage = (value) => {
   if (!normalized) {
     return ''
   }
-  if (normalized === '/static/logo.png' || /\/static\/logo\.png(?:[?#].*)?$/i.test(normalized)) {
+  if (normalized === 'https://cos.cnptec.site/static/logo.png' || /\/static\/logo\.png(?:[?#].*)?$/i.test(normalized)) {
     return ''
   }
   if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
@@ -477,10 +454,6 @@ const mapCircleCard = (item = {}, index = 0) => {
 }
 
 const fetchCircles = async (reset = false) => {
-  if (!ensureLoggedIn()) {
-    return
-  }
-
   if (loading.value || loadingMore.value) {
     return
   }
@@ -605,8 +578,9 @@ const fetchCircles = async (reset = false) => {
       uni.removeStorageSync('token')
       uni.removeStorageSync('isLoggedIn')
       uni.removeStorageSync('userInfo')
-      hasPromptedLogin.value = false
-      ensureLoggedIn()
+      if (reset && !hasAny.value) {
+        loadError.value = texts.fetchError
+      }
       return
     }
 
@@ -708,6 +682,10 @@ const onRetry = () => {
 }
 
 const onToggleInterest = async (circle) => {
+  if (!ensureLoggedIn()) {
+    return
+  }
+
   const circleCode = String(circle?.circleCode || '').trim()
   if (!circleCode) {
     return
@@ -1016,7 +994,22 @@ onUnmounted(() => {
 
 /* 空状态样式 */
 .empty-state {
-  padding: 48rpx 32rpx;
+  margin: 24rpx 32rpx;
+  padding: 120rpx 32rpx 80rpx;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.empty-icon-image {
+  width: 200rpx;
+  height: 200rpx;
+  margin-bottom: 12rpx;
 }
 
 .empty-icon-wrap {
@@ -1028,11 +1021,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   margin-bottom: 8rpx;
-}
-
-.empty-icon {
-  font-size: 64rpx;
-  line-height: 64rpx;
 }
 
 .empty-title {
@@ -1118,17 +1106,18 @@ onUnmounted(() => {
     box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
   }
 
-  .loading-spinner {
-    border-color: #334155;
-    border-top-color: #3b82f6;
+  .empty-state {
+    background: transparent;
+    box-shadow: none;
   }
 
   .empty-icon-wrap {
     background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
   }
 
-  .empty-title {
-    color: #f1f5f9;
+  .loading-spinner {
+    border-color: #334155;
+    border-top-color: #3b82f6;
   }
 
   .empty-desc,

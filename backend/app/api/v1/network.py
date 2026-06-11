@@ -1,20 +1,22 @@
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from app.api.deps import db_session, get_current_user_id
+from app.api.deps import db_session, get_current_user_id, get_optional_current_user_id
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
 from app.crud import get_user_by_id
 from app.models.user import User
 from app.models.user_interest import UserInterest
+from app.models.resource_post import ResourcePost
 from app.network import (
     list_network_filter_options,
     list_network_recommendations,
     save_network_feedback,
     save_network_impressions,
 )
+from app.payment import resolve_member_snapshot
 from app.schemas.network import NetworkFeedbackRequest, NetworkImpressionsBatchRequest
 
 router = APIRouter(prefix="/network", tags=["Network"])
@@ -50,6 +52,133 @@ def _parse_offset_cursor(cursor: str | None) -> int:
         return max(int(str(cursor or "").strip() or "0"), 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _encode_public_cursor(offset: int) -> str:
+    return str(max(int(offset or 0), 0))
+
+
+def _serialize_public_network_user(user: User, request: Request, db: Session, viewer_user_pk: int | None = None) -> dict:
+    business_user_id = str(user.user_id or "").strip()
+    name = str(user.nickname or "").strip() or "未命名用户"
+    industry_label = str(user.industry_label or "").strip()
+    city_name = str(user.city_name or "").strip()
+    company_name = str(user.company_name or "").strip()
+    job_title = str(user.job_title or "").strip()
+    detail_line = _join_non_empty(industry_label, company_name, job_title) or city_name or "商务人士"
+    avatar = _public_avatar_url(user.avatar_url, request)
+    circle_tags = [item for item in (industry_label, city_name) if item][:2]
+    member_snapshot = resolve_member_snapshot(db=db, user_pk=int(user.id))
+
+    # 查询用户发布的资源数量
+    post_count = db.scalar(
+        select(func.count(ResourcePost.id))
+        .where(
+            ResourcePost.author_user_pk == user.id,
+            ResourcePost.status == "active"
+        )
+    ) or 0
+
+    # 查询是否已关注
+    is_followed = False
+    if viewer_user_pk:
+        from app.crud.network import get_user_follows
+        follow_status = get_user_follows(
+            db=db,
+            follower_user_pk=viewer_user_pk,
+            following_user_pks={int(user.id)}
+        )
+        is_followed = follow_status.get(int(user.id), False)
+
+    return {
+        "id": business_user_id,
+        "userId": business_user_id,
+        "user_id": business_user_id,
+        "businessUserId": business_user_id,
+        "business_user_id": business_user_id,
+        "nickname": name,
+        "name": name,
+        "avatar": avatar,
+        "avatar_url": avatar,
+        "intro": str(user.intro or "").strip(),
+        "industry_label": industry_label,
+        "city_name": city_name,
+        "company_name": company_name,
+        "job_title": job_title,
+        "detailLine": detail_line,
+        "detail_line": detail_line,
+        "circleTags": circle_tags,
+        "circle_tags": circle_tags,
+        "circle_names": circle_tags,
+        "is_verified": bool(user.is_verified),
+        "verifyType": "lv1" if bool(user.is_verified) else "",
+        "verifyText": "已认证" if bool(user.is_verified) else "",
+        "is_member": bool(member_snapshot["is_member"]),
+        "member_opened": bool(member_snapshot["member_opened"]),
+        "is_vip": bool(member_snapshot["is_vip"]),
+        "vip_opened": bool(member_snapshot["vip_opened"]),
+        "member_status": str(member_snapshot["member_status"]),
+        "vip_status": str(member_snapshot["vip_status"]),
+        "member_expire_at": member_snapshot["member_expire_at"],
+        "vip_expire_at": member_snapshot["vip_expire_at"],
+        "member_plan_id": str(member_snapshot["member_plan_id"]),
+        "member_plan_name": str(member_snapshot["member_plan_name"]),
+        "is_followed": is_followed,
+        "followed": is_followed,
+        "active_text": "最近活跃",
+        "activeText": "最近活跃",
+        "reason_tags": ["推荐人脉"],
+        "post_count": post_count,
+        "postCount": post_count,
+        "posts_count": post_count,
+    }
+
+
+def _list_public_network_recommendations(
+    db: Session,
+    *,
+    request: Request,
+    cursor: str | None,
+    limit: int,
+    keyword: str | None,
+    city_name: str | None,
+    industry_label: str | None,
+    viewer_user_pk: int | None = None,
+) -> dict:
+    safe_limit = min(max(int(limit or 20), 1), 50)
+    offset = _parse_offset_cursor(cursor)
+    safe_keyword = str(keyword or "").strip()
+    safe_city = str(city_name or "").strip()
+    safe_industry = str(industry_label or "").strip()
+    conditions = [User.is_active.is_(True)]
+    if safe_city and safe_city != "全国":
+        conditions.append(User.city_name == safe_city)
+    if safe_industry:
+        conditions.append(User.industry_label == safe_industry)
+    if safe_keyword:
+        like_keyword = f"%{safe_keyword}%"
+        conditions.append(
+            (User.nickname.like(like_keyword))
+            | (User.company_name.like(like_keyword))
+            | (User.job_title.like(like_keyword))
+            | (User.industry_label.like(like_keyword))
+            | (User.city_name.like(like_keyword))
+        )
+    rows = db.execute(
+        select(User)
+        .where(*conditions)
+        .order_by(User.is_verified.desc(), User.updated_at.desc(), User.created_at.desc(), User.id.desc())
+        .offset(offset)
+        .limit(safe_limit + 1)
+    ).scalars().all()
+    page_rows = rows[:safe_limit]
+    has_more = len(rows) > safe_limit
+    return {
+        "request_id": "",
+        "items": [_serialize_public_network_user(user, request, db, viewer_user_pk) for user in page_rows],
+        "next_cursor": _encode_public_cursor(offset + len(page_rows)) if has_more else "",
+        "has_more": has_more,
+    }
 
 
 def _serialize_interested_user(user: User, interest: UserInterest, request: Request) -> dict:
@@ -97,6 +226,7 @@ def _serialize_interested_user(user: User, interest: UserInterest, request: Requ
 
 @router.get("/recommendations", summary="Get network recommendations")
 def get_network_recommendations(
+    request: Request,
     tab: str = Query(default="recommend"),
     request_id: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
@@ -106,10 +236,26 @@ def get_network_recommendations(
     industry_label: str | None = Query(default=None),
     domain: str | None = Query(default=None),
     exclude_user_ids: str | None = Query(default=None),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
     excluded_ids = [item.strip() for item in str(exclude_user_ids or "").split(",") if item and item.strip()]
+
+    # 如果未登录，使用简单的公开推荐
+    if user_id is None:
+        payload = _list_public_network_recommendations(
+            db=db,
+            request=request,
+            cursor=cursor,
+            limit=limit,
+            keyword=keyword,
+            city_name=city_name,
+            industry_label=industry_label,
+            viewer_user_pk=None,
+        )
+        return success_response(data=payload)
+
+    # 登录用户使用完整的推荐逻辑
     viewer = _require_current_user(db=db, current_user_pk=user_id)
     payload = list_network_recommendations(
         db=db,
@@ -129,10 +275,8 @@ def get_network_recommendations(
 
 @router.get("/filters", summary="Get network filter options")
 def get_network_filters(
-    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
     payload = list_network_filter_options(db=db)
     return success_response(data=payload)
 
@@ -255,4 +399,40 @@ def toggle_interest(
     return success_response(
         data={"is_interested": is_interested},
         message="已标记为感兴趣" if is_interested else "已取消感兴趣",
+    )
+
+
+@router.post("/follow/toggle", summary="Toggle user follow status")
+def toggle_follow(
+    target_user_id: str = Query(..., description="Target user business ID"),
+    desired: bool | None = Query(default=None, description="Desired follow state"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    """切换对目标用户的关注状态"""
+    from app.crud.network import map_business_user_ids_to_pks, toggle_user_follow
+
+    viewer = _require_current_user(db=db, current_user_pk=user_id)
+
+    # 将business_user_id转换为user_pk
+    mapping = map_business_user_ids_to_pks(db=db, business_user_ids={target_user_id})
+    target_pk = mapping.get(target_user_id)
+
+    if not target_pk:
+        raise BusinessException(message="Target user not found", code=4042, status_code=404)
+
+    if target_pk == viewer.id:
+        raise BusinessException(message="Cannot follow yourself", code=4003, status_code=400)
+
+    # 切换关注状态
+    is_followed = toggle_user_follow(
+        db=db,
+        follower_user_pk=viewer.id,
+        following_user_pk=target_pk,
+        desired_state=desired,
+    )
+
+    return success_response(
+        data={"is_followed": is_followed},
+        message="关注成功" if is_followed else "已取消关注",
     )

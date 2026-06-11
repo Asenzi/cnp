@@ -7,6 +7,21 @@ export function getCurrentUserProfile() {
   })
 }
 
+export function getCircleOwnerApplication() {
+  return request({
+    url: '/api/v1/user/me/circle-owner-application',
+    method: 'GET'
+  })
+}
+
+export function applyForCircleOwner(payload) {
+  return request({
+    url: '/api/v1/user/me/circle-owner-application',
+    method: 'POST',
+    data: payload || {}
+  })
+}
+
 export function getUserProfileById(targetUserId) {
   const safeId = encodeURIComponent(String(targetUserId || '').trim())
   return request({
@@ -175,5 +190,39 @@ export function removeBlockedUser(targetUserId) {
   return request({
     url: `/api/v1/user/me/blocked-users/${normalized}`,
     method: 'DELETE'
+  })
+}
+
+export function getMyFollowingList(params = {}) {
+  const query = []
+  const offset = Number(params.offset || 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+
+  if (offset > 0) {
+    query.push(`offset=${offset}`)
+  }
+  query.push(`limit=${limit}`)
+
+  const queryString = query.length > 0 ? `?${query.join('&')}` : ''
+  return request({
+    url: `/api/v1/user/me/following${queryString}`,
+    method: 'GET'
+  })
+}
+
+export function getMyFollowersList(params = {}) {
+  const query = []
+  const offset = Number(params.offset || 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+
+  if (offset > 0) {
+    query.push(`offset=${offset}`)
+  }
+  query.push(`limit=${limit}`)
+
+  const queryString = query.length > 0 ? `?${query.join('&')}` : ''
+  return request({
+    url: `/api/v1/user/me/followers${queryString}`,
+    method: 'GET'
   })
 }

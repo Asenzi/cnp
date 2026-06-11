@@ -781,6 +781,16 @@ def create_friend_request(
     db.commit()
     db.refresh(request_row)
 
+    # Notify the target user that a new friend request is waiting.
+    from app.tasks.wechat import send_friend_request_notification
+
+    send_friend_request_notification.delay(
+        from_user_id=int(viewer.id),
+        to_user_id=int(target_user.id),
+        from_username=str(viewer.nickname or viewer.username or "").strip(),
+        message=normalized_message,
+    )
+
     return {
         "request_id": str(request_row.id),
         "status": str(request_row.status),
@@ -807,6 +817,15 @@ def accept_friend_request(db: Session, *, viewer_user_pk: int, request_id: int) 
     request_row.status = "accepted"
     request_row.handled_at = datetime.now(UTC).replace(tzinfo=None)
     db.add(request_row)
+
+    # Notify the requester that the friend request has been accepted.
+    from app.tasks.wechat import send_friend_accepted_notification
+
+    send_friend_accepted_notification.delay(
+        from_user_id=int(viewer.id),
+        to_user_id=int(requester.id),
+        from_username=str(viewer.nickname or viewer.username or "").strip(),
+    )
 
     welcome_message = UserMessage(
         sender_user_pk=viewer.id,

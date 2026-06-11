@@ -1,4 +1,4 @@
-﻿export const VERIFICATION_TYPE = {
+export const VERIFICATION_TYPE = {
   ENTERPRISE: 'enterprise',
   REAL_NAME: 'real_name',
   BUSINESS_CARD: 'business_card'
@@ -16,13 +16,13 @@ export const verificationTypeList = [
     type: VERIFICATION_TYPE.ENTERPRISE,
     title: '企业认证',
     desc: '验证企业身份，解锁发布职位等企业权益',
-    icon: '/static/me-icons/corporate-primary.png'
+    icon: 'https://cos.cnptec.site/static/me-icons/corporate-primary.png'
   },
   {
     type: VERIFICATION_TYPE.REAL_NAME,
     title: '实名认证',
     desc: '核实真实身份，建立职场信任基石',
-    icon: '/static/me-icons/badge-primary.png'
+    icon: 'https://cos.cnptec.site/static/me-icons/badge-primary.png'
   }
 ]
 

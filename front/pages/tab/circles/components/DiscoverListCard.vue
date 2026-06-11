@@ -61,7 +61,7 @@ const normalizeCircleImage = (value) => {
   if (!normalized) {
     return ''
   }
-  if (normalized === '/static/logo.png' || /\/static\/logo\.png(?:[?#].*)?$/i.test(normalized)) {
+  if (normalized === 'https://cos.cnptec.site/static/logo.png' || /\/static\/logo\.png(?:[?#].*)?$/i.test(normalized)) {
     return ''
   }
   if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {

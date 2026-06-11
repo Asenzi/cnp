@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 NetworkTab = Literal["recommend", "nearby", "latest"]
 NetworkScene = Literal["discover"]
-NetworkEventType = Literal["click_card", "apply_friend", "cancel_interest", "chat_start", "dismiss", "block"]
+NetworkEventType = Literal["click_card", "apply_friend", "cancel_interest", "follow_user", "unfollow_user", "chat_start", "dismiss", "block"]
 
 
 class NetworkRecommendationItem(BaseModel):

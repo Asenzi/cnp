@@ -569,6 +569,16 @@ def review_verification_submission(
                         f"Failed to grant real-name verification points. "
                         f"verification_id={verification_id}, user_pk={record.user_pk}, error={award_exc}"
                     )
+
+        # Send async notification to user
+        from app.tasks.wechat import send_verification_result
+        send_verification_result.delay(
+            user_id=int(record.user_pk),
+            verification_type=str(record.verify_type or ""),
+            approved=(action == "approve"),
+            reason=normalized_reason if action == "reject" else None,
+        )
+
     except SQLAlchemyError as exc:
         logger.exception(
             f"Failed to review verification. verification_id={verification_id}, action={action}, error={exc}"

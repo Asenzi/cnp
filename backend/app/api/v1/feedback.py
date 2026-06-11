@@ -12,6 +12,7 @@ from app.api.deps import db_session, get_current_user_id
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
 from app.core.response import success_response
+from app.core.storage import upload_public_asset
 from app.crud import get_user_by_id
 from app.models.user_feedback import UserFeedback
 from app.schemas.feedback import HelpFeedbackSubmitData, HelpFeedbackSubmitRequest
@@ -70,7 +71,7 @@ def _normalize_feedback_images(images: list[dict] | None) -> list[dict]:
     normalized_items: list[dict] = []
     for item in list(images or []):
         path = str(item.get("path") or "").strip()
-        if not path.startswith("/static/uploads/feedback/"):
+        if not (path.startswith("/static/uploads/feedback/") or path.startswith(("http://", "https://"))):
             raise BusinessException(message="反馈截图路径无效，请重新上传", code=4706, status_code=400)
 
         name = str(item.get("name") or "").strip() or None
@@ -116,22 +117,22 @@ async def upload_feedback_image(
     if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
         suffix = IMAGE_CONTENT_TYPE_EXTENSION_MAP.get(content_type, ".jpg")
 
-    FEEDBACK_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{token_hex(4)}{suffix}"
-    save_path = FEEDBACK_UPLOAD_DIR / file_name
-    save_path.write_bytes(file_bytes)
-
-    relative_url = f"/static/uploads/feedback/{file_name}"
-    public_url = _to_public_file_url(relative_url, request)
-    display_name = (file.filename or file_name).strip() or file_name
+    stored = upload_public_asset(
+        prefix="uploads/feedback",
+        file_bytes=file_bytes,
+        suffix=suffix,
+        content_type=content_type,
+        request=request,
+    )
+    display_name = (file.filename or Path(stored.key).name).strip() or Path(stored.key).name
     if len(display_name) > 128:
         display_name = display_name[:128]
 
     return success_response(
         data={
             "name": display_name,
-            "path": relative_url,
-            "url": public_url,
+            "path": stored.path,
+            "url": stored.url,
             "size": len(file_bytes),
             "mime_type": content_type or "application/octet-stream",
         },

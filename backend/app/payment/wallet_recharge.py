@@ -483,6 +483,35 @@ def handle_wechat_pay_notify_xml(
         return False, "INVALID_XML"
 
     out_trade_no = str(payload.get("out_trade_no") or "").strip().upper()
+    if out_trade_no.startswith("J"):
+        from app.payment.circle_join import handle_circle_join_wechat_notify
+
+        try:
+            success, message = handle_circle_join_wechat_notify(db=db, payload=payload)
+            create_payment_notify_log(
+                db=db,
+                order_no=out_trade_no,
+                notify_type="wxpay_circle_join",
+                raw_body=xml_text[:2000],
+                result="success" if success else "failed",
+                result_message=message,
+                commit=False,
+            )
+            db.commit()
+            return success, message
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            create_payment_notify_log(
+                db=db,
+                order_no=out_trade_no,
+                notify_type="wxpay_circle_join",
+                raw_body=xml_text[:2000],
+                result="failed",
+                result_message=str(exc)[:255],
+                commit=True,
+            )
+            return False, str(exc)[:100]
+
     if out_trade_no.startswith("R"):
         try:
             success, message = _handle_wallet_wechat_notify(db=db, payload=payload)

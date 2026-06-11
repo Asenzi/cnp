@@ -5,12 +5,27 @@
         <text class="price-main">¥{{ price.current }}</text>
         <text class="price-unit">/年</text>
       </view>
-      <text class="price-sub">原价 ¥{{ price.original }}</text>
+      <text class="price-note">{{ Number(price.current || 0) > 0 ? '拒绝申请将退回费用' : '无需支付费用' }}</text>
     </view>
 
     <view class="actions-row">
-      <button class="apply-btn" hover-class="apply-btn-active" @tap="emit('apply')">申请加入</button>
-      <button class="join-btn" hover-class="join-btn-active" @tap="emit('join')">立即加入</button>
+      <button
+        class="interest-btn"
+        :class="{ 'interest-btn-active-state': interested }"
+        hover-class="button-pressed"
+        @tap="emit('interest')"
+      >
+        {{ interested ? '已感兴趣' : '感兴趣' }}
+      </button>
+      <button
+        class="apply-btn"
+        :class="{ 'apply-btn-disabled': disabled }"
+        :disabled="disabled"
+        hover-class="button-pressed"
+        @tap="emit('apply')"
+      >
+        {{ actionText }}
+      </button>
     </view>
   </view>
 </template>
@@ -19,11 +34,23 @@
 defineProps({
   price: {
     type: Object,
-    default: () => ({ current: '99.00', original: '299' })
+    default: () => ({ current: '0.00' })
+  },
+  interested: {
+    type: Boolean,
+    default: false
+  },
+  actionText: {
+    type: String,
+    default: '申请加入'
+  },
+  disabled: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['apply', 'join'])
+const emit = defineEmits(['interest', 'apply'])
 </script>
 
 <style scoped>
@@ -33,9 +60,11 @@ const emit = defineEmits(['apply', 'join'])
   right: 0;
   bottom: 0;
   z-index: 40;
-  background: #ffffff;
-  border-top: 1rpx solid #f3f4f6;
   padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #edf1f5;
+  background: rgba(255, 255, 255, 0.96);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -43,6 +72,7 @@ const emit = defineEmits(['apply', 'join'])
 }
 
 .price-wrap {
+  min-width: 172rpx;
   display: flex;
   flex-direction: column;
 }
@@ -56,67 +86,73 @@ const emit = defineEmits(['apply', 'join'])
 .price-main {
   color: #dc2626;
   font-size: 36rpx;
-  line-height: 1;
-  font-weight: 600;
+  line-height: 40rpx;
+  font-weight: 700;
 }
 
 .price-unit {
-  color: #6b7280;
-  font-size: 22rpx;
+  padding-bottom: 2rpx;
+  color: #64748b;
+  font-size: 21rpx;
   line-height: 30rpx;
 }
 
-.price-sub {
+.price-note {
   margin-top: 4rpx;
-  color: #9ca3af;
-  font-size: 22rpx;
-  line-height: 30rpx;
-  text-decoration: line-through;
+  color: #94a3b8;
+  font-size: 19rpx;
+  line-height: 28rpx;
 }
 
 .actions-row {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 12rpx;
 }
 
-.apply-btn,
-.join-btn {
-  height: 72rpx;
-  border-radius: 6rpx;
+.interest-btn,
+.apply-btn {
+  height: 76rpx;
+  margin: 0;
   border: 0;
-  padding: 0 28rpx;
-  font-size: 26rpx;
-  font-weight: 500;
-  display: inline-flex;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 25rpx;
+  font-weight: 600;
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.apply-btn {
-  background: #f3f4f6;
-  color: #374151;
+.interest-btn::after,
+.apply-btn::after {
+  border: 0;
 }
 
-.join-btn {
-  background: #2563eb;
+.interest-btn {
+  min-width: 150rpx;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.interest-btn-active-state {
+  background: #e8f4fa;
+  color: #0676af;
+}
+
+.apply-btn {
+  flex: 1;
+  background: #0676af;
   color: #ffffff;
 }
 
-.apply-btn-active,
-.join-btn-active {
-  opacity: 0.8;
+.apply-btn-disabled {
+  background: #cbd5e1;
+  color: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  .bottom-bar {
-    background: #111827;
-    border-top-color: #1f2937;
-  }
-
-  .apply-btn {
-    background: #1f2937;
-    color: #d1d5db;
-  }
+.button-pressed {
+  opacity: 0.82;
 }
 </style>

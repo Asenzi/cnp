@@ -44,11 +44,35 @@ function getRuntimePlatform() {
   }
 }
 
-function getDefaultDevBaseUrl() {
-  const platform = getRuntimePlatform()
-  if (platform === 'devtools') {
-    return LOCAL_DEV_BASE_URL
+function getMiniProgramEnvVersion() {
+  try {
+    if (typeof __wxConfig !== 'undefined' && __wxConfig) {
+      return String(__wxConfig.envVersion || '').trim().toLowerCase()
+    }
+  } catch (error) {
+    // Ignore runtime probing failures.
   }
+
+  try {
+    if (typeof globalThis !== 'undefined' && globalThis.__wxConfig) {
+      return String(globalThis.__wxConfig.envVersion || '').trim().toLowerCase()
+    }
+  } catch (error) {
+    // Ignore runtime probing failures.
+  }
+
+  return ''
+}
+
+function isWechatDevelopRuntime() {
+  return getMiniProgramEnvVersion() === 'develop'
+}
+
+function isWechatPublishedRuntime() {
+  return ['trial', 'release'].includes(getMiniProgramEnvVersion())
+}
+
+function getDefaultDevBaseUrl() {
   return LAN_DEV_BASE_URL
 }
 
@@ -66,11 +90,16 @@ function isProductionEnv() {
   return nodeEnv === 'production' || nodeEnv === 'prod'
 }
 
-function resolveApiBaseUrlFromEnv() {
+function isHttpsBaseUrl(url) {
+  return /^https:\/\//i.test(normalizeBaseUrl(url))
+}
+
+function resolveApiBaseUrlFromEnv(options = {}) {
+  const allowHttp = Boolean(options.allowHttp)
   const env = getProcessEnv()
   for (const key of API_BASE_URL_ENV_KEYS) {
     const value = normalizeUnsafeLoopback(env[key])
-    if (value) {
+    if (value && (allowHttp || isHttpsBaseUrl(value))) {
       return value
     }
   }
@@ -78,7 +107,9 @@ function resolveApiBaseUrlFromEnv() {
 }
 
 export function getSuggestedApiBaseUrl() {
-  const envBaseUrl = resolveApiBaseUrlFromEnv()
+  const envBaseUrl = resolveApiBaseUrlFromEnv({
+    allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+  })
   if (envBaseUrl) {
     return envBaseUrl
   }
@@ -105,19 +136,25 @@ function getBaseUrl() {
   //
   // This keeps local debugging and production deployment clearly separated,
   // and avoids stale runtime overrides leaking into production requests.
-  if (isDevelopmentEnv()) {
+  if (isWechatPublishedRuntime()) {
+    return DEFAULT_PROD_BASE_URL
+  }
+
+  if (isDevelopmentEnv() || isWechatDevelopRuntime()) {
     const customBaseUrl = normalizeUnsafeLoopback(uni.getStorageSync(API_BASE_URL_STORAGE_KEY))
     if (customBaseUrl) {
       return customBaseUrl
     }
   }
 
-  const envBaseUrl = resolveApiBaseUrlFromEnv()
+  const envBaseUrl = resolveApiBaseUrlFromEnv({
+    allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+  })
   if (envBaseUrl) {
     return envBaseUrl
   }
 
-  if (isDevelopmentEnv()) {
+  if (isDevelopmentEnv() || isWechatDevelopRuntime()) {
     return getDefaultDevBaseUrl()
   }
 
@@ -125,9 +162,13 @@ function getBaseUrl() {
     return DEFAULT_PROD_BASE_URL
   }
 
-  // Unknown env falls back to the safer local-dev address instead of silently
-  // routing requests to production.
-  return getDefaultDevBaseUrl()
+  // Uploaded trial builds can have an empty NODE_ENV, so unknown runtime must
+  // prefer production HTTPS instead of leaking a local LAN address.
+  const platform = getRuntimePlatform()
+  if (platform === 'devtools') {
+    return getDefaultDevBaseUrl()
+  }
+  return DEFAULT_PROD_BASE_URL
 }
 
 export function getApiBaseUrl() {
@@ -137,13 +178,16 @@ export function getApiBaseUrl() {
 export function getApiEnvInfo() {
   return {
     nodeEnv: getNodeEnv(),
+    envVersion: getMiniProgramEnvVersion(),
     baseUrl: getBaseUrl(),
-    envBaseUrl: resolveApiBaseUrlFromEnv(),
-    runtimeOverride: isDevelopmentEnv()
+    envBaseUrl: resolveApiBaseUrlFromEnv({
+      allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+    }),
+    runtimeOverride: (isDevelopmentEnv() || isWechatDevelopRuntime())
       ? normalizeUnsafeLoopback(uni.getStorageSync(API_BASE_URL_STORAGE_KEY))
       : '',
     isDevelopment: isDevelopmentEnv(),
-    isProduction: isProductionEnv()
+    isProduction: isProductionEnv() || isWechatPublishedRuntime()
   }
 }
 
@@ -152,8 +196,11 @@ function writeApiDebugRecord(stage, payload = {}) {
     ts: Date.now(),
     stage,
     nodeEnv: getNodeEnv(),
+    envVersion: getMiniProgramEnvVersion(),
     baseUrl: getBaseUrl(),
-    envBaseUrl: resolveApiBaseUrlFromEnv(),
+    envBaseUrl: resolveApiBaseUrlFromEnv({
+      allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+    }),
     runtimeOverride: normalizeUnsafeLoopback(uni.getStorageSync(API_BASE_URL_STORAGE_KEY)),
     ...payload
   }

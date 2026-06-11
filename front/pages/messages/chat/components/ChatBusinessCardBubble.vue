@@ -10,7 +10,7 @@
         </button>
       </view>
 
-      <image class="card-avatar" :src="card.avatar || '/static/logo.png'" mode="aspectFill" />
+      <image class="card-avatar" :src="card.avatar || 'https://cos.cnptec.site/static/logo.png'" mode="aspectFill" />
     </view>
   </view>
 </template>

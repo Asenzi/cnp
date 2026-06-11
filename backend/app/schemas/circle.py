@@ -50,7 +50,21 @@ class CircleData(BaseModel):
     member_count: int
     post_count: int
     owner: CircleOwnerData
+    is_interested: bool = False
+    is_joined: bool = False
+    join_request_status: str = ""
+    join_payment_status: str = ""
+    join_auto_approve_at: datetime | None = None
     created_at: datetime | None = None
+
+
+class CircleJoinRequestCreate(BaseModel):
+    message: str | None = Field(default=None, max_length=500)
+    pay_channel: str | None = Field(default=None, max_length=16)
+
+
+class CircleJoinPaymentConfirm(BaseModel):
+    transaction_id: str | None = Field(default=None, max_length=64)
 
 
 class MyCircleItem(BaseModel):

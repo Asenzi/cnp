@@ -15,7 +15,7 @@
 
           <button class="detail-chip" hover-class="detail-chip-active" @tap="onTapHistory">
             <text class="detail-chip-text">积分明细</text>
-            <image class="detail-chip-icon" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+            <image class="detail-chip-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
           </button>
         </view>
 
@@ -89,7 +89,7 @@
                 hover-class="mini-arrow-btn-active"
                 @tap="onTapTask(task)"
               >
-                <image class="mini-arrow-img" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+                <image class="mini-arrow-img" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
               </button>
             </view>
           </view>
@@ -148,7 +148,7 @@ const TASK_CONFIG = {
     amount: 10,
     description: '每日签到一次，可获得积分奖励',
     tone: 'blue',
-    iconPath: '/static/me-icons/badge-blue.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/badge-blue.png',
     iconText: '签'
   },
   publish_resource: {
@@ -157,7 +157,7 @@ const TASK_CONFIG = {
     amount: 20,
     description: '每成功发布一条资源，可获得积分奖励',
     tone: 'orange',
-    iconPath: '/static/me-icons/upload-primary.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/upload-primary.png',
     iconText: '发'
   },
   complete_profile: {
@@ -166,7 +166,7 @@ const TASK_CONFIG = {
     amount: 100,
     description: '提升职场可信度',
     tone: 'blue-soft',
-    iconPath: '/static/me-icons/description-primary.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/description-primary.png',
     iconText: '资'
   },
   real_name_verified: {
@@ -175,7 +175,7 @@ const TASK_CONFIG = {
     amount: 200,
     description: '解锁更多高级权限',
     tone: 'green',
-    iconPath: '/static/me-icons/verified-emerald.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/verified-emerald.png',
     iconText: '认'
   },
   invite_friend: {
@@ -184,7 +184,7 @@ const TASK_CONFIG = {
     amount: 300,
     description: '每成功邀请一位可获得奖励',
     tone: 'primary',
-    iconPath: '/static/me-icons/contact-page-primary.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/contact-page-primary.png',
     iconText: '邀'
   }
 }

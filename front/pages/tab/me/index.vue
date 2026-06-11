@@ -13,13 +13,13 @@
             <view class="user-info">
               <view class="name-line">
                 <text class="name">{{ displayName }}</text>
-                <image v-if="isVerified" class="badge" mode="aspectFit" src="/static/icon/certification.png" />
+                <image v-if="isVerified" class="badge" mode="aspectFit" src="https://cos.cnptec.site/static/icon/certification.png" />
               </view>
               <text class="id">ID: {{ displayUserId }}</text>
               <text class="meta">{{ displayMeta }}</text>
             </view>
             <view class="edit" @tap="goEditInfo">
-              <image class="edit-icon" mode="aspectFit" src="/static/icon/edit.png" />
+              <image class="edit-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/edit.png" />
             </view>
           </view>
 
@@ -28,21 +28,21 @@
           </view>
 
           <view class="stats">
+            <view class="stat" @tap="goMyFollowing">
+              <text class="stat-num">{{ displayFollowingCount }}</text>
+              <text class="stat-name">关注</text>
+            </view>
+            <view class="stat" @tap="goMyFans">
+              <text class="stat-num">{{ displayFansCount }}</text>
+              <text class="stat-name">粉丝</text>
+            </view>
+            <view class="stat" @tap="goMyActivities">
+              <text class="stat-num">{{ displayActivityCount }}</text>
+              <text class="stat-name">活动</text>
+            </view>
             <view class="stat" @tap="goMyCircles">
               <text class="stat-num">{{ displayCircleCount }}</text>
               <text class="stat-name">圈子</text>
-            </view>
-            <view class="stat" @tap="goInterests">
-              <text class="stat-num">{{ displayInterestCount }}</text>
-              <text class="stat-name">感兴趣</text>
-            </view>
-            <view class="stat" @tap="goMessages">
-              <text class="stat-num" :class="{ 'stat-num-message': unreadMessageCount > 0 }">{{ unreadMessageCountText }}</text>
-              <text class="stat-name">消息</text>
-            </view>
-            <view class="stat" @tap="goWallet">
-              <text class="stat-num">{{ displayBalance }}</text>
-              <text class="stat-name">余额</text>
             </view>
           </view>
         </view>
@@ -56,33 +56,28 @@
 
       <!-- 未登录 -->
       <view v-else class="guest-section">
-        <image class="guest-logo" mode="aspectFit" src="/static/logo.png" />
+        <image class="guest-logo" mode="aspectFit" src="https://cos.cnptec.site/static/logo.png" />
         <text class="guest-text">登录后查看完整功能</text>
         <view class="guest-btn" @tap="goLogin">
           <text class="guest-btn-text">立即登录</text>
         </view>
       </view>
 
-      <!-- 功能 -->
       <view class="block">
-        <text class="block-title">功能服务</text>
-        <view class="services">
+        <view class="settings">
           <view
-            v-for="item in serviceList"
+            v-for="item in visibleServiceList"
             :key="item.key"
-            class="service"
+            class="setting"
             @tap="onServiceTap(item)"
           >
-            <image class="service-icon" mode="aspectFit" :src="item.iconPath" />
-            <text class="service-name">{{ item.label }}</text>
+            <image class="setting-icon" mode="aspectFit" :src="item.iconPath" />
+            <text class="setting-name">{{ item.label }}</text>
+            <view v-if="item.key === 'messages' && unreadMessageCount > 0" class="message-badge">
+              <text class="message-badge-text">{{ unreadMessageCountText }}</text>
+            </view>
+            <text class="setting-arrow">›</text>
           </view>
-        </view>
-      </view>
-
-      <!-- 设置 -->
-      <view class="block">
-        <text class="block-title">系统设置</text>
-        <view class="settings">
           <view
             v-for="item in settingList"
             :key="item.key"
@@ -112,7 +107,7 @@ const isLoggedIn = ref(false)
 const currentUser = ref({})
 const unreadMessageCount = ref(0)
 
-const DEFAULT_AVATAR = '/static/logo.png'
+const DEFAULT_AVATAR = 'https://cos.cnptec.site/static/logo.png'
 
 const displayAvatar = computed(() => {
   const avatar = currentUser.value?.avatar_url?.trim() || ''
@@ -121,6 +116,28 @@ const displayAvatar = computed(() => {
 
 const isVerified = computed(() => {
   return Boolean(currentUser.value?.is_verified || currentUser.value?.real_name_verified)
+})
+
+const visibleServiceList = computed(() => {
+  return serviceList
+    .filter((item) => item.key !== 'auth' || !isVerified.value)
+    .map((item) => {
+      if (item.key !== 'create_circle') {
+        return item
+      }
+      if (Boolean(currentUser.value?.is_circle_owner)) {
+        return {
+          ...item,
+          label: '创建圈子',
+          url: '/pages/circles/create/index'
+        }
+      }
+      return {
+        ...item,
+        label: '成为圈主',
+        url: '/pages/me/circle-owner/apply/index'
+      }
+    })
 })
 
 const displayName = computed(() => {
@@ -145,6 +162,21 @@ const displayIntro = computed(() => {
 
 const displayCircleCount = computed(() => {
   const count = currentUser.value?.circle_count
+  return typeof count === 'number' ? String(count) : '--'
+})
+
+const displayFollowingCount = computed(() => {
+  const count = currentUser.value?.following_count ?? currentUser.value?.follow_count
+  return typeof count === 'number' ? String(count) : '0'
+})
+
+const displayFansCount = computed(() => {
+  const count = currentUser.value?.fans_count ?? currentUser.value?.follower_count
+  return typeof count === 'number' ? String(count) : '0'
+})
+
+const displayActivityCount = computed(() => {
+  const count = currentUser.value?.activity_count ?? currentUser.value?.event_count
   return typeof count === 'number' ? String(count) : '--'
 })
 
@@ -251,6 +283,18 @@ const goLogin = () => {
 
 const goMyCircles = () => {
   uni.navigateTo({ url: '/pages/me/my-circles/index' })
+}
+
+const goMyFollowing = () => {
+  uni.navigateTo({ url: '/pages/me/following/index' })
+}
+
+const goMyFans = () => {
+  uni.navigateTo({ url: '/pages/me/followers/index' })
+}
+
+const goMyActivities = () => {
+  uni.showToast({ title: '我的活动功能开发中', icon: 'none' })
 }
 
 const goWallet = () => {
@@ -398,7 +442,7 @@ onShow(() => {
 
 /* 用户区域 */
 .user-section {
-  margin-bottom: 32rpx;
+  margin-bottom: 20rpx;
 }
 
 .user-card {
@@ -520,20 +564,20 @@ onShow(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff9f5;
+  background: #1296db;
   border-radius: 12rpx;
-  padding: 24rpx 28rpx;
+  padding: 43rpx 28rpx;
   margin-top: 16rpx;
 }
 
 .member-text {
   font-size: 26rpx;
-  color: #d4a574;
+  color: #fff;
 }
 
 .member-arrow {
   font-size: 32rpx;
-  color: #d4a574;
+  color: #fff;
 }
 
 /* 未登录 */
@@ -581,41 +625,6 @@ onShow(() => {
   margin-bottom: 32rpx;
 }
 
-.block-title {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #172033;
-  margin-bottom: 16rpx;
-}
-
-.services {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20rpx;
-  background: #ffffff;
-  border-radius: 16rpx;
-  padding: 28rpx 20rpx;
-}
-
-.service {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.service-icon {
-  width: 66rpx;
-  height: 66rpx;
-}
-
-.service-name {
-  font-size: 24rpx;
-  color: #172033;
-  text-align: center;
-}
-
 .settings {
   background: #ffffff;
   border-radius: 16rpx;
@@ -648,5 +657,24 @@ onShow(() => {
 .setting-arrow {
   font-size: 32rpx;
   color: #cbd5e1;
+}
+
+.message-badge {
+  min-width: 36rpx;
+  height: 36rpx;
+  padding: 0 8rpx;
+  background: #ef4444;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12rpx;
+}
+
+.message-badge-text {
+  font-size: 20rpx;
+  color: #ffffff;
+  font-weight: 500;
+  line-height: 1;
 }
 </style>

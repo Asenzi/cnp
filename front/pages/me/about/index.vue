@@ -4,7 +4,7 @@
     <view class="custom-nav" :style="navStyle">
       <view class="nav-inner">
         <view class="nav-back" hover-class="nav-back-active" @tap="goBack">
-          <image class="nav-back-icon" src="/static/me-icons/arrow-back-dark.png" mode="aspectFit" />
+          <image class="nav-back-icon" src="https://cos.cnptec.site/static/me-icons/arrow-back-dark.png" mode="aspectFit" />
         </view>
         <text class="nav-title">关于我们</text>
         <view class="nav-capsule-space"></view>
@@ -62,7 +62,7 @@
               <text class="info-label">{{ item.label }}</text>
               <text class="info-value">{{ item.value }}</text>
             </view>
-            <image class="chevron" src="/static/me-icons/chevron-light.png" mode="aspectFit" />
+            <image class="chevron" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" mode="aspectFit" />
           </view>
         </view>
 
@@ -100,7 +100,7 @@ const infoItems = [
     label: '官方网站',
     value: 'www.quanmailian.com',
     toast: '网址已复制',
-    iconPath: '/static/me-icons/info-gray.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/info-gray.png',
     iconClass: 'info-icon-blue'
   },
   {
@@ -108,7 +108,7 @@ const infoItems = [
     label: '官方微信',
     value: 'QuanMaiLian_Official',
     toast: '微信号已复制',
-    iconPath: '/static/icon/chat.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/chat.png',
     iconClass: 'info-icon-green'
   },
   {
@@ -116,7 +116,7 @@ const infoItems = [
     label: '商务合作',
     value: 'bd@quanmailian.com',
     toast: '邮箱已复制',
-    iconPath: '/static/me-icons/event-orange.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/event-orange.png',
     iconClass: 'info-icon-orange'
   }
 ]

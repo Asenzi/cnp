@@ -35,9 +35,7 @@
 
       <!-- 空状态 -->
       <view v-else-if="currentList.length === 0" class="empty-state">
-        <view class="empty-icon">
-          <image class="icon-img" mode="aspectFit" :src="emptyIcon" />
-        </view>
+        <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
         <text class="empty-title">暂无{{ currentTabLabel }}</text>
         <text class="empty-hint">{{ emptyHint }}</text>
       </view>
@@ -51,43 +49,43 @@
             :key="item.id"
             class="apply-card"
             :class="{ 'card-read': item.read }"
+            @tap="handleCircleRequestTap(item)"
           >
-            <view class="card-main" @tap="viewApplicantProfile(item)">
-              <!-- 申请人头像 -->
-              <image class="applicant-avatar" mode="aspectFill" :src="item.avatar" />
-
-              <!-- 申请信息 -->
-              <view class="apply-info">
-                <view class="info-top">
-                  <text class="applicant-name">{{ item.applicantName }}</text>
-                  <text class="apply-time">{{ item.timeText }}</text>
+            <view class="card-body">
+              <!-- 头像和主要信息 -->
+              <view class="card-top">
+                <image class="user-avatar" mode="aspectFill" :src="item.avatar" />
+                <view class="main-info">
+                  <text class="user-name">{{ item.displayName }}</text>
+                  <text class="circle-title">{{ item.circleName }}</text>
                 </view>
-                <text class="apply-text">{{ item.content }}</text>
-                <view v-if="item.message" class="apply-message">
-                  <text class="message-label">申请留言：</text>
-                  <text class="message-text">{{ item.message }}</text>
+                <text class="time-ago">{{ item.timeText }}</text>
+              </view>
+
+              <!-- 操作或状态 -->
+              <view v-if="item.perspective === 'owner' && item.status === 'pending' && item.paymentStatus === 'paid'" class="actions">
+                <view class="btn-reject" hover-class="btn-reject-hover" @tap.stop="handleReject(item)">
+                  <text class="btn-text">拒绝</text>
+                </view>
+                <view class="btn-approve" hover-class="btn-approve-hover" @tap.stop="handleApprove(item)">
+                  <text class="btn-text">通过</text>
                 </view>
               </view>
 
-              <!-- 未读标记 -->
-              <view v-if="!item.read" class="unread-dot"></view>
-            </view>
+              <view
+                v-else-if="item.statusText && item.perspective === 'applicant' && item.status === 'pending' && item.paymentStatus === 'paid'"
+                class="status-row"
+              >
+                <view class="status-btn" hover-class="status-btn-hover" @tap.stop="handleCancelRequest(item)">
+                  <text class="btn-text">{{ item.statusText }}</text>
+                </view>
+              </view>
 
-            <!-- 操作按钮 -->
-            <view v-if="item.status === 'pending'" class="card-actions">
-              <button class="action-btn btn-reject" hover-class="btn-reject-active" @tap.stop="handleReject(item)">
-                拒绝
-              </button>
-              <button class="action-btn btn-approve" hover-class="btn-approve-active" @tap.stop="handleApprove(item)">
-                通过
-              </button>
-            </view>
-
-            <!-- 已处理状态 -->
-            <view v-else class="card-status">
-              <text class="status-text" :class="item.status === 'approved' ? 'status-approved' : 'status-rejected'">
-                {{ item.status === 'approved' ? '已通过' : '已拒绝' }}
-              </text>
+              <view v-else-if="item.statusText" class="status-row">
+                <view class="status-chip" :class="item.statusClass">
+                  <text class="chip-text">{{ item.statusText }}</text>
+                </view>
+              </view>
             </view>
           </view>
         </template>
@@ -127,9 +125,10 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getCircleJoinRequests, reviewCircleJoinRequest } from '../../../api/circle'
+import { cancelCircleJoinRequest, getCircleJoinRequests, reviewCircleJoinRequest } from '../../../api/circle'
 import { getSystemNotifications, markNotificationAsRead } from '../../../api/notification'
 
+// 获取状态栏高度
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
 // 状态
@@ -163,9 +162,8 @@ const currentTabLabel = computed(() => {
 })
 
 const emptyIcon = computed(() => {
-  return activeTab.value === 'circle' ? '/static/icon/mennber.png' : '/static/icon/block.png'
+  return activeTab.value === 'circle' ? 'https://cos.cnptec.site/static/icon/mennber.png' : 'https://cos.cnptec.site/static/icon/block.png'
 })
-
 const emptyHint = computed(() => {
   return activeTab.value === 'circle'
     ? '圈子加入申请和审核结果会在这里显示'
@@ -174,8 +172,8 @@ const emptyHint = computed(() => {
 
 // 图标映射
 const typeIcons = {
-  circle: '/static/icon/mennber.png',
-  system: '/static/icon/block.png'
+  circle: 'https://cos.cnptec.site/static/icon/mennber.png',
+  system: 'https://cos.cnptec.site/static/icon/block.png'
 }
 
 const getTypeIcon = (type) => {
@@ -206,6 +204,57 @@ const formatTime = (timestamp) => {
   }
 }
 
+const formatDeadline = (value) => {
+  const timestamp = new Date(value || '').getTime()
+  if (!Number.isFinite(timestamp)) return ''
+  const now = Date.now()
+  const diff = timestamp - now
+
+  if (diff <= 0) return ''
+
+  const hour = 60 * 60 * 1000
+  const day = 24 * hour
+
+  if (diff < hour) {
+    const minutes = Math.ceil(diff / (60 * 1000))
+    return `${minutes}分钟后自动通过`
+  } else if (diff < day) {
+    const hours = Math.ceil(diff / hour)
+    return `${hours}小时后自动通过`
+  } else {
+    const days = Math.ceil(diff / day)
+    return `${days}天后自动通过`
+  }
+}
+
+const resolveRequestStatus = (item, perspective) => {
+  const status = String(item.status || 'pending').trim()
+  const paymentStatus = String(item.payment_status || 'unpaid').trim()
+  const refundStatus = String(item.refund_status || 'none').trim()
+  if (status === 'approved') {
+    return { text: perspective === 'applicant' ? '已加入圈子' : '已通过', className: 'status-approved' }
+  }
+  if (status === 'rejected') {
+    if (Number(item.amount || 0) > 0 && refundStatus === 'success') {
+      return { text: '已拒绝 · 费用已退回', className: 'status-rejected' }
+    }
+    return { text: '已拒绝', className: 'status-rejected' }
+  }
+  if (status === 'cancelled') {
+    if (Number(item.amount || 0) > 0 && refundStatus === 'success') {
+      return { text: '已取消 · 费用已退回', className: 'status-cancelled' }
+    }
+    return { text: '已取消', className: 'status-cancelled' }
+  }
+  if (paymentStatus === 'pending') {
+    return { text: '待完成支付', className: 'status-pending' }
+  }
+  return {
+    text: perspective === 'applicant' ? '取消加入' : '待处理',
+    className: 'status-pending'
+  }
+}
+
 // 切换选项卡
 const switchTab = (key) => {
   activeTab.value = key
@@ -215,7 +264,6 @@ const switchTab = (key) => {
 const loadData = async () => {
   loading.value = true
   try {
-    // 并行加载圈子申请和系统通知
     await Promise.all([
       loadCircleRequests(),
       loadSystemNotifications()
@@ -236,21 +284,41 @@ const loadCircleRequests = async () => {
     const data = await getCircleJoinRequests({ limit: 50 })
     const items = Array.isArray(data?.items) ? data.items : []
 
-    circleList.value = items.map(item => ({
-      id: String(item.id || item.request_id || ''),
-      type: 'circle',
-      applicantName: String(item.user?.nickname || item.applicant_name || '未知用户').trim(),
-      content: `申请加入你的圈子"${String(item.circle?.name || item.circle_name || '').trim()}"`,
-      message: String(item.message || '').trim(),
-      circleName: String(item.circle?.name || item.circle_name || '').trim(),
-      circleCode: String(item.circle?.circle_code || item.circle_code || '').trim(),
-      timestamp: new Date(item.created_at).getTime(),
-      timeText: formatTime(new Date(item.created_at).getTime()),
-      read: item.status !== 'pending',
-      status: String(item.status || 'pending').trim(),
-      avatar: String(item.user?.avatar_url || item.applicant_avatar || '/static/logo.png').trim(),
-      applicantId: String(item.user?.user_id || item.user_pk || '').trim()
-    }))
+    circleList.value = items.map(item => {
+      const perspective = String(item.perspective || 'owner').trim()
+      const circleName = String(item.circle?.name || item.circle_name || '').trim()
+      const applicantName = String(item.user?.nickname || item.applicant_name || '未知用户').trim()
+      const status = resolveRequestStatus(item, perspective)
+      const amount = Number(item.amount || 0)
+      return {
+        id: String(item.id || item.request_id || ''),
+        type: 'circle',
+        perspective,
+        displayName: perspective === 'applicant' ? circleName : applicantName,
+        content: perspective === 'applicant'
+          ? `你申请加入圈子”${circleName}”`
+          : `${applicantName}申请加入你的圈子”${circleName}”`,
+        message: String(item.message || '').trim(),
+        amount,
+        autoApproveText: item.status === 'pending' && item.auto_approve_at ? formatDeadline(item.auto_approve_at) : '',
+        circleName,
+        circleCode: String(item.circle?.circle_code || item.circle_code || '').trim(),
+        timestamp: new Date(item.updated_at || item.created_at).getTime(),
+        timeText: formatTime(new Date(item.updated_at || item.created_at).getTime()),
+        read: perspective === 'applicant' || item.status !== 'pending',
+        status: String(item.status || 'pending').trim(),
+        statusText: status.text,
+        statusClass: status.className,
+        paymentStatus: String(item.payment_status || 'unpaid').trim(),
+        refundStatus: String(item.refund_status || 'none').trim(),
+        avatar: String(
+          perspective === 'applicant'
+            ? item.circle?.avatar_url || item.circle?.cover_url
+            : item.user?.avatar_url || item.applicant_avatar
+        ).trim() || 'https://cos.cnptec.site/static/logo.png',
+        applicantId: String(item.user?.user_id || item.user_pk || '').trim()
+      }
+    })
   } catch (err) {
     console.error('加载圈子申请失败:', err)
     circleList.value = []
@@ -278,13 +346,19 @@ const loadSystemNotifications = async () => {
   }
 }
 
-// 查看申请人资料
-const viewApplicantProfile = (item) => {
-  if (!item.applicantId) return
-
-  uni.navigateTo({
-    url: `/pages/me/card/index?userId=${item.applicantId}`
-  })
+const handleCircleRequestTap = (item) => {
+  if (item.perspective === 'applicant') {
+    if (!item.circleCode) return
+    uni.navigateTo({
+      url: `/pages/circles/detail/index?code=${encodeURIComponent(item.circleCode)}`
+    })
+    return
+  }
+  if (item.applicantId) {
+    uni.navigateTo({
+      url: `/pages/me/card/index?userId=${encodeURIComponent(item.applicantId)}`
+    })
+  }
 }
 
 // 通过申请
@@ -292,7 +366,6 @@ const handleApprove = async (item) => {
   try {
     await reviewCircleJoinRequest(item.id, { action: 'approve' })
 
-    // 更新状态
     item.status = 'approved'
     item.read = true
 
@@ -301,7 +374,7 @@ const handleApprove = async (item) => {
       icon: 'success'
     })
 
-    // 刷新列表
+    // 鍒锋柊鍒楄〃
     setTimeout(() => {
       loadCircleRequests()
     }, 1000)
@@ -317,7 +390,9 @@ const handleApprove = async (item) => {
 const handleReject = async (item) => {
   uni.showModal({
     title: '拒绝申请',
-    content: '确定要拒绝该申请吗？',
+    content: item.amount > 0
+      ? `确定拒绝该申请并退回 ¥${item.amount.toFixed(2)} 入圈费用吗？`
+      : '确定要拒绝该申请吗？',
     success: async (res) => {
       if (res.confirm) {
         try {
@@ -326,7 +401,6 @@ const handleReject = async (item) => {
             reject_reason: '不符合圈子要求'
           })
 
-          // 更新状态
           item.status = 'rejected'
           item.read = true
 
@@ -335,7 +409,36 @@ const handleReject = async (item) => {
             icon: 'success'
           })
 
-          // 刷新列表
+          // 鍒锋柊鍒楄〃
+          setTimeout(() => {
+            loadCircleRequests()
+          }, 1000)
+        } catch (err) {
+          uni.showToast({
+            title: err?.message || '操作失败',
+            icon: 'none'
+          })
+        }
+      }
+    }
+  })
+}
+
+// 取消加入申请
+const handleCancelRequest = async (item) => {
+  uni.showModal({
+    title: '取消加入',
+    content: '确定要取消加入该圈子的申请吗？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          await cancelCircleJoinRequest(item.id)
+
+          uni.showToast({
+            title: '已取消申请',
+            icon: 'success'
+          })
+
           setTimeout(() => {
             loadCircleRequests()
           }, 1000)
@@ -352,7 +455,6 @@ const handleReject = async (item) => {
 
 // 点击系统通知
 const handleItemTap = async (item) => {
-  // 标记为已读
   if (!item.read && item.id) {
     try {
       await markNotificationAsRead(item.id)
@@ -368,7 +470,6 @@ const handleItemTap = async (item) => {
   })
 }
 
-// 返回上一页
 const goBack = () => {
   uni.navigateBack({
     delta: 1
@@ -388,7 +489,7 @@ onShow(() => {
   flex-direction: column;
 }
 
-/* 顶部导航 */
+/* 椤堕儴瀵艰埅 */
 .header {
   background: #ffffff;
   border-bottom: 1rpx solid #e7ecf3;
@@ -427,7 +528,7 @@ onShow(() => {
   color: #172033;
 }
 
-/* 选项卡 */
+/* 閫夐」鍗?*/
 .tabs-bar {
   display: flex;
   background: #ffffff;
@@ -511,21 +612,10 @@ onShow(() => {
   align-items: center;
 }
 
-.empty-icon {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 80rpx;
-  background: #f1f5f9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.empty-icon-image {
+  width: 200rpx;
+  height: 200rpx;
   margin-bottom: 32rpx;
-}
-
-.empty-icon .icon-img {
-  width: 80rpx;
-  height: 80rpx;
-  opacity: 0.3;
 }
 
 .empty-title {
@@ -540,7 +630,7 @@ onShow(() => {
   color: #94a3b8;
 }
 
-/* 消息列表 */
+/* 娑堟伅鍒楄〃 */
 .message-list {
   padding: 24rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
   display: flex;
@@ -550,163 +640,204 @@ onShow(() => {
 
 /* 圈子申请卡片 */
 .apply-card {
-  background: #f8fafc;
+  background: #ffffff;
   border-radius: 16rpx;
-  border: 1rpx solid transparent;
   overflow: hidden;
+  box-shadow: 0 1rpx 3rpx rgba(15, 23, 42, 0.06);
 }
 
 .apply-card.card-read {
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
-.apply-card:not(.card-read) {
-  background: #ffffff;
-  border-color: #e7ecf3;
-  box-shadow: 0 2rpx 12rpx rgba(15, 23, 42, 0.04);
-}
-
-.card-main {
-  position: relative;
-  display: flex;
-  gap: 20rpx;
+.card-body {
   padding: 24rpx;
 }
 
-.applicant-avatar {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 48rpx;
-  background: #e2e8f0;
+/* 顶部：头像+信息 */
+.card-top {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.user-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 40rpx;
+  background: #f1f5f9;
   flex-shrink: 0;
 }
 
-.apply-info {
+.main-info {
   flex: 1;
   min-width: 0;
 }
 
-.info-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16rpx;
-  margin-bottom: 8rpx;
-}
-
-.applicant-name {
-  font-size: 30rpx;
+.user-name {
+  display: block;
+  font-size: 32rpx;
   font-weight: 600;
-  color: #172033;
+  color: #0f172a;
+  line-height: 1.3;
+  margin-bottom: 6rpx;
 }
 
-.apply-time {
-  font-size: 22rpx;
-  color: #94a3b8;
-  flex-shrink: 0;
-}
-
-.apply-text {
+.circle-title {
   display: block;
   font-size: 26rpx;
-  line-height: 38rpx;
-  color: #475569;
-  margin-bottom: 8rpx;
-}
-
-.apply-message {
-  margin-top: 12rpx;
-  padding: 16rpx;
-  background: #f1f5f9;
-  border-radius: 12rpx;
-}
-
-.message-label {
-  font-size: 22rpx;
   color: #64748b;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.message-text {
+.time-ago {
   font-size: 24rpx;
-  line-height: 36rpx;
-  color: #475569;
-}
-
-.unread-dot {
-  position: absolute;
-  top: 28rpx;
-  right: 24rpx;
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 8rpx;
-  background: #ef4444;
+  color: #94a3b8;
+  flex-shrink: 0;
+  line-height: 1.3;
 }
 
 /* 操作按钮 */
-.card-actions {
+.actions {
   display: flex;
-  gap: 16rpx;
-  padding: 0 24rpx 24rpx;
+  gap: 12rpx;
 }
 
-.action-btn {
+.btn-reject,
+.btn-approve {
   flex: 1;
-  height: 72rpx;
+  height: 76rpx;
   border-radius: 12rpx;
-  border: 0;
-  font-size: 28rpx;
-  font-weight: 500;
-  line-height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s;
-}
-
-.action-btn::after {
-  border: 0;
 }
 
 .btn-reject {
   background: #f1f5f9;
-  color: #475569;
 }
 
-.btn-reject-active {
+.btn-reject-hover {
   background: #e2e8f0;
+  transform: scale(0.98);
 }
 
 .btn-approve {
-  background: #2563eb;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.2);
+}
+
+.btn-approve-hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: scale(0.98);
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.3);
+}
+
+.btn-text {
+  font-size: 28rpx;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.btn-reject .btn-text {
+  color: #64748b;
+}
+
+.btn-approve .btn-text {
   color: #ffffff;
 }
 
-.btn-approve-active {
-  background: #1d4ed8;
+/* 状态显示 */
+.status-row {
+  display: flex;
+  justify-content: flex-end;
 }
 
-/* 已处理状态 */
-.card-status {
-  padding: 0 24rpx 24rpx;
-  text-align: center;
-}
-
-.status-text {
-  display: inline-block;
+.status-btn {
   padding: 12rpx 32rpx;
-  border-radius: 8rpx;
-  font-size: 24rpx;
+  background: #1296db;
+  border-radius: 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(18, 150, 219, 0.2);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-btn-hover {
+  background: #0d7ab8;
+  transform: scale(0.98);
+  box-shadow: 0 2rpx 8rpx rgba(18, 150, 219, 0.3);
+}
+
+.status-btn .btn-text {
+  font-size: 26rpx;
   font-weight: 500;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+.status-chip {
+  padding: 10rpx 24rpx;
+  border-radius: 24rpx;
+  display: inline-flex;
+  align-items: center;
+}
+
+.chip-text {
+  font-size: 26rpx;
+  font-weight: 500;
+  line-height: 1.3;
 }
 
 .status-approved {
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.status-approved .chip-text {
   color: #059669;
 }
 
 .status-rejected {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.status-rejected .chip-text {
   color: #dc2626;
 }
 
-/* 系统通知卡片 */
+.status-cancelled {
+  background: rgba(100, 116, 139, 0.12);
+}
+
+.status-cancelled .chip-text {
+  color: #64748b;
+}
+
+.status-pending,
+.status-paid,
+.status-unpaid,
+.status-refunded {
+  background: #f1f5f9;
+}
+
+.status-pending .chip-text,
+.status-paid .chip-text,
+.status-unpaid .chip-text,
+.status-refunded .chip-text {
+  color: #64748b;
+}
+
+.status-pending {
+  background: rgba(217, 119, 6, 0.1);
+  color: #b45309;
+}
+
+/* 绯荤粺閫氱煡鍗＄墖 */
 .notice-card {
   position: relative;
   display: flex;
@@ -829,10 +960,6 @@ onShow(() => {
     color: #64748b;
   }
 
-  .empty-icon {
-    background: #1e293b;
-  }
-
   .empty-title {
     color: #cbd5e1;
   }
@@ -841,70 +968,87 @@ onShow(() => {
     color: #64748b;
   }
 
+  /* 圈子申请卡片 - 深色模式 */
   .apply-card {
-    background: rgba(30, 41, 59, 0.5);
-  }
-
-  .apply-card:not(.card-read) {
     background: #1e293b;
-    border-color: #334155;
-    box-shadow: none;
+    box-shadow: 0 1rpx 3rpx rgba(0, 0, 0, 0.2);
   }
 
-  .applicant-avatar {
+  .user-avatar {
     background: #334155;
   }
 
-  .applicant-name {
-    color: #f8fafc;
+  .user-name {
+    color: #f1f5f9;
   }
 
-  .apply-time {
-    color: #64748b;
-  }
-
-  .apply-text {
-    color: #cbd5e1;
-  }
-
-  .apply-message {
-    background: rgba(15, 23, 42, 0.8);
-  }
-
-  .message-label {
+  .circle-title {
     color: #94a3b8;
   }
 
-  .message-text {
-    color: #cbd5e1;
+  .time-ago {
+    color: #64748b;
   }
 
   .btn-reject {
     background: #334155;
-    color: #cbd5e1;
   }
 
-  .btn-reject-active {
+  .btn-reject-hover {
     background: #475569;
   }
 
-  .btn-approve {
-    background: #3b82f6;
+  .btn-reject .btn-text {
+    color: #cbd5e1;
   }
 
-  .btn-approve-active {
-    background: #2563eb;
+  .btn-approve {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  }
+
+  .btn-approve-hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   }
 
   .status-approved {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.18);
+  }
+
+  .status-approved .chip-text {
     color: #34d399;
   }
 
   .status-rejected {
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(239, 68, 68, 0.18);
+  }
+
+  .status-rejected .chip-text {
     color: #f87171;
   }
+
+  .status-btn {
+    background: #1296db;
+  }
+
+  .status-btn-hover {
+    background: #0d7ab8;
+  }
+
+  .status-pending,
+  .status-paid,
+  .status-unpaid,
+  .status-refunded {
+    background: #f1f5f9;
+  }
+
+  .status-pending .chip-text,
+  .status-paid .chip-text,
+  .status-unpaid .chip-text,
+  .status-refunded .chip-text {
+    color: #64748b;
+  }
+
+  /* 系统通知卡片 - 深色模式 */
 
   .notice-card {
     background: rgba(30, 41, 59, 0.5);

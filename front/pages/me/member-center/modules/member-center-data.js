@@ -3,31 +3,31 @@ export const DEFAULT_BENEFITS = [
     key: 'badge',
     title: '专属身份标识',
     desc: '彰显商务独特身份',
-    iconPath: '/static/icon/1.png'
+    iconPath: 'https://cos.cnptec.site/static/icon/1.png'
   },
   {
     key: 'contact',
     title: '解锁联系方式',
     desc: '直接获取核心资源',
-    iconPath: '/static/icon/2.png'
+    iconPath: 'https://cos.cnptec.site/static/icon/2.png'
   },
   {
     key: 'circle_discount',
     title: '社群加入优惠',
     desc: '低成本高效入圈',
-    iconPath: '/static/icon/3.png'
+    iconPath: 'https://cos.cnptec.site/static/icon/3.png'
   },
   {
     key: 'boost',
     title: '展示权重提升',
     desc: '曝光率大幅翻倍',
-    iconPath: '/static/icon/4.png'
+    iconPath: 'https://cos.cnptec.site/static/icon/4.png'
   },
   {
     key: 'support',
     title: '优先技术支持',
     desc: '专属客服，极速响应您的需求',
-    iconPath: '/static/icon/5.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/5.png',
     wide: true
   }
 ]

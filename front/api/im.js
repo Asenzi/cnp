@@ -128,7 +128,7 @@ export function getImPresence(targetUserId) {
 }
 
 export function getImWebSocketUrl() {
-  const httpBase = String(getApiBaseUrl() || 'http://172.20.10.3:8001').trim().replace(/\/$/, '')
+  const httpBase = String(getApiBaseUrl() || 'https://www.cnptec.site').trim().replace(/\/$/, '')
   if (httpBase.startsWith('https://')) {
     return `${httpBase.replace(/^https:\/\//, 'wss://')}/api/v1/im/ws`
   }
@@ -152,7 +152,7 @@ export function uploadImAsset(filePath, options = {}) {
   const kind = String(options.kind || 'image').trim() || 'image'
   const name = String(options.name || '').trim() || 'file'
   const token = uni.getStorageSync('token')
-  const baseUrl = String(getApiBaseUrl() || 'http://172.20.10.3:8001').replace(/\/$/, '')
+  const baseUrl = String(getApiBaseUrl() || 'https://www.cnptec.site').replace(/\/$/, '')
   const uploadUrl = `${baseUrl}/api/v1/im/assets/upload?kind=${encodeURIComponent(kind)}`
   const header = token
     ? {

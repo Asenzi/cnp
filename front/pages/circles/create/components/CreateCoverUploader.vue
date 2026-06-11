@@ -1,11 +1,11 @@
-﻿<template>
+<template>
   <view class="section-wrap">
     <text class="section-title">圈子封面</text>
 
     <view class="cover-card" @tap="chooseCover">
       <image class="cover-image" mode="aspectFill" :src="modelValue || defaultCoverImage" />
       <view class="cover-mask">
-        <image class="camera-icon" mode="aspectFit" src="/static/me-icons/camera-white.png" />
+        <image class="camera-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/camera-white.png" />
         <text class="cover-tip">点击更换封面图</text>
       </view>
     </view>

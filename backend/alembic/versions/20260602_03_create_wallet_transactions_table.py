@@ -1,7 +1,7 @@
 """create wallet transactions table
 
-Revision ID: 20260602_01
-Revises:
+Revision ID: 20260602_03
+Revises: 20260602_02
 Create Date: 2026-06-02 16:03:00
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "20260602_01"
-down_revision = None  # 请根据你的最新迁移版本填写
+revision = "20260602_03"
+down_revision = "20260602_02"
 branch_labels = None
 depends_on = None
 
@@ -21,12 +21,12 @@ def upgrade() -> None:
         "wallet_transactions",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("user_pk", sa.Integer(), nullable=False),
-        sa.Column("change_amount", sa.Numeric(precision=12, scale=2), nullable=False, comment="变动金额，正数为收入，负数为支出"),
-        sa.Column("balance_after", sa.Numeric(precision=12, scale=2), nullable=False, server_default=sa.text("0.00"), comment="交易后余额"),
-        sa.Column("biz_type", sa.String(length=64), nullable=False, comment="业务类型: recharge-充值, member_subscribe-会员订阅, refund-退款等"),
-        sa.Column("biz_key", sa.String(length=128), nullable=False, server_default=sa.text("''"), comment="业务唯一标识，如订单号"),
-        sa.Column("title", sa.String(length=128), nullable=False, server_default=sa.text("''"), comment="交易标题"),
-        sa.Column("remark", sa.Text(), nullable=True, comment="备注信息"),
+        sa.Column("change_amount", sa.Numeric(precision=12, scale=2), nullable=False),
+        sa.Column("balance_after", sa.Numeric(precision=12, scale=2), nullable=False, server_default=sa.text("0.00")),
+        sa.Column("biz_type", sa.String(length=64), nullable=False),
+        sa.Column("biz_key", sa.String(length=128), nullable=False, server_default=sa.text("''")),
+        sa.Column("title", sa.String(length=128), nullable=False, server_default=sa.text("''")),
+        sa.Column("remark", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["user_pk"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

@@ -166,6 +166,20 @@ export interface AdminVerificationItem {
   user_id: string;
 }
 
+export interface AdminCircleOwnerApplicationItem {
+  experience: string;
+  id: number;
+  is_circle_owner: boolean;
+  nickname: string;
+  reason: string;
+  reject_reason: string;
+  reviewed_at: null | string;
+  status: string;
+  submitted_at: null | string;
+  user_id: string;
+  user_pk: number;
+}
+
 export interface AdminContentReviewItem {
   action_type: string;
   created_at: null | string;
@@ -363,6 +377,30 @@ export async function reviewAdminVerificationApi(
   },
 ) {
   return requestClient.post(`/verifications/${verificationId}/review`, payload);
+}
+
+export async function listAdminCircleOwnerApplicationsApi(params: {
+  page: number;
+  page_size: number;
+  status?: string;
+}) {
+  return requestClient.get<PageResult<AdminCircleOwnerApplicationItem>>(
+    '/circle-owner-applications',
+    { params },
+  );
+}
+
+export async function reviewAdminCircleOwnerApplicationApi(
+  applicationId: number,
+  payload: {
+    action: 'approve' | 'reject';
+    reject_reason?: string;
+  },
+) {
+  return requestClient.post(
+    `/circle-owner-applications/${applicationId}/review`,
+    payload,
+  );
 }
 
 export async function listAdminContentReviewsApi(params: {

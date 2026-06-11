@@ -4,9 +4,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import db_session, get_current_user_id
 from app.core.response import success_response
 from app.payment import (
+    CIRCLE_OWNER_PLAN_ID,
     confirm_member_order_payment,
     confirm_wallet_recharge_payment,
     create_wallet_recharge,
+    get_circle_owner_overview,
     get_member_center_overview,
     get_member_order_status,
     get_wallet_recharge_status,
@@ -17,6 +19,7 @@ from app.payment import (
 )
 from app.payment.statistics import get_payment_statistics, get_user_payment_summary
 from app.schemas.payment import (
+    CircleOwnerPurchaseRequest,
     MemberOrderConfirmRequest,
     MemberSubscribeRequest,
     WalletRechargeConfirmRequest,
@@ -38,6 +41,35 @@ def get_member_center(
 ):
     payload = get_member_center_overview(db=db, user_pk=user_id)
     return success_response(data=payload)
+
+
+@router.get("/circle-owner/overview", summary="Get lifetime circle owner product")
+def get_circle_owner_product(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    return success_response(data=get_circle_owner_overview(db=db, user_pk=user_id))
+
+
+@router.post("/circle-owner/purchase", summary="Purchase lifetime circle owner identity")
+def post_circle_owner_purchase(
+    request: Request,
+    payload: CircleOwnerPurchaseRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    data = subscribe_member_plan(
+        db=db,
+        user_pk=user_id,
+        plan_id=CIRCLE_OWNER_PLAN_ID,
+        pay_channel=payload.pay_channel,
+        use_points_discount=False,
+        request_client_ip=request.client.host if request.client else None,
+        request_base_url=str(request.base_url).rstrip("/"),
+    )
+    if str(data.get("action") or "").strip() == "wxpay_required":
+        return success_response(data=data, message="请完成微信支付")
+    return success_response(data=data, message="永久圈主已开通")
 
 
 @router.post("/member/subscribe", summary="Subscribe or renew member plan")

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="post-card">
     <view class="post-head">
       <text class="post-type-tag" :class="resolvedTypeKey === 'supply' ? 'post-type-supply' : 'post-type-demand'">
@@ -61,7 +61,7 @@ const resolvedTimeText = computed(() => String(props.post?.time_text || props.po
 const resolvedTitle = computed(() => String(props.post?.title || '').trim())
 const resolvedDescription = computed(() => String(props.post?.description || '').trim())
 const resolvedAuthorAvatar = computed(() => {
-  return String(props.post?.author?.avatar_url || props.post?.authorAvatar || '').trim() || '/static/logo.png'
+  return String(props.post?.author?.avatar_url || props.post?.authorAvatar || '').trim() || 'https://cos.cnptec.site/static/logo.png'
 })
 const resolvedAuthorName = computed(() => {
   const nickname = String(props.post?.author?.nickname || '').trim()
@@ -206,4 +206,4 @@ const resolvedAuthorName = computed(() => {
     color: #94a3b8;
   }
 }
-</style>
+</style>

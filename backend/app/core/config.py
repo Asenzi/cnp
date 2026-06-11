@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     OSS_BUCKET: str = Field(default='')
     OSS_ACCESS_KEY: str = Field(default='')
     OSS_SECRET_KEY: str = Field(default='')
+    STORAGE_BACKEND: str = Field(default='local')
+    COS_SECRET_ID: str = Field(default='')
+    COS_SECRET_KEY: str = Field(default='')
+    COS_REGION: str = Field(default='')
+    COS_BUCKET: str = Field(default='')
+    COS_DOMAIN: str = Field(default='')
+    COS_SCHEME: str = Field(default='https')
 
     WECHAT_MINI_APP_ID: str = Field(default='')
     WECHAT_MINI_APP_SECRET: str = Field(default='')
@@ -55,6 +62,9 @@ class Settings(BaseSettings):
     WECHAT_PAY_API_V2_KEY: str = Field(default='')
     WECHAT_PAY_NOTIFY_URL: str = Field(default='')
     WECHAT_PAY_UNIFIEDORDER_URL: str = Field(default='https://api.mch.weixin.qq.com/pay/unifiedorder')
+    WECHAT_PAY_REFUND_URL: str = Field(default='https://api.mch.weixin.qq.com/secapi/pay/refund')
+    WECHAT_PAY_CERT_PATH: str = Field(default='')
+    WECHAT_PAY_KEY_PATH: str = Field(default='')
     DEFAULT_AVATAR_URL: str = Field(default='/static/logo.png')
     VERIFICATION_AUTO_APPROVE: bool = Field(default=False)
     VERIFICATION_DATA_SECRET: str = Field(default="")
@@ -69,6 +79,9 @@ class Settings(BaseSettings):
     ADMIN_DEFAULT_USERNAME: str = Field(default='admin')
     ADMIN_DEFAULT_PASSWORD: str = Field(default='Admin@20260325')
     ADMIN_DEFAULT_DISPLAY_NAME: str = Field(default='系统管理员')
+
+    # 腾讯地图 WebService API Key
+    QQ_MAP_KEY: str = Field(default='')
 
     @field_validator('DEBUG', 'REDIS_ENABLED', 'VERIFICATION_AUTO_APPROVE', 'WECHAT_PAY_ENABLED', mode='before')
     @classmethod
@@ -110,4 +123,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

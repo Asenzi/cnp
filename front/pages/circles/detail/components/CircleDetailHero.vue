@@ -12,6 +12,9 @@
             <text class="meta-text">{{ detail.membersText }} · {{ detail.postsText }}</text>
           </view>
         </view>
+        <button class="share-btn" open-type="share" hover-class="share-btn-active">
+          <image class="share-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/share.png" />
+        </button>
       </view>
 
       <view class="description-wrap" @tap="toggleDescription">
@@ -69,12 +72,40 @@ const toggleDescription = () => {
   height: 120rpx;
   border-radius: 8rpx;
   background: #f3f4f6;
+  flex-shrink: 0;
 }
 
 .title-wrap {
   flex: 1;
   min-width: 0;
   padding-top: 4rpx;
+}
+
+.share-btn {
+  width: 64rpx;
+  height: 64rpx;
+  padding: 0;
+  margin-top: 22rpx;
+  border: 0;
+  border-radius: 12rpx;
+  background: #eff6ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.share-btn::after {
+  border: 0;
+}
+
+.share-icon {
+  width: 36rpx;
+  height: 36rpx;
+}
+
+.share-btn-active {
+  opacity: 0.7;
 }
 
 .title {
@@ -163,6 +194,10 @@ const toggleDescription = () => {
 
   .description {
     color: #d1d5db;
+  }
+
+  .share-btn {
+    background: rgba(37, 99, 235, 0.15);
   }
 }
 </style>

@@ -2,7 +2,7 @@
   <view class="page">
     <view class="header" :style="{ paddingTop: statusBarHeight + 'px' }">
       <view class="back-btn" @tap="goBack">
-        <image class="back-icon" mode="aspectFit" src="/static/me-icons/arrow-back-dark.png" />
+        <image class="back-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/arrow-back-dark.png" />
       </view>
       <text class="title">编辑资料</text>
       <view class="placeholder"></view>
@@ -14,7 +14,7 @@
         <view class="avatar-wrap" @tap="onChangeAvatar">
           <image class="avatar" mode="aspectFill" :src="avatarUrl" />
           <view class="camera-badge">
-            <image class="camera-icon" mode="aspectFit" src="/static/me-icons/camera-white.png" />
+            <image class="camera-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/camera-white.png" />
           </view>
         </view>
         <text class="avatar-tip">{{ uploadingAvatar ? '上传中...' : '点击更换头像' }}</text>
@@ -74,7 +74,7 @@
                   {{ industryOptions[industryIndex].label }}
                 </view>
               </picker>
-              <image class="arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+              <image class="arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
             </view>
           </view>
 
@@ -116,7 +116,7 @@
                   {{ cityDisplayText }}
                 </view>
               </picker>
-              <image class="arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+              <image class="arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
             </view>
           </view>
         </view>
@@ -190,13 +190,14 @@ import {
 import { getApiBaseUrl } from '../../../utils/request'
 import { PROVINCE_CITY_OPTIONS } from './modules/city-picker-data'
 
-const DEFAULT_AVATAR = '/static/logo.png'
+const DEFAULT_AVATAR = 'https://cos.cnptec.site/static/logo.png'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
 const loading = ref(false)
 const saving = ref(false)
 const uploadingAvatar = ref(false)
+const hasSelectedNewAvatar = ref(false) // 标记是否选择了新头像
 
 const avatarUrl = ref(DEFAULT_AVATAR)
 const nickname = ref('')
@@ -348,7 +349,10 @@ const findCitySelection = (cityCode = '', cityName = '') => {
 }
 
 const applyProfile = (profile = {}) => {
-  avatarUrl.value = typeof profile?.avatar_url === 'string' && profile.avatar_url.trim() ? profile.avatar_url : DEFAULT_AVATAR
+  // 只在没有选择新头像时才更新头像
+  if (!hasSelectedNewAvatar.value) {
+    avatarUrl.value = typeof profile?.avatar_url === 'string' && profile.avatar_url.trim() ? profile.avatar_url : DEFAULT_AVATAR
+  }
   nickname.value = typeof profile?.nickname === 'string' ? profile.nickname : ''
   bio.value = typeof profile?.intro === 'string' ? profile.intro : ''
   companyName.value = typeof profile?.company_name === 'string' ? profile.company_name : ''
@@ -433,30 +437,25 @@ const onChangeAvatar = () => {
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success: async (res) => {
+    success: (res) => {
       const filePath = res?.tempFilePaths?.[0]
       if (!filePath) {
         return
       }
 
-      uploadingAvatar.value = true
-      try {
-        const data = await uploadCurrentUserAvatar(filePath)
-        if (typeof data?.avatar_url === 'string' && data.avatar_url.trim()) {
-          const uploadedUrl = data.avatar_url.trim()
-          avatarUrl.value = uploadedUrl
+      console.log('选择的图片路径:', filePath)
 
-          const userInfo = uni.getStorageSync('userInfo') || {}
-          userInfo.avatar_url = uploadedUrl
-          uni.setStorageSync('userInfo', userInfo)
+      // 标记已选择新头像
+      hasSelectedNewAvatar.value = true
 
-          showToast('头像已更新')
-        }
-      } catch (err) {
-        showToast(err?.message || '头像上传失败')
-      } finally {
-        uploadingAvatar.value = false
-      }
+      // 更新本地预览，使用临时文件路径
+      avatarUrl.value = filePath
+
+      showToast('头像已选择，点击提交保存')
+    },
+    fail: (err) => {
+      console.error('选择图片失败:', err)
+      showToast('选择图片失败')
     }
   })
 }
@@ -483,13 +482,6 @@ const onSave = async () => {
 
   const baseUrl = getApiBaseUrl()
   const normalizedAvatarUrl = String(avatarUrl.value || DEFAULT_AVATAR).trim()
-  let avatarForSave = normalizedAvatarUrl
-
-  if (normalizedAvatarUrl.startsWith(baseUrl)) {
-    avatarForSave = normalizedAvatarUrl.replace(baseUrl, '')
-  } else if (normalizedAvatarUrl.startsWith('http://') || normalizedAvatarUrl.startsWith('https://')) {
-    avatarForSave = normalizedAvatarUrl
-  }
 
   if (normalizedDisplayPhone && !DISPLAY_PHONE_REGEX.test(normalizedDisplayPhone)) {
     showToast('请输入正确的展示手机号')
@@ -505,23 +497,99 @@ const onSave = async () => {
   displayWechat.value = normalizedDisplayWechat
   email.value = normalizedEmail
 
-  const payload = {
-    nickname: normalizedNickname,
-    avatar_url: avatarForSave || DEFAULT_AVATAR,
-    intro,
-    industry_code: selectedIndustry.value || null,
-    industry_label: selectedIndustry.value ? selectedIndustry.label : null,
-    company_name: normalizedCompanyName || null,
-    job_title: normalizedJobTitle || null,
-    display_phone: normalizedDisplayPhone || null,
-    display_wechat: normalizedDisplayWechat || null,
-    email: normalizedEmail || null,
-    city_code: selectedCity?.value || null,
-    city_name: selectedCity?.label || null
-  }
-
   saving.value = true
+  let avatarForSave = normalizedAvatarUrl
+  let avatarUploadedDirectly = false // 标记头像是否已通过专用接口上传
+
   try {
+    // 如果选择了新头像，必须先上传
+    if (hasSelectedNewAvatar.value) {
+      uploadingAvatar.value = true
+      try {
+        console.log('开始上传新头像:', normalizedAvatarUrl)
+        const data = await uploadCurrentUserAvatar(normalizedAvatarUrl)
+        if (typeof data?.avatar_url === 'string' && data.avatar_url.trim()) {
+          avatarForSave = data.avatar_url.trim()
+          avatarUploadedDirectly = true // 标记头像已通过专用接口直接保存到数据库
+          console.log('头像上传成功（已直接保存到数据库）:', avatarForSave)
+
+          // 更新本地存储的用户信息
+          const userInfo = uni.getStorageSync('userInfo') || {}
+          userInfo.avatar_url = avatarForSave
+          uni.setStorageSync('userInfo', userInfo)
+
+          // 更新本地显示
+          avatarUrl.value = avatarForSave
+        } else {
+          throw new Error('头像上传返回数据异常')
+        }
+      } catch (err) {
+        saving.value = false
+        uploadingAvatar.value = false
+        console.error('头像上传失败:', err)
+        showToast(err?.message || '头像上传失败，请重试')
+        return
+      } finally {
+        uploadingAvatar.value = false
+      }
+    } else {
+      // 没有选择新头像，处理现有头像 URL
+      if (normalizedAvatarUrl.startsWith(baseUrl)) {
+        avatarForSave = normalizedAvatarUrl.replace(baseUrl, '')
+      } else if (normalizedAvatarUrl.startsWith('http://') || normalizedAvatarUrl.startsWith('https://')) {
+        avatarForSave = normalizedAvatarUrl
+      } else if (normalizedAvatarUrl === DEFAULT_AVATAR) {
+        avatarForSave = DEFAULT_AVATAR
+      } else {
+        // 其他情况使用默认头像
+        avatarForSave = DEFAULT_AVATAR
+      }
+    }
+
+    // 如果只修改了头像，已经通过专用接口保存，直接返回成功
+    if (avatarUploadedDirectly) {
+      // 检查其他字段是否有修改
+      const currentProfile = uni.getStorageSync('userInfo') || {}
+      const hasOtherChanges =
+        normalizedNickname !== (currentProfile.nickname || '') ||
+        intro !== (currentProfile.intro || '') ||
+        normalizedCompanyName !== (currentProfile.company_name || '') ||
+        normalizedJobTitle !== (currentProfile.job_title || '') ||
+        normalizedDisplayPhone !== (currentProfile.display_phone || '') ||
+        normalizedDisplayWechat !== (currentProfile.display_wechat || '') ||
+        normalizedEmail !== (currentProfile.email || '') ||
+        (selectedIndustry.value && selectedIndustry.value !== (currentProfile.industry_code || '')) ||
+        (selectedCity?.value && selectedCity.value !== (currentProfile.city_code || ''))
+
+      if (!hasOtherChanges) {
+        // 只修改了头像，已保存成功
+        hasSelectedNewAvatar.value = false
+        showToast('头像更新成功')
+        setTimeout(() => {
+          goBack()
+        }, 250)
+        saving.value = false
+        return
+      }
+    }
+
+    const payload = {
+      nickname: normalizedNickname,
+      avatar_url: avatarForSave || DEFAULT_AVATAR,
+      intro,
+      industry_code: selectedIndustry.value || null,
+      industry_label: selectedIndustry.value ? selectedIndustry.label : null,
+      company_name: normalizedCompanyName || null,
+      job_title: normalizedJobTitle || null,
+      display_phone: normalizedDisplayPhone || null,
+      display_wechat: normalizedDisplayWechat || null,
+      email: normalizedEmail || null,
+      city_code: selectedCity?.value || null,
+      city_name: selectedCity?.label || null
+    }
+
+    console.log('提交的数据:', JSON.stringify(payload, null, 2))
+
     const profile = await updateCurrentUserProfile(payload)
     const review = profile && typeof profile._review === 'object'
       ? profile._review
@@ -547,11 +615,20 @@ const onSave = async () => {
 
     applyProfile(nextProfile)
     uni.setStorageSync('userInfo', nextProfile)
+
+    // 重置头像选择标记
+    hasSelectedNewAvatar.value = false
+
     showToast('保存成功')
     setTimeout(() => {
       goBack()
     }, 250)
   } catch (err) {
+    console.error('保存失败，完整错误:', err)
+    console.error('错误代码:', err?.code)
+    console.error('错误信息:', err?.message)
+    console.error('错误payload:', err?.payload)
+
     if (Number(err?.code) === 5701) {
       const detail = err?.payload?.data || {}
       showToast(

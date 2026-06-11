@@ -10,7 +10,7 @@
           <view class="name-with-badge">
             <text class="name">{{ displayName }}</text>
             <view v-if="isVerified" class="verified-badge-inline">
-              <image class="verified-icon-img" mode="aspectFit" src="/static/icon/certification.png" />
+              <image class="verified-icon-img" mode="aspectFit" src="https://cos.cnptec.site/static/icon/certification.png" />
             </view>
           </view>
         </view>
@@ -25,7 +25,7 @@
       </view>
 
       <view class="edit-btn" @tap="$emit('edit')">
-        <image class="edit-icon-img" mode="aspectFit" src="/static/icon/edit.png" />
+        <image class="edit-icon-img" mode="aspectFit" src="https://cos.cnptec.site/static/icon/edit.png" />
       </view>
     </view>
 
@@ -68,7 +68,7 @@ const props = defineProps({
 
 defineEmits(['edit', 'open-circles', 'open-wallet', 'open-interests'])
 
-const DEFAULT_AVATAR = '/static/logo.png'
+const DEFAULT_AVATAR = 'https://cos.cnptec.site/static/logo.png'
 
 const displayAvatar = computed(() => {
   const avatar = typeof props.userInfo?.avatar_url === 'string' ? props.userInfo.avatar_url.trim() : ''

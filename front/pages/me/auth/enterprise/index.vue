@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="enterprise-page">
     <view class="page-shell">
       <scroll-view class="main-scroll" scroll-y :show-scrollbar="false">
@@ -47,7 +47,7 @@
           >
             <view class="upload-content">
               <view class="upload-icon-wrap">
-                <image class="upload-icon" mode="aspectFit" src="/static/me-icons/upload-primary.png" />
+                <image class="upload-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/upload-primary.png" />
               </view>
               <text class="upload-title">{{ uploading ? '上传中...' : '点击上传营业执照' }}</text>
               <text class="upload-subtitle">支持 JPG, PNG, PDF (最大 10MB)</text>
@@ -68,7 +68,7 @@
           </view>
 
           <view v-if="licenseName" class="license-file">
-            <image class="license-file-icon" mode="aspectFit" src="/static/me-icons/image-primary.png" />
+            <image class="license-file-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/image-primary.png" />
             <view class="license-file-meta">
               <text class="license-file-name">{{ licenseName }}</text>
               <text class="license-file-size">{{ licenseSizeText }}</text>
@@ -80,7 +80,7 @@
           </view>
 
           <view class="tips-row">
-            <image class="tips-icon" mode="aspectFit" src="/static/me-icons/shield-person-primary.png" />
+            <image class="tips-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/shield-person-primary.png" />
             <view class="tips-text-wrap">
               <text class="tips-text">
                 您的个人信息仅用于企业认证核实，平台将严格保护您的隐私安全。认证申请通常会在

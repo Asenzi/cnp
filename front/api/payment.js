@@ -19,6 +19,23 @@ export function getMemberCenterOverview() {
   })
 }
 
+export function getCircleOwnerOverview() {
+  return request({
+    url: '/api/v1/payment/circle-owner/overview',
+    method: 'GET'
+  })
+}
+
+export function purchaseCircleOwner(payload = {}) {
+  return request({
+    url: '/api/v1/payment/circle-owner/purchase',
+    method: 'POST',
+    data: {
+      pay_channel: String(payload.pay_channel || '').trim() || undefined
+    }
+  })
+}
+
 export function subscribeMemberPlan(payload = {}) {
   return request({
     url: '/api/v1/payment/member/subscribe',

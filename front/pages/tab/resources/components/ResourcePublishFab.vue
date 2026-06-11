@@ -12,7 +12,7 @@ defineEmits(['tap'])
 <style scoped>
 .fab-btn {
   position: fixed;
-  right: 24rpx;
+  right: 70rpx;
   bottom: calc(150rpx + env(safe-area-inset-bottom));
   width: 96rpx;
   height: 96rpx;

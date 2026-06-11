@@ -11,7 +11,7 @@
         <image class="setting-icon-img" mode="aspectFit" :src="item.iconPath" />
         <text class="setting-text">{{ item.label }}</text>
       </view>
-      <image class="chevron-img" mode="aspectFit" src="/static/me-icons/chevron-light.png" />
+      <image class="chevron-img" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" />
     </view>
   </view>
 </template>

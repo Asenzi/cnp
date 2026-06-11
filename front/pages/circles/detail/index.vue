@@ -48,14 +48,30 @@
       </view>
     </view>
 
-    <CircleBottomBar v-if="!isOwner" :price="detail.price" @apply="onApplyJoin" @join="onJoinNow" />
+    <CircleBottomBar
+      v-if="!isOwner && !isJoined"
+      :price="detail.price"
+      :interested="isInterested"
+      :action-text="joinActionText"
+      :disabled="joinActionDisabled"
+      @interest="onToggleInterest"
+      @apply="onApplyJoin"
+    />
   </view>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
-import { getCircleDetail, getCirclePosts, getCircleMembers } from '../../../api/circle'
+import {
+  confirmCircleJoinPayment,
+  getCircleDetail,
+  getCircleJoinOrderStatus,
+  getCircleMembers,
+  getCirclePosts,
+  submitCircleJoinRequest,
+  toggleCircleInterest
+} from '../../../api/circle'
 import CircleBottomBar from './components/CircleBottomBar.vue'
 import CircleContentTabs from './components/CircleContentTabs.vue'
 import CircleDetailHero from './components/CircleDetailHero.vue'
@@ -73,6 +89,7 @@ const members = ref([])
 const circleCode = ref('')
 const currentUserId = ref('')
 const shouldRefreshOnShow = ref(false)
+const joinSubmitting = ref(false)
 
 const activeTabIndex = ref(0)
 
@@ -95,12 +112,34 @@ const isOwner = computed(() => {
   const ownerUserId = String(detail.value?.owner?.userId || '').trim()
   return Boolean(ownerUserId) && ownerUserId === currentUserId.value
 })
+const isInterested = computed(() => Boolean(detail.value?.isInterested))
+const isJoined = computed(() => Boolean(detail.value?.isJoined))
+const joinRequestStatus = computed(() => String(detail.value?.joinRequestStatus || '').trim())
+const joinPaymentStatus = computed(() => String(detail.value?.joinPaymentStatus || '').trim())
+const joinActionText = computed(() => {
+  if (joinSubmitting.value) return '处理中...'
+  if (joinRequestStatus.value === 'pending' && joinPaymentStatus.value === 'paid') {
+    return '等待圈主处理'
+  }
+  if (joinRequestStatus.value === 'approved') return '已加入'
+  if (joinRequestStatus.value === 'rejected') return '重新申请'
+  return '申请加入'
+})
+const joinActionDisabled = computed(() => {
+  return joinSubmitting.value
+    || joinRequestStatus.value === 'approved'
+    || (joinRequestStatus.value === 'pending' && joinPaymentStatus.value === 'paid')
+})
 
 const showToast = (title) => {
   uni.showToast({
     title,
     icon: 'none'
   })
+}
+
+const isLoggedIn = () => {
+  return Boolean(String(uni.getStorageSync('token') || '').trim())
 }
 
 const onTabChange = (index) => {
@@ -136,10 +175,10 @@ const resolveCurrentUserId = () => {
 const sanitizeCircleImage = (value) => {
   const normalized = String(value || '').trim()
   if (!normalized) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   return normalized
 }
@@ -178,7 +217,12 @@ const applyServerDetail = (serverDetail) => {
     price: {
       current: priceNumber > 0 ? priceNumber.toFixed(2) : '0.00',
       original: detail.value?.price?.original || '299'
-    }
+    },
+    isInterested: Boolean(serverDetail.is_interested),
+    isJoined: Boolean(serverDetail.is_joined),
+    joinRequestStatus: String(serverDetail.join_request_status || ''),
+    joinPaymentStatus: String(serverDetail.join_payment_status || ''),
+    joinAutoApproveAt: serverDetail.join_auto_approve_at || null
   }
 }
 
@@ -291,8 +335,103 @@ const onMemberDetail = (member) => {
     url: `/pages/me/card/index?userId=${encodeURIComponent(userId)}`
   })
 }
-const onApplyJoin = () => showToast('申请加入已提交')
-const onJoinNow = () => showToast('立即加入圈子')
+const onToggleInterest = async () => {
+  if (!isLoggedIn()) {
+    showToast('\u8bf7\u5148\u767b\u5f55')
+    return
+  }
+  try {
+    const result = await toggleCircleInterest(circleCode.value)
+    detail.value = {
+      ...detail.value,
+      isInterested: Boolean(result?.is_interested ?? result?.interested)
+    }
+    showToast(detail.value.isInterested ? '已标记感兴趣' : '已取消感兴趣')
+  } catch (err) {
+    showToast(err?.message || '操作失败')
+  }
+}
+
+const invokeJoinPayment = async (result) => {
+  const orderNo = String(result?.order_no || '').trim()
+  const wxpay = result?.wxpay || {}
+  if (!orderNo || !wxpay.timeStamp || !wxpay.nonceStr || !wxpay.package || !wxpay.signType || !wxpay.paySign) {
+    throw new Error('支付参数异常')
+  }
+  const payResult = await new Promise((resolve, reject) => {
+    uni.requestPayment({
+      timeStamp: String(wxpay.timeStamp),
+      nonceStr: String(wxpay.nonceStr),
+      package: String(wxpay.package),
+      signType: String(wxpay.signType),
+      paySign: String(wxpay.paySign),
+      success: (res) => resolve(res || {}),
+      fail: (err) => reject({ ...(err || {}), order_no: orderNo })
+    })
+  })
+  await confirmCircleJoinPayment(orderNo, {
+    transaction_id: String(payResult?.transactionId || payResult?.transaction_id || '').trim()
+  })
+}
+
+const onApplyJoin = async () => {
+  if (!isLoggedIn()) {
+    showToast('\u8bf7\u5148\u767b\u5f55')
+    return
+  }
+  if (joinSubmitting.value || joinActionDisabled.value) return
+
+  const amount = Number(detail.value?.price?.current || 0)
+  const confirmed = await new Promise((resolve) => {
+    uni.showModal({
+      title: '申请加入圈子',
+      content: amount > 0
+        ? `需支付入圈费用 ¥${amount.toFixed(2)}。圈主拒绝将退回费用，1个工作日未处理将自动加入。`
+        : '提交后圈主可审核，1个工作日未处理将自动加入。',
+      confirmText: amount > 0 ? '确认支付' : '提交申请',
+      cancelText: '取消',
+      success: (res) => resolve(Boolean(res?.confirm)),
+      fail: () => resolve(false)
+    })
+  })
+  if (!confirmed) return
+
+  joinSubmitting.value = true
+  uni.showLoading({ title: amount > 0 ? '发起支付...' : '提交中...' })
+  try {
+    const result = await submitCircleJoinRequest(circleCode.value, {
+      pay_channel: amount > 0 ? 'wxpay' : undefined
+    })
+    if (String(result?.action || '') === 'wxpay_required') {
+      await invokeJoinPayment(result)
+    }
+    await loadCircleDetail(circleCode.value)
+    uni.showToast({ title: '申请已提交', icon: 'success' })
+  } catch (err) {
+    const message = String(err?.errMsg || err?.message || '')
+    if (message.toLowerCase().includes('cancel')) {
+      const orderNo = String(err?.order_no || '').trim()
+      if (orderNo) {
+        try {
+          const status = await getCircleJoinOrderStatus(orderNo)
+          if (Boolean(status?.paid)) {
+            await loadCircleDetail(circleCode.value)
+            uni.showToast({ title: '申请已提交', icon: 'success' })
+            return
+          }
+        } catch {
+          // Keep the original cancellation result.
+        }
+      }
+      showToast('已取消支付')
+    } else {
+      showToast(err?.message || '申请加入失败')
+    }
+  } finally {
+    joinSubmitting.value = false
+    uni.hideLoading()
+  }
+}
 const onEditCircle = () => {
   if (!circleCode.value) {
     showToast('圈子编号缺失')

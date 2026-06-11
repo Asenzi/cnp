@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圈脉链 - 连接路径计算引擎</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="logo.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <!-- 侧边栏导航 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="logo.png" alt="圈脉链" class="sidebar-logo">
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#system" class="nav-item active">
+                    <span class="nav-icon">⚡</span>
+                    <span class="nav-label">系统概览</span>
+                </a>
+                <a href="#engine" class="nav-item">
+                    <span class="nav-icon">🔗</span>
+                    <span class="nav-label">匹配引擎</span>
+                </a>
+                <a href="#paths" class="nav-item">
+                    <span class="nav-icon">🗺️</span>
+                    <span class="nav-label">路径计算</span>
+                </a>
+                <a href="#data" class="nav-item">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">数据表现</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="sidebar-cta">申请接入</button>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部状态栏 -->
+            <header class="status-bar">
+                <div class="status-left">
+                    <span class="status-item">
+                        <span class="status-dot"></span>
+                        系统运行中
+                    </span>
+                    <span class="status-item">
+                        52,847 次成功连接
+                    </span>
+                </div>
+                <div class="status-right">
+                    <span class="status-time">2026.05.28</span>
+                </div>
+            </header>
+
+            <!-- 系统概览 -->
+            <section class="section" id="system">
+                <div class="section-header">
+                    <div class="header-meta">
+                        <span class="meta-tag">SYSTEM OVERVIEW</span>
+                        <span class="meta-version">v2.1</span>
+                    </div>
+                    <h1 class="section-title">
+                        把"我想认识谁"<br>
+                        变成可计算的连接路径
+                    </h1>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">平均路径长度</div>
+                        <div class="metric-value">
+                            <span class="value-num" data-value="2.3">0</span>
+                            <span class="value-unit">跳</span>
+                        </div>
+                        <div class="metric-change positive">↑ 效率提升 6 倍</div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-label">响应时间中位数</div>
+                        <div class="metric-value">
+                            <span class="value-num" data-value="2">0</span>
+                            <span class="value-unit">小时</span>
+                        </div>
+                        <div class="metric-change">传统方式需 12h+</div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-label">匹配准确率</div>
+                        <div class="metric-value">
+                            <span class="value-num" data-value="83">0</span>
+                            <span class="value-unit">%</span>
+                        </div>
+                        <div class="metric-change">进入实质对话</div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-label">信任背书覆盖</div>
+                        <div class="metric-value">
+                            <span class="value-num" data-value="94">0</span>
+                            <span class="value-unit">%</span>
+                        </div>
+                        <div class="metric-change">含共同关系</div>
+                    </div>
+                </div>
+
+                <!-- 路径可视化 -->
+                <div class="path-demo">
+                    <div class="path-header">
+                        <h3>连接路径示例</h3>
+                        <span class="path-type">创业合伙场景</span>
+                    </div>
+                    <div class="path-visualization">
+                        <div class="path-node node-start">
+                            <div class="node-avatar">你</div>
+                            <div class="node-info">
+                                <div class="node-name">产品经理</div>
+                                <div class="node-tag">AI 方向</div>
+                            </div>
+                        </div>
+
+                        <div class="path-bridge">
+                            <div class="bridge-line"></div>
+                            <div class="bridge-info">
+                                <span class="bridge-label">共同好友</span>
+                                <span class="bridge-name">张华（前同事）</span>
+                            </div>
+                        </div>
+
+                        <div class="path-node node-target">
+                            <div class="node-avatar">TA</div>
+                            <div class="node-info">
+                                <div class="node-name">技术合伙人</div>
+                                <div class="node-tag">AI Agent 专家</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="path-meta">
+                        <span>信任度: 高</span>
+                        <span>响应概率: 89%</span>
+                        <span>预计响应: 2-4 小时</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 匹配引擎 -->
+            <section class="section" id="engine">
+                <div class="section-header">
+                    <div class="header-meta">
+                        <span class="meta-tag">MATCHING ENGINE</span>
+                    </div>
+                    <h2 class="section-title">三层匹配逻辑</h2>
+                </div>
+
+                <div class="engine-stack">
+                    <div class="engine-layer">
+                        <div class="layer-index">01</div>
+                        <div class="layer-content">
+                            <h3>意图理解层</h3>
+                            <p>不只看职业标签，理解"为什么要认识"</p>
+                            <div class="layer-specs">
+                                <span>12 个意图维度</span>
+                                <span>语义分析</span>
+                                <span>场景识别</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="engine-layer">
+                        <div class="layer-index">02</div>
+                        <div class="layer-content">
+                            <h3>关系图谱层</h3>
+                            <p>计算最短可信路径，优先推荐有共同关系的对象</p>
+                            <div class="layer-specs">
+                                <span>图算法</span>
+                                <span>信任传递</span>
+                                <span>路径优化</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="engine-layer">
+                        <div class="layer-index">03</div>
+                        <div class="layer-content">
+                            <h3>行为预测层</h3>
+                            <p>预测响应速度、合作意愿、匹配度</p>
+                            <div class="layer-specs">
+                                <span>活跃度模型</span>
+                                <span>历史数据</span>
+                                <span>实时状态</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 路径计算 -->
+            <section class="section" id="paths">
+                <div class="section-header">
+                    <div class="header-meta">
+                        <span class="meta-tag">PATH CALCULATION</span>
+                    </div>
+                    <h2 class="section-title">从需求到连接的执行流程</h2>
+                </div>
+
+                <div class="flow-container">
+                    <div class="flow-step">
+                        <div class="step-number">Step 1</div>
+                        <div class="step-content">
+                            <h3>输入连接需求</h3>
+                            <div class="step-example">
+                                <div class="example-input">
+                                    "想找一位懂 AI Agent 的技术合伙人，<br>
+                                    最好在北京，有创业经验"
+                                </div>
+                            </div>
+                            <div class="step-output">
+                                <span>提取: 角色=技术合伙人</span>
+                                <span>技能=AI Agent</span>
+                                <span>地域=北京</span>
+                                <span>经历=创业</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-arrow">→</div>
+
+                    <div class="flow-step">
+                        <div class="step-number">Step 2</div>
+                        <div class="step-content">
+                            <h3>计算连接路径</h3>
+                            <div class="step-data">
+                                <div class="data-row">
+                                    <span class="data-label">候选对象</span>
+                                    <span class="data-value">127 人</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="data-label">有共同关系</span>
+                                    <span class="data-value">23 人</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="data-label">高匹配推荐</span>
+                                    <span class="data-value highlight">7 人</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flow-arrow">→</div>
+
+                    <div class="flow-step">
+                        <div class="step-number">Step 3</div>
+                        <div class="step-content">
+                            <h3>发起连接</h3>
+                            <div class="step-action">
+                                <div class="action-card">
+                                    <div class="action-header">
+                                        <span class="action-name">李明</span>
+                                        <span class="action-match">匹配度 92%</span>
+                                    </div>
+                                    <div class="action-path">
+                                        通过 张华（前同事）
+                                    </div>
+                                    <button class="action-btn">发起对话</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 数据表现 -->
+            <section class="section" id="data">
+                <div class="section-header">
+                    <div class="header-meta">
+                        <span class="meta-tag">PERFORMANCE DATA</span>
+                    </div>
+                    <h2 class="section-title">真实案例数据</h2>
+                </div>
+
+                <div class="cases-table">
+                    <div class="table-header">
+                        <div class="th">场景</div>
+                        <div class="th">用户</div>
+                        <div class="th">路径长度</div>
+                        <div class="th">响应时间</div>
+                        <div class="th">结果</div>
+                    </div>
+
+                    <div class="table-row">
+                        <div class="td">
+                            <span class="case-tag tag-startup">创业融资</span>
+                        </div>
+                        <div class="td">李明 · AI 教育</div>
+                        <div class="td">
+                            <span class="path-length">2 跳</span>
+                        </div>
+                        <div class="td">
+                            <span class="response-time">1.5h</span>
+                        </div>
+                        <div class="td">
+                            <span class="result-success">完成团队搭建</span>
+                        </div>
+                    </div>
+
+                    <div class="table-row">
+                        <div class="td">
+                            <span class="case-tag tag-career">职业跃迁</span>
+                        </div>
+                        <div class="td">张浩 · 后端工程师</div>
+                        <div class="td">
+                            <span class="path-length">1 跳</span>
+                        </div>
+                        <div class="td">
+                            <span class="response-time">3.2h</span>
+                        </div>
+                        <div class="td">
+                            <span class="result-success">薪资提升 50%</span>
+                        </div>
+                    </div>
+
+                    <div class="table-row">
+                        <div class="td">
+                            <span class="case-tag tag-freelance">自由职业</span>
+                        </div>
+                        <div class="td">王菲 · 设计顾问</div>
+                        <div class="td">
+                            <span class="path-length">2 跳</span>
+                        </div>
+                        <div class="td">
+                            <span class="response-time">2.8h</span>
+                        </div>
+                        <div class="td">
+                            <span class="result-success">月签 3 个客户</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 申请接入 -->
+                <div class="access-panel">
+                    <div class="panel-content">
+                        <h3>申请接入圈脉链</h3>
+                        <p>为你的连接需求计算最优路径</p>
+                    </div>
+                    <form class="access-form">
+                        <input type="email" placeholder="工作邮箱" required>
+                        <input type="text" placeholder="当前角色" required>
+                        <button type="submit">提交申请</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- 页脚 -->
+            <footer class="footer">
+                <div class="footer-content">
+                    <div class="footer-info">
+                        <p>© 2026 圈脉链 · 连接路径计算引擎</p>
+                    </div>
+                        <p><a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">粤ICP备2026055027号</a></p>
+                    <div class="footer-links">
+                        <a href="#system">系统概览</a>
+                        <a href="#engine">匹配引擎</a>
+                        <a href="#paths">路径计算</a>
+                        <a href="#data">数据表现</a>
+                    </div>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

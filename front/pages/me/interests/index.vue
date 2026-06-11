@@ -37,10 +37,8 @@
         </view>
 
         <template v-else>
-          <view v-if="showEmpty" class="status-wrap empty-state">
-            <view class="empty-icon-wrap">
-              <text class="empty-icon">{{ activeTab === 'network' ? '👥' : activeTab === 'resources' ? '📦' : '🎯' }}</text>
-            </view>
+          <view v-if="showEmpty" class="empty-state">
+            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
             <text class="empty-title">暂无感兴趣的{{ activeTabLabel }}</text>
             <text class="empty-desc">去发现页面找找感兴趣的内容吧</text>
           </view>
@@ -158,7 +156,7 @@ const fetchData = async (reset = false) => {
   }
 
   try {
-    // 调用实际API
+    // 璋冪敤瀹為檯API
     let data
     try {
       if (activeTab.value === 'network') {
@@ -246,7 +244,7 @@ const onChangeTab = (key) => {
 const onTapMemberDetail = (member) => {
   const userId = String(member?.userId || member?.user_id || '').trim()
   if (!userId) {
-    showToast('用户ID缺失')
+    showToast('鐢ㄦ埛ID缂哄け')
     return
   }
   uni.navigateTo({
@@ -257,7 +255,7 @@ const onTapMemberDetail = (member) => {
 const onTapPostDetail = (post) => {
   const postCode = String(post?.postCode || post?.rawPost?.post_code || post?.post_code || '').trim()
   if (!postCode) {
-    showToast('资源编号缺失')
+    showToast('璧勬簮缂栧彿缂哄け')
     return
   }
   uni.navigateTo({
@@ -405,13 +403,13 @@ onUnmounted(() => {
   z-index: 10;
   display: flex;
   align-items: center;
-  background: #ffffff;
+  background: #f6f6f8;
   border-bottom: 1rpx solid #f1f5f9;
   padding: 0 32rpx;
+  gap: 30px;
 }
 
 .tab-item {
-  flex: 1;
   height: 88rpx;
   display: flex;
   align-items: center;
@@ -441,7 +439,6 @@ onUnmounted(() => {
   width: 48rpx;
   height: 4rpx;
   border-radius: 2rpx;
-  background: #1a57db;
 }
 
 .content-scroll {
@@ -483,6 +480,18 @@ onUnmounted(() => {
   gap: 20rpx;
   padding: 48rpx 32rpx;
   box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+}
+
+.empty-state {
+  background: transparent;
+  box-shadow: none;
+  padding: 120rpx 32rpx 80rpx;
+}
+
+.empty-icon-image {
+  width: 200rpx;
+  height: 200rpx;
+  margin-bottom: 12rpx;
 }
 
 .loading-spinner {
@@ -600,6 +609,11 @@ onUnmounted(() => {
   .empty-state {
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
     box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+  }
+
+  .empty-state {
+    background: transparent;
+    box-shadow: none;
   }
 
   .loading-spinner {

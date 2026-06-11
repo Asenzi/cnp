@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="resource-page">
     <TopSearchFilterHeader
       v-model="keyword"
@@ -55,10 +55,11 @@
         </view>
 
         <template v-else>
-          <!-- 活动卡片 - 第二版上线 -->
-          <!-- <template v-for="(post, index) in feedCards" :key="post.id">
+          <!-- 活动卡片 -->
+          <template v-for="(post, index) in feedCards">
             <VenueEventCard
               v-if="post.type === 'venue'"
+              :key="post.id"
               :item="post"
               :show-interest="true"
               :style="{ animationDelay: `${index * 50}ms` }"
@@ -68,6 +69,7 @@
             />
             <ProfilePostCard
               v-else
+              :key="post.id"
               :item="post"
               :show-interest="true"
               :style="{ animationDelay: `${index * 50}ms` }"
@@ -75,23 +77,10 @@
               @detail="onTapDetail"
               @interest="onToggleInterest"
             />
-          </template> -->
-
-          <ProfilePostCard
-            v-for="(post, index) in feedCards"
-            :key="post.id"
-            :item="post"
-            :show-interest="true"
-            :style="{ animationDelay: getFeedCardAnimationDelay(index) }"
-            class="feed-card-enter"
-            @detail="onTapDetail"
-            @interest="onToggleInterest"
-          />
+          </template>
 
           <view v-if="showEmpty" class="empty-wrap">
-            <view class="empty-icon-wrap">
-              <text class="empty-icon">📦</text>
-            </view>
+            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
             <text class="empty-title">暂无匹配内容</text>
             <text class="empty-desc">换个关键词或筛选条件试试</text>
           </view>
@@ -123,6 +112,15 @@
     </scroll-view>
 
     <ResourcePublishFab @tap="onTapPublish" />
+
+    <NetworkFilterPanel
+      :visible="filterVisible"
+      :value="{ industry_label: selectedIndustry }"
+      :options="{ industries: filterOptions.industries }"
+      @close="onCloseFilter"
+      @reset="onResetFilter"
+      @apply="onApplyFilter"
+    />
   </view>
 </template>
 
@@ -138,10 +136,12 @@ import {
 } from '../../../api/post'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import ProfilePostCard from '../../me/card/components/ProfilePostCard.vue'
+import NetworkFilterPanel from '../discover/components/NetworkFilterPanel.vue'
 // import VenueEventCard from './components/VenueEventCard.vue' // 第二版上线
 import ResourcePublishFab from './components/ResourcePublishFab.vue'
 import { mapProfilePostItem } from '../../me/card/modules/profile-home-view-model'
 import { getLocationErrorMessage, resolveCurrentCityByGps, saveCurrentCity } from '../discover/modules/location'
+import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
 
 const PAGE_SIZE = 20
 const FIRST_PAGE_HISTORY_STORAGE_KEY = 'resource_first_page_history_v1'
@@ -172,6 +172,7 @@ const requestId = ref('')
 const hasPromptedLogin = ref(false)
 const firstPageHistoryByContext = ref({})
 const refreshing = ref(false)
+const filterVisible = ref(false)
 const filterOptions = ref({
   industries: []
 })
@@ -222,14 +223,14 @@ const hasActiveFilter = computed(() => Boolean(selectedIndustry.value))
 const sortLabel = computed(() => (sortKey.value === 'latest' ? '最新' : '热门'))
 
 const resourceLeftTabs = computed(() => [
-  { key: 'cooperate', label: '找合作' },
-  { key: 'resource', label: '找资源' }
-  // { key: 'venue', label: '活动' } // 第二版上线
+  { key: 'cooperate', label: '需求' },
+  { key: 'resource', label: '供应' },
+  { key: 'venue', label: '活动' }
 ])
 
 const resourceRightControls = computed(() => [
   ...(showLocationFilter ? [{ key: 'locate', label: locating.value ? texts.locating : currentCity.value, showArrow: false }] : []),
-  { key: 'industry', label: selectedIndustry.value || '按行业', dot: hasActiveFilter.value },
+  { key: 'industry', label: selectedIndustry.value || '行业', dot: hasActiveFilter.value },
   { key: 'sort', label: sortLabel.value },
   { key: 'manage', label: '管理', showArrow: false }
 ])
@@ -369,46 +370,25 @@ const ensureLoggedIn = () => {
     return true
   }
 
-  posts.value = []
-  loaded.value = true
-  loadError.value = ''
-  hasMore.value = false
-  requestId.value = ''
-
   if (!hasPromptedLogin.value) {
     hasPromptedLogin.value = true
     showToast(texts.loginFirst)
-
-    // 清除之前的定时器
-    if (loginRedirectTimer.value) {
-      clearTimeout(loginRedirectTimer.value)
-      loginRedirectTimer.value = null
-    }
-
-    // 设置新的定时器并保存引用
-    loginRedirectTimer.value = setTimeout(() => {
-      if (isPageAlive.value) {
-        uni.navigateTo({
-          url: '/pages/auth/login/index'
-        })
-      }
-      loginRedirectTimer.value = null
-    }, 220)
   }
   return false
 }
 
 const fetchFilterOptions = async () => {
-  if (!ensureLoggedIn()) {
-    return
-  }
   try {
-    const data = await getResourceFilters()
+    await getResourceFilters()
+    // 使用本地中文行业列表，忽略后端返回的英文列表
     filterOptions.value = {
-      industries: Array.isArray(data?.industries) ? data.industries : []
+      industries: INDUSTRY_OPTIONS
     }
   } catch {
-    // Keep fallback options.
+    // 使用本地默认行业列表
+    filterOptions.value = {
+      industries: INDUSTRY_OPTIONS
+    }
   }
 }
 
@@ -432,9 +412,6 @@ const refreshLocation = async ({ silent = false } = {}) => {
 }
 
 const fetchFeed = async (reset = false) => {
-  if (!ensureLoggedIn()) {
-    return
-  }
   if (loading.value || loadingMore.value) {
     return
   }
@@ -517,8 +494,9 @@ const fetchFeed = async (reset = false) => {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
-      hasPromptedLogin.value = false
-      ensureLoggedIn()
+      if (reset && !hasAny.value) {
+        loadError.value = texts.loadError
+      }
       return
     }
 
@@ -543,19 +521,23 @@ const onChangeFilter = (key) => {
 }
 
 const onSelectIndustry = () => {
-  const options = ['全部行业', ...filterOptions.value.industries]
-  if (!options.length) {
-    showToast(texts.noIndustryOptions)
-    return
-  }
-  uni.showActionSheet({
-    itemList: options,
-    success: (res) => {
-      const index = Number(res?.tapIndex || 0)
-      selectedIndustry.value = index === 0 ? '' : String(options[index] || '').trim()
-      fetchFeed(true)
-    }
-  })
+  filterVisible.value = true
+}
+
+const onCloseFilter = () => {
+  filterVisible.value = false
+}
+
+const onResetFilter = () => {
+  selectedIndustry.value = ''
+  filterVisible.value = false
+  fetchFeed(true)
+}
+
+const onApplyFilter = (filters) => {
+  selectedIndustry.value = filters?.industry_label || ''
+  filterVisible.value = false
+  fetchFeed(true)
 }
 
 const onToggleSort = () => {
@@ -569,6 +551,9 @@ const onTapRightControl = (key) => {
     return
   }
   if (key === 'manage') {
+    if (!ensureLoggedIn()) {
+      return
+    }
     uni.navigateTo({
       url: '/pages/resources/manage/index'
     })
@@ -603,6 +588,10 @@ const onTapDetail = (post) => {
 }
 
 const onTapPublish = () => {
+  if (!ensureLoggedIn()) {
+    return
+  }
+
   uni.navigateTo({
     url: '/pages/resources/publish/index',
     events: {
@@ -615,6 +604,10 @@ const onTapPublish = () => {
 }
 
 const onToggleInterest = async (post) => {
+  if (!ensureLoggedIn()) {
+    return
+  }
+
   const postCode = String(post?.postCode || post?.rawPost?.post_code || post?.post_code || '').trim()
   if (!postCode) {
     return
@@ -889,16 +882,13 @@ onUnmounted(() => {
 
 .status-wrap,
 .empty-wrap {
-  border-radius: 24rpx;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   min-height: 320rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 20rpx;
-  padding: 48rpx 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+  padding: 120rpx 32rpx 80rpx;
 }
 
 /* 加载动画 */
@@ -931,6 +921,12 @@ onUnmounted(() => {
 }
 
 /* 空状态图标 */
+.empty-icon-image {
+  width: 200rpx;
+  height: 200rpx;
+  margin-bottom: 12rpx;
+}
+
 .empty-icon-wrap {
   width: 120rpx;
   height: 120rpx;
@@ -940,11 +936,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   margin-bottom: 8rpx;
-}
-
-.empty-icon {
-  font-size: 64rpx;
-  line-height: 64rpx;
 }
 
 .empty-title {
@@ -1013,8 +1004,7 @@ onUnmounted(() => {
 
   .status-wrap,
   .empty-wrap {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+    background: transparent;
   }
 
   .loading-spinner {
@@ -1041,4 +1031,3 @@ onUnmounted(() => {
   }
 }
 </style>
-

@@ -56,17 +56,19 @@
           </view>
 
           <template v-else>
-            <view v-if="showEmpty" class="status-wrap">
-              <text class="status-text">{{ uiText.empty }}</text>
+            <view v-if="showEmpty" class="empty-state">
+              <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+              <text class="empty-title">暂无推荐人脉</text>
+              <text class="empty-subtitle">试试调整筛选条件或切换城市</text>
             </view>
 
             <NetworkMemberCard
               v-for="item in members"
               :key="item.id"
               :member="item"
-              :interest-pending="isMemberInterestPending(item.id)"
+              :follow-pending="isMemberFollowPending(item.id)"
               @view="onViewProfile"
-              @interest="onInterestMember"
+              @follow="onFollowMember"
               @verify="onGoVerify"
             />
 
@@ -102,7 +104,7 @@ import {
   getNetworkRecommendations,
   reportNetworkFeedback,
   reportNetworkImpressions,
-  toggleUserInterest
+  toggleUserFollow
 } from '../../../api/network'
 import { getApiBaseUrl } from '../../../utils/request'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
@@ -166,6 +168,25 @@ const uiText = {
   nationwideCity: '\u5168\u56fd'
 }
 
+const MEMBER_ACTIVE_STATUS = new Set(['active', 'opened', 'member', 'vip', 'paid', 'enabled', 'on'])
+
+const resolveMemberEnabled = (profile = {}) => {
+  const candidateFlags = [
+    profile?.is_member,
+    profile?.member_opened,
+    profile?.pro_member,
+    profile?.vip_opened,
+    profile?.vip_member
+  ]
+
+  if (candidateFlags.some(Boolean)) {
+    return true
+  }
+
+  const statusText = String(profile?.member_status || profile?.vip_status || '').trim().toLowerCase()
+  return MEMBER_ACTIVE_STATUS.has(statusText)
+}
+
 const topTabs = [
   { key: 'recommend', label: uiText.recommend }
 ]
@@ -199,7 +220,7 @@ const loadedFilterOptions = ref(false)
 const locationHistoryCities = ref([])
 const filterOptionsLoading = ref(false)
 const pendingRecommendationReset = ref(false)
-const interestPendingMap = ref({})
+const followPendingMap = ref({})
 const sentImpressionKeys = ref({})
 const sentFeedbackKeys = ref({})
 const recommendationCacheByContext = ref({})
@@ -279,19 +300,7 @@ const hotCities = computed(() => {
     '\u897f\u5b89',
     '\u5929\u6d25',
     '\u91cd\u5e86',
-    '\u5357\u4eac',
-    '鍖椾含',
-    '涓婃捣',
-    '骞垮窞',
-    '娣卞湷',
-    '鏉窞',
-    '鎴愰兘',
-    '姝︽眽',
-    '鑻忓窞',
-    '瑗垮畨',
-    '澶╂触',
-    '閲嶅簡',
-    '鍗椾含'
+    '\u5357\u4eac'
   ]
   return [...new Set(preferred.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 12)
 })
@@ -565,19 +574,9 @@ const ensureLoggedIn = () => {
     return true
   }
 
-  members.value = []
-  loaded.value = true
-  loadError.value = ''
-  hasMore.value = false
-
   if (!hasPromptedLogin.value) {
     hasPromptedLogin.value = true
     showToast(uiText.loginFirst)
-    setTimeout(() => {
-      uni.navigateTo({
-        url: '/pages/auth/login/index'
-      })
-    }, 220)
   }
   return false
 }
@@ -585,13 +584,13 @@ const ensureLoggedIn = () => {
 const resolveAvatarUrl = (url) => {
   const normalized = String(url || '').trim()
   if (!normalized) {
-    return '/static/logo.png'
+    return 'https://cos.cnptec.site/static/logo.png'
   }
   if (/^https?:\/\//.test(normalized)) {
     return normalized
   }
   if (normalized.startsWith('/')) {
-    const base = String(getApiBaseUrl() || 'http://172.20.10.3:8001').trim()
+    const base = String(getApiBaseUrl() || 'https://www.cnptec.site').trim()
     return `${base}${normalized}`
   }
   return normalized
@@ -800,6 +799,37 @@ const patchCachedRecommendationInterestState = (memberId, interested) => {
   })
 }
 
+const patchCachedRecommendationFollowState = (memberId, followed) => {
+  const targetId = String(memberId || '').trim()
+  if (!targetId) {
+    return
+  }
+  const currentCacheKey = buildRecommendationCacheKey({
+    tab: activeTab.value,
+    keyword: normalizedKeyword.value,
+    cityName: effectiveCityName.value,
+    industryLabel: filters.value.industry_label || '',
+    scope: isNationalScope.value ? 'national' : 'city'
+  })
+  const currentEntry = recommendationCacheByContext.value[currentCacheKey]
+  if (!currentEntry || !Array.isArray(currentEntry.members)) {
+    return
+  }
+  const nextMembers = currentEntry.members.map((item) => {
+    if (String(item?.id || '').trim() !== targetId) {
+      return item
+    }
+    return {
+      ...item,
+      followed: Boolean(followed)
+    }
+  })
+  persistRecommendationCacheEntry(currentCacheKey, {
+    ...currentEntry,
+    members: nextMembers
+  })
+}
+
 const buildRecommendationContextSignature = () => {
   return [
     String(activeTab.value || 'recommend').trim(),
@@ -841,15 +871,7 @@ const mapMemberCard = (item = {}) => {
     : normalizeCircleList(reasonDetail.circle_names)
   const sharedCircles = normalizeCircleList(reasonDetail.shared_circle_names)
   const sharedSource = normalizeTag(reasonDetail.shared_connection_source || '')
-  const fallbackCity = String(cityName || effectiveCityName.value || currentCity.value || '').trim()
-  const visibleCircleTags = intro
-    ? [intro]
-    : candidateCircles.length
-      ? candidateCircles.slice(0, 2)
-      : [fallbackCity || uiText.sameCityTag]
-  const circleTags = candidateCircles.length
-    ? candidateCircles.slice(0, 2).map((circleName) => `同圈·${circleName}`)
-    : [fallbackCity || uiText.sameCityTag]
+  const visibleCircleTags = intro ? [intro] : []
 
   return {
     id: businessUserId || `${String(item.nickname || 'guest').trim()}-${cityName || 'city'}`,
@@ -858,15 +880,14 @@ const mapMemberCard = (item = {}) => {
     verifyType: Boolean(item.is_verified) ? 'lv1' : '',
     verifyText: Boolean(item.is_verified) ? uiText.verifyLv1 : '',
     detailLine: joinNonEmpty(industryLabel, jobTitle) || industryLabel || cityName || uiText.defaultRole,
+    memberEnabled: resolveMemberEnabled(item),
     circleTags: visibleCircleTags,
     reasonTags,
     activeText: String(item.active_text || '').trim() || uiText.activeFallback,
     avatar: resolveAvatarUrl(item.avatar_url),
-    interested: Boolean(
-      item.is_interested
-      || item.interested
-      || item.interest_status === 'interested'
-      || item.is_followed
+    postCount: Number(item.post_count || item.postCount || 0),
+    followed: Boolean(
+      item.is_followed
       || item.followed
       || item.follow_status === 'followed'
     ),
@@ -880,7 +901,7 @@ const mapMemberCard = (item = {}) => {
   }
 }
 
-const updateMemberInterestState = (memberId, interested) => {
+const updateMemberFollowState = (memberId, followed) => {
   const targetId = String(memberId || '').trim()
   if (!targetId) {
     return
@@ -892,33 +913,33 @@ const updateMemberInterestState = (memberId, interested) => {
     }
     return {
       ...item,
-      interested: Boolean(interested)
+      followed: Boolean(followed)
     }
   })
-  patchCachedRecommendationInterestState(targetId, interested)
+  patchCachedRecommendationFollowState(targetId, followed)
 }
 
-const isMemberInterestPending = (memberId) => {
+const isMemberFollowPending = (memberId) => {
   const targetId = String(memberId || '').trim()
   if (!targetId) {
     return false
   }
-  return Boolean(interestPendingMap.value[targetId])
+  return Boolean(followPendingMap.value[targetId])
 }
 
-const setMemberInterestPending = (memberId, pending) => {
+const setMemberFollowPending = (memberId, pending) => {
   const targetId = String(memberId || '').trim()
   if (!targetId) {
     return
   }
   const nextMap = {
-    ...interestPendingMap.value,
+    ...followPendingMap.value,
     [targetId]: Boolean(pending)
   }
   if (!pending) {
     delete nextMap[targetId]
   }
-  interestPendingMap.value = nextMap
+  followPendingMap.value = nextMap
 }
 
 const hasSentSessionKey = (store, key) => {
@@ -941,6 +962,10 @@ const markSentSessionKey = (store, key) => {
 }
 
 const reportImpressions = async (items, currentRequestId) => {
+  const token = String(uni.getStorageSync('token') || '').trim()
+  if (!token) {
+    return
+  }
   const normalizedRequestId = String(currentRequestId || '').trim()
   const targetUserIds = items
     .map((item) => String(item.businessUserId || '').trim())
@@ -1002,9 +1027,6 @@ const sendFeedback = async (member, eventType, ext = null) => {
 
 const fetchFilterOptions = async (options = {}) => {
   const forceRefresh = Boolean(options?.forceRefresh)
-  if (!ensureLoggedIn()) {
-    return
-  }
 
   if (loadedFilterOptions.value && !forceRefresh) {
     return
@@ -1063,9 +1085,6 @@ const fetchFilterOptions = async (options = {}) => {
 
 const fetchRecommendations = async (reset = false, options = {}) => {
   const forceRefresh = Boolean(options?.forceRefresh)
-  if (!ensureLoggedIn()) {
-    return
-  }
 
   if (loading.value || loadingMore.value) {
     if (reset) {
@@ -1221,8 +1240,9 @@ const fetchRecommendations = async (reset = false, options = {}) => {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
       clearLoginState()
-      hasPromptedLogin.value = false
-      ensureLoggedIn()
+      if (reset && !hasAny.value) {
+        loadError.value = uiText.recommendationLoadError
+      }
       return
     }
 
@@ -1313,7 +1333,11 @@ const onViewProfile = (member) => {
   })
 }
 
-const onInterestMember = async (member) => {
+const onFollowMember = async (member) => {
+  if (!ensureLoggedIn()) {
+    return
+  }
+
   const targetUserId = String(member?.businessUserId || '').trim()
   if (!targetUserId) {
     showToast(uiText.missingTarget)
@@ -1321,38 +1345,42 @@ const onInterestMember = async (member) => {
   }
 
   const memberId = String(member?.id || '').trim()
-  if (isMemberInterestPending(memberId)) {
+  if (isMemberFollowPending(memberId)) {
     return
   }
 
-  const desiredInterestState = !Boolean(member?.interested)
-  setMemberInterestPending(memberId, true)
+  const desiredFollowState = !Boolean(member?.followed || member?.is_followed)
+  setMemberFollowPending(memberId, true)
 
   try {
-    const response = await toggleUserInterest(targetUserId, desiredInterestState)
-    const newInterestState = Boolean(response?.is_interested)
-    updateMemberInterestState(member.id, newInterestState)
+    const response = await toggleUserFollow(targetUserId, desiredFollowState)
+    const newFollowState = Boolean(response?.is_followed)
+    updateMemberFollowState(member.id, newFollowState)
 
-    if (newInterestState) {
-      await sendFeedback(member, 'apply_friend', {
-        source: 'discover_interest_icon'
+    if (newFollowState) {
+      await sendFeedback(member, 'follow_user', {
+        source: 'discover_follow_icon'
       })
-      showToast(uiText.interestMarked)
+      showToast('关注成功')
     } else {
-      await sendFeedback(member, 'cancel_interest', {
-        source: 'discover_interest_icon'
+      await sendFeedback(member, 'unfollow_user', {
+        source: 'discover_follow_icon'
       })
-      showToast('已取消感兴趣')
+      showToast('已取消关注')
     }
   } catch (error) {
-    console.error('Toggle interest failed:', error)
+    console.error('Toggle follow failed:', error)
     showToast('操作失败，请稍后重试')
   } finally {
-    setMemberInterestPending(memberId, false)
+    setMemberFollowPending(memberId, false)
   }
 }
 
 const onGoVerify = () => {
+  if (!ensureLoggedIn()) {
+    return
+  }
+
   uni.navigateTo({
     url: '/pages/me/auth/index'
   })
@@ -1458,6 +1486,10 @@ onShow(() => {
     return
   }
   consumePendingLocationResult()
+  // 页面重新显示时，如果有数据则刷新以获取最新的关注状态
+  if (members.value.length > 0) {
+    fetchRecommendations(true, { forceRefresh: true })
+  }
 })
 
 onUnmounted(() => {
@@ -1485,7 +1517,7 @@ onUnmounted(() => {
   max-width: 750rpx;
   margin: 0 auto;
   height: 100vh;
-  background: #ffffff;
+  background: #f6f6f9;
   overflow: hidden;
   box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.08);
   display: flex;
@@ -1496,19 +1528,19 @@ onUnmounted(() => {
   flex-shrink: 0;
   position: relative;
   z-index: 10;
-  background: #ffffff;
-  border-bottom: 1rpx solid #f1f5f9;
+  background: #f6f6f8;
+  margin-bottom: 10rpx;
 }
 
 .member-scroll {
   flex: 1;
   min-height: 0;
   height: 0;
-  background: #f6f6f8;
+  background: #f6f6f9;
 }
 
 .list-container {
-  background: #f6f6f8;
+  background: #f6f6f9;
   padding: 0 24rpx calc(28rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -1608,6 +1640,36 @@ onUnmounted(() => {
   gap: 16rpx;
 }
 
+.empty-state {
+  padding: 120rpx 40rpx 80rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.empty-icon-image {
+  width: 200rpx;
+  height: 200rpx;
+  margin-bottom: 12rpx;
+}
+
+.empty-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 36rpx;
+  color: #1e293b;
+  margin-top: 8rpx;
+}
+
+.empty-subtitle {
+  font-size: 24rpx;
+  line-height: 32rpx;
+  color: #94a3b8;
+  text-align: center;
+  max-width: 400rpx;
+}
+
 .status-text {
   color: #64748b;
   font-size: 24rpx;
@@ -1651,7 +1713,6 @@ onUnmounted(() => {
   }
 
   .tools-sticky {
-    background: #111621;
     border-bottom-color: #1e293b;
   }
 
@@ -1679,6 +1740,18 @@ onUnmounted(() => {
   .status-wrap {
     background: #0f172a;
     border-color: #334155;
+  }
+
+  .empty-state {
+    background: transparent;
+  }
+
+  .empty-title {
+    color: #f1f5f9;
+  }
+
+  .empty-subtitle {
+    color: #64748b;
   }
 
   .status-text {

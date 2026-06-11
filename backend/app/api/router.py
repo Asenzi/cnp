@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import admin, auth, circle, event, feedback, health, im, network, notification, payment, points, post, user, verification
+from app.api.v1 import admin, auth, circle, event, feedback, health, im, map, network, notification, payment, points, post, user, verification
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -17,3 +17,4 @@ api_router.include_router(im.router)
 api_router.include_router(payment.router)
 api_router.include_router(admin.router)
 api_router.include_router(notification.router)
+api_router.include_router(map.router)

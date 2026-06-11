@@ -35,8 +35,8 @@ defineProps({
   position: relative;
   overflow: hidden;
   border-radius: 24rpx;
-  padding: 48rpx 40rpx 40rpx;
-  background: #0676af;
+  padding: 40rpx 40rpx 40rpx 10rpx;
+  color: #111827;
   border: 0;
   box-shadow: none;
   font-family: var(--member-body-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
@@ -68,13 +68,12 @@ defineProps({
   font-weight: 700;
   letter-spacing: 0.02em;
   font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
-  color: #ffffff;
 }
 
 .status-subtitle {
   display: block;
   margin-top: 12rpx;
-  color: rgba(255, 255, 255, 0.8);
+  /* color: rgba(255, 255, 255, 0.8) ; */
   font-size: 24rpx;
   line-height: 36rpx;
   letter-spacing: 0.02em;
@@ -97,7 +96,7 @@ defineProps({
 }
 
 .status-pill-text {
-  color: #ffffff;
+  /* color: #ffffff ; */
   font-size: 22rpx;
   line-height: 48rpx;
   font-weight: 700;
@@ -114,7 +113,7 @@ defineProps({
 
 .status-expire {
   display: block;
-  color: rgba(255, 255, 255, 0.85);
+  /* color: rgba(255, 255, 255, 0.85) ; */
   font-size: 24rpx;
   line-height: 36rpx;
 }
@@ -122,7 +121,7 @@ defineProps({
 .status-slogan {
   display: block;
   margin-top: 12rpx;
-  color: #ffffff;
+  /* color: #ffffff ; */
   font-size: 28rpx;
   line-height: 40rpx;
   font-style: normal;

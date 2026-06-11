@@ -1,6 +1,7 @@
 import { execaCommand, getPackages } from '@vben/node-utils';
 
 import { cancel, isCancel, select } from '@clack/prompts';
+import { delimiter, dirname } from 'node:path';
 
 interface RunOptions {
   command?: string;
@@ -46,7 +47,22 @@ export async function run(options: RunOptions) {
     process.exit(1);
   }
 
+  const pathKey =
+    Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ??
+    'PATH';
+  const childPath = [
+    dirname(process.execPath),
+    process.env.PNPM_HOME,
+    process.env[pathKey],
+  ]
+    .filter(Boolean)
+    .join(delimiter);
+
   execaCommand(`pnpm --filter=${selectPkg} run ${command}`, {
+    env: {
+      ...process.env,
+      [pathKey]: childPath,
+    },
     stdio: 'inherit',
   });
 }

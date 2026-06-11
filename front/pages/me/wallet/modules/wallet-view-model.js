@@ -9,7 +9,7 @@ const DEFAULT_SAMPLE_RECORDS = [
     timeText: '今天, 14:20',
     amount: 2450,
     statusText: '交易成功',
-    iconPath: '/static/icon/income.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/income.png',
     iconBgClass: 'icon-bg-blue',
     sortTs: Date.now() - 1
   },
@@ -19,7 +19,7 @@ const DEFAULT_SAMPLE_RECORDS = [
     timeText: '昨天',
     amount: -1200,
     statusText: '交易成功',
-    iconPath: '/static/icon/spending.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/spending.png',
     iconBgClass: 'icon-bg-orange',
     sortTs: Date.now() - 2
   }
@@ -112,18 +112,18 @@ function resolveStatusLabel(status) {
 function resolvePayChannelIcon(channel) {
   if (channel === 'wallet') {
     return {
-      iconPath: '/static/icon/spending.png',
+      iconPath: 'https://cos.cnptec.site/static/icon/spending.png',
       iconBgClass: 'icon-bg-orange'
     }
   }
   if (channel === 'wxpay') {
     return {
-      iconPath: '/static/icon/income.png',
+      iconPath: 'https://cos.cnptec.site/static/icon/income.png',
       iconBgClass: 'icon-bg-blue'
     }
   }
   return {
-    iconPath: '/static/me-icons/corporate-primary.png',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/corporate-primary.png',
     iconBgClass: 'icon-bg-slate'
   }
 }
@@ -135,16 +135,17 @@ export function mapMemberOrderRecord(item) {
   const productType = String(item?.product_type || 'member').trim().toLowerCase()
   const title = productType === 'contact_package'
     ? `${planName || '人群包'}支出`
-    : `${planName || '会员费'}支出`
+    : productType === 'circle_owner'
+      ? `${planName || '永久圈主'}支出`
+      : `${planName || '会员费'}支出`
 
   return {
     id: `member_${String(item?.order_no || item?.id || Math.random())}`,
-    title: planName ? `${planName}费支出` : '会员费支出',
     title,
     timeText: formatOrderTime(item?.paid_at || item?.created_at),
     amount: -Math.abs(amount),
     statusText: resolveStatusLabel(status),
-    iconPath: '/static/icon/spending.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/spending.png',
     iconBgClass: 'icon-bg-orange',
     sortTs: toTimestamp(item?.paid_at || item?.created_at)
   }
@@ -160,7 +161,7 @@ export function mapRechargeOrderRecord(item) {
     timeText: formatOrderTime(item?.paid_at || item?.created_at),
     amount: Math.abs(amount),
     statusText: resolveStatusLabel(status),
-    iconPath: '/static/icon/income.png',
+    iconPath: 'https://cos.cnptec.site/static/icon/income.png',
     iconBgClass: 'icon-bg-blue',
     sortTs: toTimestamp(item?.paid_at || item?.created_at)
   }

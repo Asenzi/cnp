@@ -1,19 +1,19 @@
-﻿from datetime import UTC, datetime
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from secrets import token_hex
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import db_session, get_current_user_id
+from app.api.deps import db_session, get_current_user_id, get_optional_current_user_id
 from app.circle import list_circle_discover_recommendations
 from app.core.asset_urls import is_local_only_asset_url, normalize_persisted_asset_url, sanitize_public_asset_url
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
+from app.core.storage import upload_public_asset
 from app.crud import (
     count_circle_members,
     count_user_joined_circles,
@@ -26,12 +26,19 @@ from app.crud import (
 )
 from app.models.circle import Circle
 from app.models.circle_interest import CircleInterest
+from app.models.circle_join_request import CircleJoinRequest
+from app.models.notification import Notification
 from app.models.user import User
+from app.models.user_circle_membership import UserCircleMembership
+from app.payment import confirm_circle_join_payment, create_circle_join_payment, get_circle_join_order
+from app.payment.circle_join import approve_join_request, refund_circle_join_payment
 from app.post import list_circle_resource_posts, list_pending_circle_post_syncs, review_circle_post_sync
 from app.review import submit_circle_update_review
 from app.schemas.circle import (
     CircleCreateRequest,
     CircleData,
+    CircleJoinPaymentConfirm,
+    CircleJoinRequestCreate,
     CirclePostSyncReviewRequest,
     CircleUpdateRequest,
     CircleOwnerData,
@@ -96,9 +103,38 @@ def _normalize_circle_asset_url(asset_url: str, *, request: Request, field_label
     return normalize_persisted_asset_url(asset_url, request=request, field_label=field_label)
 
 
-def _serialize_circle(circle, owner, request: Request, db: Session) -> dict:
+def _serialize_circle(
+    circle,
+    owner,
+    request: Request,
+    db: Session,
+    current_user_pk: int | None = None,
+) -> dict:
     member_count = count_circle_members(db=db, circle_code=circle.circle_code)
     cover_url, avatar_url = _resolve_circle_asset_urls(circle.cover_url, circle.avatar_url or circle.cover_url, request)
+    is_interested = False
+    is_joined = False
+    join_request = None
+    if current_user_pk is not None:
+        is_interested = db.scalar(
+            select(CircleInterest.id).where(
+                CircleInterest.user_pk == current_user_pk,
+                CircleInterest.circle_pk == circle.id,
+            )
+        ) is not None
+        is_joined = db.scalar(
+            select(UserCircleMembership.id).where(
+                UserCircleMembership.user_pk == current_user_pk,
+                UserCircleMembership.circle_code == circle.circle_code,
+                UserCircleMembership.is_active.is_(True),
+            )
+        ) is not None
+        join_request = db.scalar(
+            select(CircleJoinRequest).where(
+                CircleJoinRequest.user_pk == current_user_pk,
+                CircleJoinRequest.circle_code == circle.circle_code,
+            )
+        )
     payload = CircleData(
         circle_code=circle.circle_code,
         name=circle.name,
@@ -118,6 +154,11 @@ def _serialize_circle(circle, owner, request: Request, db: Session) -> dict:
             avatar_url=_to_public_file_url(owner.avatar_url, request),
             is_verified=bool(owner.is_verified),
         ),
+        is_interested=is_interested,
+        is_joined=is_joined,
+        join_request_status=str(join_request.status or "") if join_request else "",
+        join_payment_status=str(join_request.payment_status or "") if join_request else "",
+        join_auto_approve_at=join_request.auto_approve_at if join_request else None,
         created_at=circle.created_at,
     )
     return payload.model_dump(mode='json')
@@ -166,13 +207,13 @@ async def upload_circle_cover_file(
     if suffix not in {'.jpg', '.jpeg', '.png', '.webp'}:
         suffix = CONTENT_TYPE_EXTENSION_MAP.get(content_type, '.jpg')
 
-    COVER_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{token_hex(4)}{suffix}"
-    save_path = COVER_UPLOAD_DIR / file_name
-    save_path.write_bytes(file_bytes)
-
-    relative_url = f'/static/uploads/circle-covers/{file_name}'
-    public_url = _to_public_file_url(relative_url, request)
+    stored = upload_public_asset(
+        prefix='uploads/circle-covers',
+        file_bytes=file_bytes,
+        suffix=suffix,
+        content_type=content_type,
+        request=request,
+    )
     display_name = (file.filename or '圈子封面').strip() or '圈子封面'
     if len(display_name) > 128:
         display_name = display_name[:128]
@@ -180,8 +221,8 @@ async def upload_circle_cover_file(
     return success_response(
         data={
             'name': display_name,
-            'path': relative_url,
-            'url': public_url,
+            'path': stored.path,
+            'url': stored.url,
             'size': len(file_bytes),
         },
         message='圈子封面上传成功',
@@ -197,7 +238,9 @@ def create_new_circle(
 ):
     owner = _require_current_user(db=db, current_user_pk=user_id)
     if not bool(owner.is_verified):
-        raise BusinessException(message='完成实名认证后才可创建圈子并成为圈主', code=4357, status_code=403)
+        raise BusinessException(message='完成实名认证后才可创建圈子', code=4357, status_code=403)
+    if not bool(owner.is_circle_owner):
+        raise BusinessException(message='开通永久圈主身份后才可创建圈子', code=4358, status_code=403)
 
     join_type = payload.join_type.strip().lower()
     join_price = Decimal('0.00')
@@ -366,9 +409,22 @@ def get_discover_circles(
     industry_label: str | None = None,
     request_id: str | None = None,
     exclude_circle_codes: str | None = None,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
+    if user_id is None:
+        payload = _list_public_discover_circles(
+            db=db,
+            request=request,
+            tab=tab,
+            offset=offset,
+            limit=limit,
+            keyword=keyword,
+            city_name=city_name,
+            industry_label=industry_label,
+        )
+        return success_response(data=payload)
+
     current_user = _require_current_user(db=db, current_user_pk=user_id)
     normalized_exclude_circle_codes = [
         str(item or '').strip()
@@ -408,10 +464,11 @@ def get_user_circles(
     offset: int = 0,
     limit: int = 20,
     keyword: str | None = None,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
 
     normalized_target_user_id = str(target_user_id or '').strip()
     if len(normalized_target_user_id) != 8:
@@ -457,6 +514,109 @@ def _parse_offset_cursor(cursor: str | None) -> int:
         return max(int(str(cursor or '').strip() or '0'), 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _serialize_public_discover_circle(circle: Circle, owner: User, request: Request) -> dict:
+    cover_url, avatar_url = _resolve_circle_asset_urls(circle.cover_url, circle.avatar_url or circle.cover_url, request)
+    member_count = int(circle.member_count or 0)
+    post_count = int(circle.post_count or 0)
+    return {
+        'circle_code': circle.circle_code,
+        'circleCode': circle.circle_code,
+        'id': circle.circle_code,
+        'name': circle.name,
+        'title': circle.name,
+        'industry_label': circle.industry_label,
+        'industryLabel': circle.industry_label,
+        'description': circle.description,
+        'cover_url': cover_url,
+        'coverImage': cover_url,
+        'avatar_url': avatar_url,
+        'join_type': circle.join_type,
+        'join_price': float(circle.join_price or 0),
+        'member_count': member_count,
+        'members': member_count,
+        'post_count': post_count,
+        'posts': post_count,
+        'owner_user_id': str(owner.user_id or '').strip(),
+        'owner_nickname': str(owner.nickname or '').strip(),
+        'owner_avatar_url': _to_public_file_url(str(owner.avatar_url or ''), request),
+        'owner_city_name': str(owner.city_name or '').strip(),
+        'owner_is_verified': bool(owner.is_verified),
+        'ownerVerified': bool(owner.is_verified),
+        'is_joined': False,
+        'reason_tags': [],
+        'last_active_at': circle.last_active_at.isoformat() if circle.last_active_at else None,
+        'created_at': circle.created_at.isoformat() if circle.created_at else None,
+    }
+
+
+def _list_public_discover_circles(
+    db: Session,
+    *,
+    request: Request,
+    tab: str,
+    offset: int,
+    limit: int,
+    keyword: str | None,
+    city_name: str | None,
+    industry_label: str | None,
+) -> dict:
+    safe_offset = max(int(offset or 0), 0)
+    safe_limit = min(max(int(limit or 20), 1), 50)
+    safe_tab = str(tab or 'recommend').strip()
+    safe_keyword = str(keyword or '').strip()
+    safe_city = str(city_name or '').strip()
+    safe_industry = str(industry_label or '').strip()
+    conditions = [
+        Circle.status == 'active',
+        User.is_active.is_(True),
+    ]
+    if safe_industry:
+        conditions.append(Circle.industry_label == safe_industry)
+    if safe_city and safe_city != '全国':
+        conditions.append(User.city_name == safe_city)
+    if safe_keyword:
+        like_keyword = f'%{safe_keyword}%'
+        conditions.append(
+            (Circle.name.like(like_keyword))
+            | (Circle.description.like(like_keyword))
+            | (Circle.industry_label.like(like_keyword))
+            | (User.nickname.like(like_keyword))
+        )
+    order_by = (
+        Circle.created_at.desc(),
+        Circle.id.desc(),
+    ) if safe_tab == 'latest' else (
+        Circle.last_active_at.desc(),
+        Circle.post_count.desc(),
+        Circle.member_count.desc(),
+        Circle.created_at.desc(),
+        Circle.id.desc(),
+    )
+    rows = db.execute(
+        select(Circle, User)
+        .join(User, User.id == Circle.owner_user_pk)
+        .where(*conditions)
+        .order_by(*order_by)
+        .offset(safe_offset)
+        .limit(safe_limit + 1)
+    ).all()
+    page_rows = rows[:safe_limit]
+    has_more = len(rows) > safe_limit
+    return {
+        'items': [
+            _serialize_public_discover_circle(circle=circle, owner=owner, request=request)
+            for circle, owner in page_rows
+        ],
+        'total': safe_offset + len(page_rows) + (1 if has_more else 0),
+        'offset': safe_offset,
+        'limit': safe_limit,
+        'has_more': has_more,
+        'tab': safe_tab,
+        'city_name': safe_city or None,
+        'request_id': '',
+    }
 
 
 def _serialize_interested_circle(circle: Circle, owner: User | None, interest: CircleInterest, request: Request) -> dict:
@@ -570,73 +730,191 @@ def toggle_circle_interest(
     )
 
 
-@router.get('/join-requests', summary='Get circle join requests for current user circles')
+@router.get('/join-requests', summary='Get sent and received circle join requests')
 def get_join_requests(
-    status: str | None = Query(None, description="Filter by status: pending, approved, rejected"),
+    request: Request,
+    status: str | None = Query(None, description="Filter by status: pending, approved, rejected, cancelled"),
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    """获取当前用户作为圈主收到的加入申请"""
-    from app.models.circle_join_request import CircleJoinRequest
-
-    # 获取当前用户拥有的圈子
+    """获取当前用户发出的申请，以及作为圈主收到的申请。"""
     user = _require_current_user(db=db, current_user_pk=user_id)
-    owned_circles = db.execute(
-        select(Circle).where(Circle.owner_user_pk == user.id)
-    ).scalars().all()
-
-    if not owned_circles:
-        return success_response(data={'items': [], 'total': 0, 'offset': offset, 'limit': limit})
-
-    circle_codes = [c.circle_code for c in owned_circles]
-
-    # 查询加入申请
-    query = select(CircleJoinRequest).where(CircleJoinRequest.circle_code.in_(circle_codes))
-
+    query = (
+        select(CircleJoinRequest, Circle, User)
+        .join(Circle, Circle.circle_code == CircleJoinRequest.circle_code)
+        .join(User, User.id == CircleJoinRequest.user_pk)
+        .where(
+            (CircleJoinRequest.user_pk == int(user.id))
+            | (Circle.owner_user_pk == int(user.id))
+        )
+    )
     if status:
         query = query.where(CircleJoinRequest.status == status)
-
-    query = query.order_by(CircleJoinRequest.created_at.desc())
-
-    # 获取总数（简化实现，直接用结果集长度）
-    all_requests = db.execute(query).scalars().all()
-    total = len(all_requests)
-
-    # 分页
-    paginated_requests = all_requests[offset:offset + limit]
-
-    # 构建响应
+    rows = db.execute(
+        query
+        .order_by(CircleJoinRequest.updated_at.desc(), CircleJoinRequest.id.desc())
+        .offset(offset)
+        .limit(limit + 1)
+    ).all()
+    page_rows = rows[:limit]
+    has_more = len(rows) > limit
     items = []
-    for req in paginated_requests:
-        # 获取申请人信息
-        applicant = db.execute(select(User).where(User.id == req.user_pk)).scalar_one_or_none()
-        # 获取圈子信息
-        circle = db.execute(select(Circle).where(Circle.circle_code == req.circle_code)).scalar_one_or_none()
-
+    for req, circle, applicant in page_rows:
+        perspective = 'applicant' if int(req.user_pk) == int(user.id) else 'owner'
+        circle_cover_url, circle_avatar_url = _resolve_circle_asset_urls(
+            circle.cover_url,
+            circle.avatar_url or circle.cover_url,
+            request,
+        )
         items.append({
             'id': req.id,
+            'perspective': perspective,
             'user_pk': req.user_pk,
             'circle_code': req.circle_code,
             'status': req.status,
             'message': req.message,
             'reject_reason': req.reject_reason,
+            'amount': float(req.amount or 0),
+            'pay_channel': req.pay_channel,
+            'payment_status': req.payment_status,
+            'refund_status': req.refund_status,
+            'auto_approve_at': req.auto_approve_at.isoformat() if req.auto_approve_at else None,
             'reviewed_at': req.reviewed_at.isoformat() if req.reviewed_at else None,
             'created_at': req.created_at.isoformat(),
             'updated_at': req.updated_at.isoformat(),
             'user': {
-                'user_id': applicant.user_id if applicant else '',
-                'nickname': applicant.nickname if applicant else '未知用户',
-                'avatar_url': applicant.avatar_url if applicant else '/static/logo.png',
-            } if applicant else None,
+                'user_id': applicant.user_id,
+                'nickname': applicant.nickname or '未知用户',
+                'avatar_url': _to_public_file_url(applicant.avatar_url, request),
+            },
             'circle': {
-                'circle_code': circle.circle_code if circle else req.circle_code,
-                'name': circle.name if circle else '',
-            } if circle else None,
+                'circle_code': circle.circle_code,
+                'name': circle.name,
+                'cover_url': circle_cover_url,
+                'avatar_url': circle_avatar_url,
+                'owner_user_pk': circle.owner_user_pk,
+            },
         })
 
-    return success_response(data={'items': items, 'total': total, 'offset': offset, 'limit': limit})
+    return success_response(
+        data={
+            'items': items,
+            'total': offset + len(items) + (1 if has_more else 0),
+            'offset': offset,
+            'limit': limit,
+            'has_more': has_more,
+        }
+    )
+
+
+@router.post('/{circle_code}/join-request', summary='Pay and submit circle join request')
+def submit_join_request(
+    circle_code: str,
+    payload: CircleJoinRequestCreate,
+    request: Request,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    data = create_circle_join_payment(
+        db=db,
+        user_pk=user_id,
+        circle_code=str(circle_code or "").strip(),
+        message=str(payload.message or "").strip(),
+        pay_channel=payload.pay_channel,
+        client_ip=request.client.host if request.client else None,
+        base_url=str(request.base_url).rstrip("/"),
+    )
+    message = "请完成支付" if data.get("action") == "wxpay_required" else "入圈申请已提交"
+    return success_response(data=data, message=message)
+
+
+@router.post('/join-orders/{order_no}/confirm', summary='Confirm circle join payment')
+def confirm_join_order(
+    order_no: str,
+    payload: CircleJoinPaymentConfirm,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=confirm_circle_join_payment(
+            db=db,
+            user_pk=user_id,
+            order_no=order_no,
+            transaction_id=payload.transaction_id,
+        ),
+        message="入圈费用支付成功",
+    )
+
+
+@router.get('/join-orders/{order_no}', summary='Get circle join payment status')
+def get_join_order_status(
+    order_no: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    return success_response(data=get_circle_join_order(db=db, user_pk=user_id, order_no=order_no))
+
+
+@router.post('/join-requests/{request_id}/cancel', summary='Cancel own circle join request')
+def cancel_join_request(
+    request_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    user = _require_current_user(db=db, current_user_pk=user_id)
+    join_request = db.execute(
+        select(CircleJoinRequest)
+        .where(CircleJoinRequest.id == request_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if join_request is None:
+        raise BusinessException(message='申请不存在', code=4046, status_code=404)
+    if int(join_request.user_pk) != int(user.id):
+        raise BusinessException(message='只能取消自己提交的申请', code=4393, status_code=403)
+    if str(join_request.status) != 'pending':
+        raise BusinessException(message='当前申请已处理，无法取消', code=4394, status_code=409)
+    if str(join_request.payment_status) == 'pending':
+        raise BusinessException(message='支付结果确认中，暂时无法取消', code=4395, status_code=409)
+
+    circle = db.scalar(select(Circle).where(Circle.circle_code == join_request.circle_code))
+    if circle is None:
+        raise BusinessException(message='圈子不存在', code=4043, status_code=404)
+
+    was_paid = str(join_request.payment_status) == 'paid'
+    if was_paid:
+        refund_circle_join_payment(
+            db,
+            join_request=join_request,
+            circle=circle,
+            reason='用户主动取消入圈申请',
+        )
+    join_request.status = 'cancelled'
+    join_request.reviewed_at = datetime.now(UTC).replace(tzinfo=None)
+    join_request.reject_reason = '用户主动取消'
+    join_request.auto_approve_at = None
+    db.add(
+        Notification(
+            user_pk=int(circle.owner_user_pk),
+            type='circle',
+            title='入圈申请已取消',
+            content=f'{str(user.nickname or "申请人").strip()}已取消加入“{circle.name}”的申请',
+            link_type='circle',
+            link_id=str(circle.circle_code),
+            is_read=False,
+        )
+    )
+    db.commit()
+    return success_response(
+        data={
+            'request_id': int(join_request.id),
+            'status': str(join_request.status),
+            'payment_status': str(join_request.payment_status),
+            'refund_status': str(join_request.refund_status),
+        },
+        message='申请已取消，已支付费用已原路退回' if was_paid else '申请已取消',
+    )
 
 
 @router.post('/join-requests/{request_id}/review', summary='Review circle join request')
@@ -647,9 +925,6 @@ def review_join_request(
     db: Session = Depends(db_session),
 ):
     """审批圈子加入申请"""
-    from app.models.circle_join_request import CircleJoinRequest
-    from app.models.user_circle_membership import UserCircleMembership
-
     action = payload.get('action', '')
     reject_reason = payload.get('reject_reason')
 
@@ -657,7 +932,9 @@ def review_join_request(
 
     # 获取申请
     join_request = db.execute(
-        select(CircleJoinRequest).where(CircleJoinRequest.id == request_id)
+        select(CircleJoinRequest)
+        .where(CircleJoinRequest.id == request_id)
+        .with_for_update()
     ).scalar_one_or_none()
 
     if not join_request:
@@ -675,42 +952,29 @@ def review_join_request(
     if join_request.status != 'pending':
         raise BusinessException(code=400, message='该申请已处理')
 
-    # 处理申请
     if action == 'approve':
-        # 通过申请 - 创建成员关系
-        join_request.status = 'approved'
-        join_request.reviewed_at = datetime.now(UTC)
-
-        # 检查是否已经是成员
-        existing_membership = db.execute(
-            select(UserCircleMembership).where(
-                UserCircleMembership.user_pk == join_request.user_pk,
-                UserCircleMembership.circle_code == join_request.circle_code
-            )
-        ).scalar_one_or_none()
-
-        if not existing_membership:
-            membership = UserCircleMembership(
-                user_pk=join_request.user_pk,
-                circle_code=join_request.circle_code,
-                role='member',
-                joined_at=datetime.now(UTC)
-            )
-            db.add(membership)
-
-            # 更新圈子成员数
-            circle.member_count = (circle.member_count or 0) + 1
-
+        approve_join_request(db, join_request=join_request, circle=circle)
     elif action == 'reject':
-        # 拒绝申请
+        refund_circle_join_payment(db, join_request=join_request, circle=circle)
         join_request.status = 'rejected'
-        join_request.reviewed_at = datetime.now(UTC)
+        join_request.reviewed_at = datetime.now(UTC).replace(tzinfo=None)
         join_request.reject_reason = reject_reason or '不符合圈子要求'
 
     else:
         raise BusinessException(code=400, message='无效的操作')
 
     db.commit()
+
+    # Notify the applicant after the owner reviews the join request.
+    from app.tasks.wechat import send_circle_join_result
+
+    send_circle_join_result.delay(
+        user_id=int(join_request.user_pk),
+        circle_name=str(circle.name or "").strip(),
+        circle_code=str(circle.circle_code or "").strip(),
+        approved=(action == "approve"),
+        reason=reject_reason if action == "reject" else None,
+    )
 
     return success_response(message=f'申请已{"通过" if action == "approve" else "拒绝"}')
 
@@ -719,6 +983,7 @@ def review_join_request(
 def get_circle_detail(
     circle_code: str,
     request: Request,
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
     normalized_code = (circle_code or '').strip()
@@ -733,7 +998,15 @@ def get_circle_detail(
     if owner is None:
         raise BusinessException(message='圈主不存在', code=4044, status_code=404)
 
-    return success_response(data=_serialize_circle(circle=circle, owner=owner, request=request, db=db))
+    return success_response(
+        data=_serialize_circle(
+            circle=circle,
+            owner=owner,
+            request=request,
+            db=db,
+            current_user_pk=user_id,
+        )
+    )
 
 
 @router.get('/{circle_code}/posts', summary='List approved circle resource posts')
@@ -742,10 +1015,11 @@ def get_circle_posts(
     request: Request,
     cursor: str | None = None,
     limit: int = 20,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
     payload = list_circle_resource_posts(
         db=db,
         viewer_user_pk=user_id,
@@ -772,10 +1046,11 @@ def get_circle_members(
     request: Request,
     offset: int = 0,
     limit: int = 20,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int | None = Depends(get_optional_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
 
     normalized_code = (circle_code or '').strip()
     if not normalized_code:

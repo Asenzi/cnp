@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view>
     <view class="guest-profile-row" @tap="$emit('login')">
       <view class="guest-avatar-wrap">
@@ -23,7 +23,7 @@
 
     <view class="guest-intro-card">
       <view class="guest-intro-title-row">
-        <image class="intro-mark-img" mode="aspectFit" src="/static/me-icons/description-primary.png" />
+        <image class="intro-mark-img" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/description-primary.png" />
         <text class="guest-intro-title">个人简介</text>
       </view>
       <text class="guest-intro-text">您还没有登录，暂无个人简介信息</text>

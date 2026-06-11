@@ -7,7 +7,11 @@
             v-for="item in modeOptions"
             :key="item.key"
             class="mode-tab"
-            :class="form.mode === item.key ? 'mode-tab-active' : ''"
+            :class="[
+              form.mode === item.key ? 'mode-tab-active' : '',
+              item.disabled ? 'mode-tab-disabled' : ''
+            ]"
+            :disabled="item.disabled"
             hover-class="mode-tab-hover"
             @tap="setMode(item.key)"
           >
@@ -262,9 +266,9 @@ import {
 import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
 
 const modeOptions = [
-  { key: 'cooperate', title: '找合作' },
-  { key: 'resource', title: '找资源' }
-  // { key: 'venue', title: '发布活动' } // 第二版上线
+  { key: 'cooperate', title: '需求', disabled: false },
+  { key: 'resource', title: '供应', disabled: false },
+  { key: 'venue', title: '活动', disabled: true }
 ]
 
 const validityOptions = [ 
@@ -292,7 +296,7 @@ const LEGACY_VENUE_META_LABELS = {
 }
 
 const form = ref({
-  mode: 'venue',
+  mode: 'cooperate',
   title: '',
   industry_label: '',
   description: '',
@@ -418,6 +422,20 @@ const showToast = (title) => {
     title,
     icon: 'none'
   })
+}
+
+const isLocalTempImagePath = (value) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return false
+  }
+  if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
+    return true
+  }
+  if (/^https?:\/\//i.test(normalized) || normalized.startsWith('/static/')) {
+    return false
+  }
+  return true
 }
 
 const ensureLocationPermission = async () => {
@@ -615,51 +633,46 @@ const onChooseImages = async () => {
     return
   }
 
-  const nextImages = [...imageList.value]
-  let successCount = 0
-  let failedCount = 0
+  form.value.images = [...imageList.value, ...tempFilePaths].slice(0, 9)
+}
 
+const uploadPendingImages = async () => {
+  const sourceImages = imageList.value.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 9)
+  const pendingImages = sourceImages.filter((item) => isLocalTempImagePath(item))
+  if (!pendingImages.length) {
+    return sourceImages
+  }
+
+  const uploadedMap = new Map()
   uploading.value = true
   uploadProgress.value = {
     done: 0,
-    total: tempFilePaths.length
+    total: pendingImages.length
   }
 
   try {
-    for (let index = 0; index < tempFilePaths.length; index += 1) {
-      const path = tempFilePaths[index]
+    for (let index = 0; index < pendingImages.length; index += 1) {
+      const path = pendingImages[index]
       uni.showLoading({
-        title: `上传中 ${index + 1}/${tempFilePaths.length}`,
+        title: `上传中 ${index + 1}/${pendingImages.length}`,
         mask: true
       })
 
-      try {
-        const data = await uploadResourceImage(path, `resource-image-${index + 1}.jpg`)
-        const url = String(data?.url || '').trim()
-        if (url && nextImages.length < 9) {
-          nextImages.push(url)
-          form.value.images = [...nextImages]
-          successCount += 1
-        } else {
-          failedCount += 1
-        }
-      } catch {
-        failedCount += 1
-      } finally {
-        uploadProgress.value = {
-          done: index + 1,
-          total: tempFilePaths.length
-        }
+      const data = await uploadResourceImage(path, `resource-image-${index + 1}.jpg`)
+      const url = String(data?.url || data?.path || '').trim()
+      if (!url || isLocalTempImagePath(url)) {
+        throw new Error('图片上传失败，请重试')
+      }
+      uploadedMap.set(path, url)
+      uploadProgress.value = {
+        done: index + 1,
+        total: pendingImages.length
       }
     }
 
-    if (successCount && failedCount) {
-      showToast(`已上传 ${successCount} 张，失败 ${failedCount} 张`)
-    } else if (successCount) {
-      showToast(`已上传 ${successCount} 张图片`)
-    } else {
-      showToast('图片上传失败，请重试')
-    }
+    const finalImages = sourceImages.map((item) => uploadedMap.get(item) || item)
+    form.value.images = finalImages
+    return finalImages
   } finally {
     uploading.value = false
     uploadProgress.value = {
@@ -828,11 +841,6 @@ const onSubmit = async () => {
     return
   }
 
-  if (uploading.value) {
-    showToast('请等待图片上传完成')
-    return
-  }
-
   if (form.value.mode === 'venue' && !String(venueForm.value.location || '').trim()) {
     showToast('请先选择定位')
     return
@@ -844,12 +852,13 @@ const onSubmit = async () => {
 
   submitting.value = true
   try {
+    const finalImages = await uploadPendingImages()
     const payload = {
       mode: form.value.mode,
       title,
       industry_label: normalizedIndustry.value,
       description,
-      images: imageList.value,
+      images: finalImages,
       sync_circle_codes: selectedCircleCodes.value
     }
 
@@ -984,6 +993,15 @@ onLoad((query = {}) => {
 
 .mode-tab-active .mode-tab-label {
   color: #1a57db;
+}
+
+.mode-tab-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mode-tab-disabled .mode-tab-label {
+  color: #cbd5e1;
 }
 
 .mode-tab-line {

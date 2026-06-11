@@ -18,6 +18,7 @@ import {
 import { listAdminConfigsApi, saveAdminConfigApi } from '#/api/admin';
 import { formatDateTime } from '#/utils/admin';
 
+import CircleOwnerConfigCard from './components/CircleOwnerConfigCard.vue';
 import ContactPackageConfigCard from './components/ContactPackageConfigCard.vue';
 
 defineOptions({ name: 'AdminConfigsPage' });
@@ -55,7 +56,9 @@ async function loadConfigs(page = filters.page) {
     });
     pageData.value = {
       ...result,
-      items: result.items.map((item) => ({ ...item })),
+      items: result.items
+        .filter((item) => !item.config_key.startsWith('circle_owner.'))
+        .map((item) => ({ ...item })),
     };
   } finally {
     loading.value = false;
@@ -118,6 +121,7 @@ onMounted(() => {
       </p>
     </div>
 
+    <CircleOwnerConfigCard />
     <ContactPackageConfigCard />
 
     <ElCard shadow="never" class="rounded-2xl border-0">

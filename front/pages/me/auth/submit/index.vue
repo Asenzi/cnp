@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="submit-page">
     <view class="page-shell">
       <view class="content-body">
@@ -13,7 +13,7 @@
             >
               <view class="upload-overlay">
                 <view class="camera-dot">
-                  <image class="camera-icon" mode="aspectFit" src="/static/me-icons/camera-white.png" />
+                  <image class="camera-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/camera-white.png" />
                 </view>
                 <text class="overlay-title">拍照/上传名片</text>
                 <text class="overlay-subtitle">支持 JPG, PNG, PDF 格式</text>
@@ -21,7 +21,7 @@
             </view>
 
             <view class="upload-tip-row">
-              <image class="tip-icon" mode="aspectFit" src="/static/me-icons/shield-person-primary.png" />
+              <image class="tip-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/shield-person-primary.png" />
               <text class="upload-tip-text">名片认证助您在圈子里快速获得信任</text>
             </view>
 
@@ -31,7 +31,7 @@
               hover-class="reupload-btn-hover"
               @tap="onPickCardFile"
             >
-              <image class="reupload-icon" mode="aspectFit" src="/static/me-icons/upload-primary.png" />
+              <image class="reupload-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/upload-primary.png" />
               <text class="reupload-text">{{ uploadingCard ? '上传中...' : '重新上传' }}</text>
             </view>
           </view>
@@ -55,7 +55,7 @@
                   placeholder="请输入姓名"
                   placeholder-class="field-placeholder"
                 />
-                <image class="edit-icon" mode="aspectFit" src="/static/me-icons/edit-gray.png" />
+                <image class="edit-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/edit-gray.png" />
               </view>
             </view>
 
@@ -70,7 +70,7 @@
                   placeholder="请输入公司名称"
                   placeholder-class="field-placeholder"
                 />
-                <image class="edit-icon" mode="aspectFit" src="/static/me-icons/edit-gray.png" />
+                <image class="edit-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/edit-gray.png" />
               </view>
             </view>
 
@@ -85,7 +85,7 @@
                   placeholder="请输入职位"
                   placeholder-class="field-placeholder"
                 />
-                <image class="edit-icon" mode="aspectFit" src="/static/me-icons/edit-gray.png" />
+                <image class="edit-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/edit-gray.png" />
               </view>
             </view>
           </view>

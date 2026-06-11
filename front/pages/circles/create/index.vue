@@ -5,9 +5,9 @@
         <CreateCoverUploader v-model="form.coverUrl" />
         <CreateAvatarUploader v-model="form.avatarUrl" />
 
-        <view v-if="!realNameVerified" class="verify-notice-card">
-          <text class="verify-notice-title">完成实名认证后才可创建圈子并成为圈主</text>
-          <text class="verify-notice-desc">请先完成实名认证，再继续创建圈子。</text>
+        <view v-if="!realNameVerified || !isCircleOwner" class="verify-notice-card">
+          <text class="verify-notice-title">{{ createRequirementTitle }}</text>
+          <text class="verify-notice-desc">{{ createRequirementDesc }}</text>
         </view>
 
         <CreateBasicInfoCard
@@ -95,9 +95,20 @@ const parseStoredUserInfo = () => {
 currentUser.value = parseStoredUserInfo()
 
 const realNameVerified = computed(() => Boolean(currentUser.value?.is_verified))
-const submitButtonText = computed(() =>
-  realNameVerified.value ? '立即创建圈子' : '完成实名认证后可创建圈子'
-)
+const isCircleOwner = computed(() => Boolean(currentUser.value?.is_circle_owner))
+const createRequirementTitle = computed(() => {
+  if (!realNameVerified.value) return '完成实名认证后才可创建圈子'
+  return '开通圈主身份后才可创建圈子'
+})
+const createRequirementDesc = computed(() => {
+  if (!realNameVerified.value) return '请先完成实名认证，再继续创建圈子。'
+  return '圈主身份一次付费、永久有效，支付成功后即可创建圈子。'
+})
+const submitButtonText = computed(() => {
+  if (!realNameVerified.value) return '完成实名认证后可创建圈子'
+  if (!isCircleOwner.value) return '开通圈主身份'
+  return '立即创建圈子'
+})
 
 const normalizePrice = (value) => {
   const raw = String(value || '').replace(/[^\d.]/g, '')
@@ -163,10 +174,19 @@ const validateForm = () => {
     return false
   }
   if (!realNameVerified.value) {
-    showToast('完成实名认证后才可创建圈子并成为圈主')
+    showToast('完成实名认证后才可创建圈子')
     setTimeout(() => {
       uni.navigateTo({
         url: '/pages/me/auth/realname/index'
+      })
+    }, 260)
+    return false
+  }
+  if (!isCircleOwner.value) {
+    showToast('请先开通圈主身份')
+    setTimeout(() => {
+      uni.navigateTo({
+        url: '/pages/me/circle-owner/apply/index'
       })
     }, 260)
     return false

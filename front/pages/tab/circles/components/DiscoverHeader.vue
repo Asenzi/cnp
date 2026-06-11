@@ -31,7 +31,7 @@
           @tap="emit('filter-tap', item)"
         >
           <text class="chip-text">{{ item }}</text>
-          <image class="chip-arrow" mode="aspectFit" src="/static/me-icons/expand-more-slate.png" />
+          <image class="chip-arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
         </view>
       </view>
     </scroll-view>

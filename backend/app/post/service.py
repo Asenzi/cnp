@@ -743,7 +743,7 @@ def list_resource_posts(
 
     viewer = db.execute(select(User).where(User.id == int(viewer_user_pk)).limit(1)).scalar_one_or_none()
     if viewer is None:
-        raise BusinessException(message="鐢ㄦ埛涓嶅瓨鍦?", code=4041, status_code=404)
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
     viewer_industry = _normalize_lower(viewer.industry_label)
     viewer_city = _normalize_lower(viewer.city_name)
 
@@ -1314,26 +1314,28 @@ def update_resource_post(
     )
 
 
-def get_resource_post_detail(db: Session, *, viewer_user_pk: int, post_code: str) -> dict[str, Any]:
+def get_resource_post_detail(db: Session, *, viewer_user_pk: int | None, post_code: str) -> dict[str, Any]:
     post, author = _resolve_post_with_author(db=db, post_code=post_code)
 
-    is_author = int(post.author_user_pk) == int(viewer_user_pk)
+    is_author = bool(viewer_user_pk is not None and int(post.author_user_pk) == int(viewer_user_pk))
     if str(post.status or "") == "deleted":
         raise BusinessException(message="资源不存在", code=5456, status_code=404)
     if str(post.status or "") != "active" and not is_author:
         raise BusinessException(message="资源已下架", code=5459, status_code=404)
 
-    liked = (
-        db.execute(
-            select(ResourcePostLike.id).where(
-                and_(
-                    ResourcePostLike.post_pk == int(post.id),
-                    ResourcePostLike.user_pk == int(viewer_user_pk),
+    liked = False
+    if viewer_user_pk is not None:
+        liked = (
+            db.execute(
+                select(ResourcePostLike.id).where(
+                    and_(
+                        ResourcePostLike.post_pk == int(post.id),
+                        ResourcePostLike.user_pk == int(viewer_user_pk),
+                    )
                 )
-            )
-        ).scalar_one_or_none()
-        is not None
-    )
+            ).scalar_one_or_none()
+            is not None
+        )
     circle_syncs = None
     if is_author:
         circle_syncs = [
@@ -1350,11 +1352,12 @@ def get_resource_post_detail(db: Session, *, viewer_user_pk: int, post_code: str
     )
 
 
-def increase_resource_post_view(db: Session, *, post_code: str, viewer_user_pk: int) -> dict[str, Any]:
+def increase_resource_post_view(db: Session, *, post_code: str, viewer_user_pk: int | None) -> dict[str, Any]:
     post, _ = _resolve_post_with_author(db=db, post_code=post_code)
+    is_author = bool(viewer_user_pk is not None and int(post.author_user_pk) == int(viewer_user_pk))
     if str(post.status or "") == "deleted":
         raise BusinessException(message="资源不存在", code=5456, status_code=404)
-    if str(post.status or "") != "active" and int(post.author_user_pk) != int(viewer_user_pk):
+    if str(post.status or "") != "active" and not is_author:
         raise BusinessException(message="资源已下架", code=5459, status_code=404)
     post.view_count = int(post.view_count or 0) + 1
     db.add(post)
@@ -1524,7 +1527,7 @@ def list_user_resource_posts(
 
     post_ids = [int(post.id) for post, _ in rows]
     liked_set: set[int] = set()
-    if post_ids:
+    if post_ids and viewer_user_pk is not None:
         liked_rows = db.execute(
             select(ResourcePostLike.post_pk).where(
                 and_(
@@ -1556,7 +1559,7 @@ def list_user_resource_posts(
 def list_circle_resource_posts(
     db: Session,
     *,
-    viewer_user_pk: int,
+    viewer_user_pk: int | None,
     circle_code: str,
     cursor: str | None,
     limit: int,
@@ -1614,7 +1617,7 @@ def list_circle_resource_posts(
 
     post_ids = [int(post.id) for _, post, _ in rows]
     liked_set: set[int] = set()
-    if post_ids:
+    if post_ids and viewer_user_pk is not None:
         liked_rows = db.execute(
             select(ResourcePostLike.post_pk).where(
                 and_(
