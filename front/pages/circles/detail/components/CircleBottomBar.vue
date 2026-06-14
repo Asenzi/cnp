@@ -11,7 +11,6 @@
     <view class="actions-row">
       <button
         class="interest-btn"
-        :class="{ 'interest-btn-active-state': interested }"
         hover-class="button-pressed"
         @tap="emit('interest')"
       >
@@ -136,14 +135,9 @@ const emit = defineEmits(['interest', 'apply'])
   color: #475569;
 }
 
-.interest-btn-active-state {
-  background: #e8f4fa;
-  color: #0676af;
-}
-
 .apply-btn {
   flex: 1;
-  background: #0676af;
+  background: #2563eb;
   color: #ffffff;
 }
 

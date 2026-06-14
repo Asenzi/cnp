@@ -67,6 +67,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { loginByWechatMiniapp } from '../../../api/auth'
+import { connectRealtimeSocket } from '../../../utils/realtime'
 import { getMiniappLoginCode, getWechatDeviceId } from '../../../utils/wechat-auth'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
@@ -126,13 +127,30 @@ const handleWechatLogin = async () => {
     uni.setStorageSync('isLoggedIn', true)
     uni.setStorageSync('userInfo', result?.user_info || {})
     uni.removeStorageSync(INVITE_CODE_STORAGE_KEY)
+    connectRealtimeSocket()
 
     showToast('登录成功')
 
+    // 检查是否有待关注的用户、待标记感兴趣的资源或圈子
+    const pendingFollowUserId = uni.getStorageSync('pendingFollowUserId')
+    const pendingInterestPostCode = uni.getStorageSync('pendingInterestPostCode')
+    const pendingInterestCircleCode = uni.getStorageSync('pendingInterestCircleCode')
+
     setTimeout(() => {
-      uni.switchTab({
-        url: '/pages/tab/me/index'
-      })
+      if (pendingFollowUserId) {
+        // 有待关注的用户，跳转到发现页
+        uni.switchTab({
+          url: '/pages/tab/discover/index'
+        })
+      } else if (pendingInterestPostCode || pendingInterestCircleCode) {
+        // 有待标记感兴趣的资源或圈子，返回上一页
+        uni.navigateBack()
+      } else {
+        // 正常跳转到个人中心
+        uni.switchTab({
+          url: '/pages/tab/me/index'
+        })
+      }
     }, 300)
   } catch (err) {
     showToast(err?.message || '登录失败，请稍后重试')

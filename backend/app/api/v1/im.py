@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path as FsPath
@@ -14,15 +15,19 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id
+from app.core.database import SessionLocal
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
 from app.core.security import decode_access_token
 from app.core.storage import upload_public_asset
 from app.crud import get_user_by_id
+from app.models.circle import Circle
+from app.models.circle_join_request import CircleJoinRequest
+from app.models.notification import Notification
 from app.models.user import User
 from app.im import (
     accept_friend_request,
@@ -47,6 +52,90 @@ IM_UPLOAD_DIR = STATIC_DIR / "uploads" / "im"
 
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
+
+
+def _notification_realtime_state(*, user_pk: int) -> dict:
+    with SessionLocal() as session:
+        notification_row = session.execute(
+            select(
+                func.count(Notification.id),
+                func.max(Notification.id),
+                func.max(Notification.updated_at),
+            ).where(Notification.user_pk == int(user_pk))
+        ).one()
+        unread_count = int(
+            session.scalar(
+                select(func.count(Notification.id)).where(
+                    Notification.user_pk == int(user_pk),
+                    Notification.is_read.is_(False),
+                )
+            )
+            or 0
+        )
+
+        owned_circle_codes = select(Circle.circle_code).where(Circle.owner_user_pk == int(user_pk))
+        join_row = session.execute(
+            select(
+                func.count(CircleJoinRequest.id),
+                func.max(CircleJoinRequest.id),
+                func.max(CircleJoinRequest.updated_at),
+            ).where(
+                or_(
+                    CircleJoinRequest.user_pk == int(user_pk),
+                    CircleJoinRequest.circle_code.in_(owned_circle_codes),
+                )
+            )
+        ).one()
+
+    notification_updated_at = notification_row[2]
+    join_updated_at = join_row[2]
+    return {
+        "unread_count": unread_count,
+        "notification_count": int(notification_row[0] or 0),
+        "notification_version": (
+            f"{int(notification_row[1] or 0)}:"
+            f"{notification_updated_at.isoformat() if notification_updated_at else ''}"
+        ),
+        "circle_request_count": int(join_row[0] or 0),
+        "circle_request_version": (
+            f"{int(join_row[1] or 0)}:"
+            f"{join_updated_at.isoformat() if join_updated_at else ''}"
+        ),
+    }
+
+
+async def _watch_notification_changes(*, websocket: WebSocket, user_pk: int) -> None:
+    previous_signature = ""
+    initial = True
+    while True:
+        try:
+            state = await asyncio.to_thread(_notification_realtime_state, user_pk=int(user_pk))
+            signature = "|".join(
+                [
+                    str(state["unread_count"]),
+                    str(state["notification_count"]),
+                    str(state["notification_version"]),
+                    str(state["circle_request_count"]),
+                    str(state["circle_request_version"]),
+                ]
+            )
+            if signature != previous_signature:
+                previous_signature = signature
+                await websocket.send_json(
+                    {
+                        "event": "notification.changed",
+                        "data": {
+                            **state,
+                            "initial": initial,
+                        },
+                    }
+                )
+                initial = False
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            pass
+        await asyncio.sleep(1)
 
 IMAGE_CONTENT_TYPE_EXTENSION_MAP = {
     "image/jpeg": ".jpg",
@@ -296,6 +385,9 @@ async def im_websocket(
             },
         }
     )
+    notification_task = asyncio.create_task(
+        _watch_notification_changes(websocket=websocket, user_pk=int(user.id))
+    )
 
     try:
         while True:
@@ -344,6 +436,11 @@ async def im_websocket(
     except WebSocketDisconnect:
         pass
     finally:
+        notification_task.cancel()
+        try:
+            await notification_task
+        except asyncio.CancelledError:
+            pass
         await im_realtime_hub.disconnect(user_pk=int(user.id), websocket=websocket)
         still_online = await im_realtime_hub.is_online(user_pk=int(user.id))
         if not still_online:

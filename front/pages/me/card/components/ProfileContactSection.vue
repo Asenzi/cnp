@@ -136,16 +136,16 @@ const contactRows = computed(() => {
   const hiddenValue = '*******'
   if (showAccessMask.value) {
     return [
-      ['wechat', '微信：', hiddenValue],
-      ['phone', '手机：', hiddenValue],
-      ['email', '邮箱：', hiddenValue]
+      ['微信：', hiddenValue],
+      ['手机：', hiddenValue],
+      ['邮箱：', hiddenValue]
     ]
   }
 
   return [
-    ['wechat', '微信：', String(props.contact?.displayWechat || '').trim() || hiddenValue],
-    ['phone', '手机：', String(props.contact?.displayPhone || '').trim() || hiddenValue],
-    ['email', '邮箱：', String(props.contact?.displayEmail || '').trim() || hiddenValue]
+    ['微信：', String(props.contact?.displayWechat || '').trim() || hiddenValue],
+    ['手机：', String(props.contact?.displayPhone || '').trim() || hiddenValue],
+    ['邮箱：', String(props.contact?.displayEmail || '').trim() || hiddenValue]
   ]
 })
 
@@ -295,51 +295,6 @@ function drawCardAvatar(ctx, x, y, size) {
   ctx.restore()
 }
 
-function drawContactIcon(ctx, type, x, y) {
-  fillRoundRect(ctx, x, y, 16, 16, 3, '#111827')
-  ctx.setStrokeStyle('#FFFFFF')
-  ctx.setLineWidth(1.4)
-
-  if (type === 'wechat') {
-    ctx.beginPath()
-    ctx.arc(x + 7, y + 8, 4.4, 0, Math.PI * 2)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.arc(x + 11, y + 9, 3.6, 0, Math.PI * 2)
-    ctx.stroke()
-    ctx.setFillStyle('#FFFFFF')
-    ctx.beginPath()
-    ctx.arc(x + 6, y + 7.5, 0.8, 0, Math.PI * 2)
-    ctx.arc(x + 8.2, y + 7.5, 0.8, 0, Math.PI * 2)
-    ctx.fill()
-    return
-  }
-
-  if (type === 'phone') {
-    ctx.beginPath()
-    ctx.moveTo(x + 6, y + 4)
-    ctx.lineTo(x + 11, y + 4)
-    ctx.lineTo(x + 11, y + 12)
-    ctx.lineTo(x + 6, y + 12)
-    ctx.closePath()
-    ctx.stroke()
-    return
-  }
-
-  ctx.beginPath()
-  ctx.moveTo(x + 4, y + 5)
-  ctx.lineTo(x + 12, y + 5)
-  ctx.lineTo(x + 12, y + 11)
-  ctx.lineTo(x + 4, y + 11)
-  ctx.closePath()
-  ctx.stroke()
-  ctx.beginPath()
-  ctx.moveTo(x + 4, y + 5)
-  ctx.lineTo(x + 8, y + 8.4)
-  ctx.lineTo(x + 12, y + 5)
-  ctx.stroke()
-}
-
 function drawInlineText(ctx, text, x, centerY, maxWidth, options = {}) {
   const fontSize = Number(options.fontSize || 10)
   const fontWeight = options.fontWeight || 'normal'
@@ -366,19 +321,18 @@ function drawInlineText(ctx, text, x, centerY, maxWidth, options = {}) {
   ctx.fillText(finalText, x, centerY)
 }
 
-function drawContactRow(ctx, type, label, value, x, y, maxWidth) {
-  const iconSize = 16
+function drawContactRow(ctx, label, value, x, y, maxWidth) {
+  const rowHeight = 16
   const fontSize = 10
-  const centerY = y + iconSize / 2
+  const centerY = y + rowHeight / 2
   const labelWidth = 38
-  drawContactIcon(ctx, type, x, y)
-  drawInlineText(ctx, label, x + 24, centerY, labelWidth, {
+  drawInlineText(ctx, label, x, centerY, labelWidth, {
     fontSize,
     fontWeight: '700',
     color: '#172033',
     suffix: ''
   })
-  drawInlineText(ctx, value, x + 24 + labelWidth, centerY, maxWidth - 24 - labelWidth, {
+  drawInlineText(ctx, value, x + labelWidth, centerY, maxWidth - labelWidth, {
     fontSize,
     color: '#172033'
   })
@@ -590,8 +544,8 @@ function drawBusinessCard() {
   })
   drawCardAvatar(ctx, brandX, topY - 10, avatarSize)
 
-  contactRows.value.forEach(([type, label, value], index) => {
-    drawContactRow(ctx, type, label, value, margin, contactStartY + index * 25, leftColumnWidth)
+  contactRows.value.forEach(([label, value], index) => {
+    drawContactRow(ctx, label, value, margin, contactStartY + index * 25, leftColumnWidth)
   })
 
   drawMiniappCode(ctx, qrX, qrY, qrSize)

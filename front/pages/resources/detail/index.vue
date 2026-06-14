@@ -114,14 +114,31 @@
     </scroll-view>
 
     <view v-if="!isSelfPost" class="bottom-nav">
-      <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
-        <image class="btn-icon-image" src="https://cos.cnptec.site/static/icon/share.png" mode="aspectFit" />
-        <text class="btn-label">分享</text>
-      </button>
-      <button class="bottom-btn bottom-btn-primary" hover-class="bottom-btn-hover" @tap="onChat">
-        <image class="btn-icon-image btn-icon-image-primary" src="https://cos.cnptec.site/static/icon/chat-he.png" mode="aspectFit" />
-        <text class="btn-label-primary">联系方式</text>
-      </button>
+      <!-- 未登录时只显示感兴趣按钮 -->
+      <template v-if="!isLoggedIn()">
+        <button class="bottom-btn bottom-btn-single" hover-class="bottom-btn-hover" @tap="onInterestBeforeLogin">
+          <text class="btn-label-primary">感兴趣</text>
+        </button>
+      </template>
+      <!-- 已登录时显示分享、感兴趣和联系方式按钮 -->
+      <template v-else>
+        <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
+          <image class="btn-icon-image" src="https://cos.cnptec.site/static/icon/share.png" mode="aspectFit" />
+          <text class="btn-label">分享</text>
+        </button>
+        <button class="bottom-btn bottom-btn-plain" hover-class="bottom-btn-hover" @tap="onToggleInterestForPost">
+          <image
+            class="btn-icon-image"
+            :src="isPostInterested ? 'https://cos.cnptec.site/static/icon/like.png' : 'https://cos.cnptec.site/static/icon/ulike.png'"
+            mode="aspectFit"
+          />
+          <text class="btn-label">{{ isPostInterested ? '已感兴趣' : '感兴趣' }}</text>
+        </button>
+        <button class="bottom-btn bottom-btn-primary" hover-class="bottom-btn-hover" @tap="onChat">
+          <image class="btn-icon-image btn-icon-image-primary" src="https://cos.cnptec.site/static/icon/chat-he.png" mode="aspectFit" />
+          <text class="btn-label-primary">联系方式</text>
+        </button>
+      </template>
     </view>
 
     <view v-if="cardPopupVisible" class="card-popup-mask" @tap="closeCardPopup">
@@ -187,7 +204,8 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { onLoad, onPullDownRefresh, onShareAppMessage } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh, onShareAppMessage, onShow } from '@dcloudio/uni-app'
+import { toggleUserInterest } from '../../../api/network'
 import { getResourceDetail, reportResourceFeedback, reportResourceView } from '../../../api/post'
 import { getUserProfileById } from '../../../api/user'
 
@@ -195,6 +213,7 @@ const postCode = ref('')
 const post = ref({})
 const loading = ref(false)
 const loadError = ref('')
+const isPostInterested = ref(false) // 当前资源是否已感兴趣
 const cardPopupVisible = ref(false)
 const cardLoading = ref(false)
 const cardProfile = ref({})
@@ -235,6 +254,7 @@ const isSelfPost = computed(() => {
   const selfId = currentUserId.value
   return Boolean(authorId && selfId && authorId === selfId)
 })
+
 const cardSource = computed(() => {
   const profile = cardProfile.value && typeof cardProfile.value === 'object' ? cardProfile.value : {}
   const author = post.value?.author && typeof post.value.author === 'object' ? post.value.author : {}
@@ -420,6 +440,11 @@ const fetchDetail = async () => {
     const data = await getResourceDetail(postCode.value)
     post.value = data || {}
 
+    // 获取感兴趣状态（如果资源数据中有）
+    if (typeof data?.is_interested !== 'undefined') {
+      isPostInterested.value = Boolean(data.is_interested)
+    }
+
     const viewData = await reportResourceView(postCode.value)
     if (typeof viewData?.view_count !== 'undefined') {
       post.value = {
@@ -427,11 +452,24 @@ const fetchDetail = async () => {
         view_count: Number(viewData.view_count || post.value.view_count || 0)
       }
     }
+
+    // 数据加载完成后，检查是否需要执行待处理的感兴趣操作
+    checkAndPerformPendingInterest()
   } catch (err) {
     loadError.value = err?.message || '资源详情加载失败'
     showToast(loadError.value)
   } finally {
     loading.value = false
+  }
+}
+
+const checkAndPerformPendingInterest = () => {
+  const pendingPostCode = uni.getStorageSync('pendingInterestPostCode')
+  const currentPostCode = String(postCode.value || '').trim()
+
+  if (isLoggedIn() && pendingPostCode && pendingPostCode === currentPostCode) {
+    // 登录成功且需要标记感兴趣，并且数据已加载
+    performPendingInterest()
   }
 }
 
@@ -500,6 +538,40 @@ const onChat = async () => {
   await loadCardProfile(targetUserId)
 }
 
+const onInterestBeforeLogin = () => {
+  // 保存当前资源编码，表示登录后需要标记感兴趣
+  const postCode = String(post.value?.post_code || '').trim()
+  if (!postCode) {
+    showToast('资源信息缺失')
+    return
+  }
+
+  // 保存标记
+  uni.setStorageSync('pendingInterestPostCode', postCode)
+
+  // 跳转到登录页
+  uni.navigateTo({
+    url: '/pages/auth/login/index'
+  })
+}
+
+const onToggleInterestForPost = async () => {
+  const targetUserId = authorUserId.value
+  if (!targetUserId) {
+    showToast('作者信息缺失')
+    return
+  }
+
+  try {
+    const result = await toggleUserInterest(targetUserId, !isPostInterested.value)
+    isPostInterested.value = Boolean(result?.is_interested)
+    showToast(isPostInterested.value ? '已标记感兴趣' : '已取消感兴趣')
+  } catch (error) {
+    console.error('Toggle interest failed:', error)
+    showToast('操作失败，请稍后重试')
+  }
+}
+
 const goChatFromCard = () => {
   if (!isLoggedIn()) {
     showToast('\u8bf7\u5148\u767b\u5f55')
@@ -549,6 +621,32 @@ onLoad((query = {}) => {
   }
   fetchDetail()
 })
+
+onShow(() => {
+  // onShow 时不需要检查，因为会在 fetchDetail 完成后检查
+})
+
+const performPendingInterest = async () => {
+  try {
+    const targetUserId = authorUserId.value
+    if (!targetUserId) {
+      showToast('作者信息缺失')
+      uni.removeStorageSync('pendingInterestPostCode')
+      return
+    }
+
+    const result = await toggleUserInterest(targetUserId, true)
+    isPostInterested.value = Boolean(result?.is_interested)
+    showToast('已标记感兴趣')
+    // 清除标记
+    uni.removeStorageSync('pendingInterestPostCode')
+  } catch (error) {
+    console.error('Pending interest failed:', error)
+    showToast('标记失败，请稍后重试')
+    // 即使失败也清除标记，避免重复尝试
+    uni.removeStorageSync('pendingInterestPostCode')
+  }
+}
 
 onPullDownRefresh(async () => {
   await fetchDetail()
@@ -1015,6 +1113,13 @@ onPullDownRefresh(async () => {
   flex: 1;
   background: #2563eb;
   color: #ffffff;
+}
+
+.bottom-btn-single {
+  width: 100%;
+  background: linear-gradient(135deg, #1a57db 0%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.2);
 }
 
 .bottom-btn-hover {

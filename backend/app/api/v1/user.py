@@ -1,5 +1,6 @@
 ﻿import json
 from datetime import UTC, datetime
+from decimal import Decimal
 import re
 from pathlib import Path
 from secrets import token_hex
@@ -543,6 +544,8 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
         "job_title": user.job_title,
         "city_code": user.city_code,
         "city_name": user.city_name,
+        "latitude": float(user.latitude) if user.latitude is not None else None,
+        "longitude": float(user.longitude) if user.longitude is not None else None,
         "card_files": _parse_card_files(user.card_files_json, request),
         "show_contact": bool(user.show_contact),
         "protect_real_name": bool(user.protect_real_name),
@@ -825,6 +828,8 @@ def update_current_user_profile(
     user = _require_current_user(db=db, current_user_pk=user_id)
 
     updates: dict = {}
+    if (payload.latitude is None) != (payload.longitude is None):
+        raise BusinessException(message="经纬度必须同时提交", code=4234, status_code=400)
 
     if payload.nickname is not None:
         normalized_nickname = payload.nickname.strip()
@@ -871,6 +876,12 @@ def update_current_user_profile(
     if payload.city_name is not None:
         updates["city_name"] = _normalize_optional_text(payload.city_name, 32)
 
+    if payload.latitude is not None:
+        updates["latitude"] = Decimal(str(payload.latitude)).quantize(Decimal("0.0000001"))
+
+    if payload.longitude is not None:
+        updates["longitude"] = Decimal(str(payload.longitude)).quantize(Decimal("0.0000001"))
+
     if payload.card_files is not None:
         normalized_files = []
         for item in payload.card_files[:10]:
@@ -903,7 +914,28 @@ def update_current_user_profile(
     if not updates:
         raise BusinessException(message="没有可更新的字段", code=4222, status_code=400)
 
+    coordinate_updates = {
+        field_name: updates.pop(field_name)
+        for field_name in ("latitude", "longitude")
+        if field_name in updates
+    }
+
     try:
+        if coordinate_updates and not updates:
+            user = update_user_profile(db=db, user=user, **coordinate_updates)
+            payload = _serialize_user(user, request, db)
+            payload["_review"] = {
+                "review_required": False,
+                "fee_paid": False,
+                "fee_amount": 0,
+            }
+            return success_response(data=payload, message="保存成功")
+
+        for field_name, field_value in coordinate_updates.items():
+            setattr(user, field_name, field_value)
+        if coordinate_updates:
+            db.add(user)
+
         review_result = submit_profile_update_review(
             db=db,
             user=user,

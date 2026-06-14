@@ -43,20 +43,7 @@
             <text class="empty-desc">去发现页面找找感兴趣的内容吧</text>
           </view>
 
-          <template v-if="activeTab === 'network'">
-            <NetworkMemberCard
-              v-for="(member, index) in items"
-              :key="member.id"
-              :member="member"
-              :show-interest="true"
-              :style="{ animationDelay: `${index * 50}ms` }"
-              class="item-enter"
-              @view="onTapMemberDetail"
-              @interest="onToggleNetworkInterest"
-            />
-          </template>
-
-          <template v-else-if="activeTab === 'resources'">
+          <template v-if="activeTab === 'resources'">
             <ProfilePostCard
               v-for="(post, index) in items"
               :key="post.id"
@@ -101,21 +88,18 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onPullDownRefresh } from '@dcloudio/uni-app'
 import ProfilePostCard from '../card/components/ProfilePostCard.vue'
 import DiscoverListCard from '../../tab/circles/components/DiscoverListCard.vue'
-import NetworkMemberCard from '../../tab/discover/components/NetworkMemberCard.vue'
 import { mapProfilePostItem } from '../card/modules/profile-home-view-model'
-import { getInterestedUsers, toggleUserInterest } from '../../../api/network'
 import { getInterestedResources, toggleResourceInterest } from '../../../api/post'
 import { getInterestedCircles, toggleCircleInterest } from '../../../api/circle'
 
 const PAGE_SIZE = 20
 
 const tabs = [
-  { key: 'network', label: '人脉' },
   { key: 'resources', label: '资源' },
   { key: 'circles', label: '圈子' }
 ]
 
-const activeTab = ref('network')
+const activeTab = ref('resources')
 const items = ref([])
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -159,12 +143,7 @@ const fetchData = async (reset = false) => {
     // 璋冪敤瀹為檯API
     let data
     try {
-      if (activeTab.value === 'network') {
-        data = await getInterestedUsers({
-          cursor: reset ? '' : nextCursor.value,
-          limit: PAGE_SIZE
-        })
-      } else if (activeTab.value === 'resources') {
+      if (activeTab.value === 'resources') {
         data = await getInterestedResources({
           cursor: reset ? '' : nextCursor.value,
           limit: PAGE_SIZE
@@ -241,17 +220,6 @@ const onChangeTab = (key) => {
   fetchData(true)
 }
 
-const onTapMemberDetail = (member) => {
-  const userId = String(member?.userId || member?.user_id || '').trim()
-  if (!userId) {
-    showToast('鐢ㄦ埛ID缂哄け')
-    return
-  }
-  uni.navigateTo({
-    url: `/pages/me/card/index?userId=${encodeURIComponent(userId)}`
-  })
-}
-
 const onTapPostDetail = (post) => {
   const postCode = String(post?.postCode || post?.rawPost?.post_code || post?.post_code || '').trim()
   if (!postCode) {
@@ -261,33 +229,6 @@ const onTapPostDetail = (post) => {
   uni.navigateTo({
     url: `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode)}`
   })
-}
-
-const onToggleNetworkInterest = async (member) => {
-  const userId = String(member?.userId || member?.user_id || '').trim()
-  if (!userId) {
-    return
-  }
-
-  // 乐观更新：从列表移除
-  const targetIndex = items.value.findIndex((item) =>
-    (item.userId || item.user_id) === userId
-  )
-
-  if (targetIndex >= 0) {
-    const removedItem = items.value[targetIndex]
-    items.value.splice(targetIndex, 1)
-
-    try {
-      await toggleUserInterest(userId)
-      showToast('已取消感兴趣')
-    } catch (err) {
-      // 失败时恢复
-      items.value.splice(targetIndex, 0, removedItem)
-      const message = err?.message || '操作失败，请稍后重试'
-      showToast(message)
-    }
-  }
 }
 
 const onTogglePostInterest = async (post) => {
@@ -306,7 +247,7 @@ const onTogglePostInterest = async (post) => {
     items.value.splice(targetIndex, 1)
 
     try {
-      await toggleResourceInterest(postCode)
+      await toggleResourceInterest(postCode, false)
       showToast('已取消感兴趣')
     } catch (err) {
       // 失败时恢复
@@ -331,7 +272,7 @@ const onToggleCircleInterest = async (circle) => {
     items.value.splice(targetIndex, 1)
 
     try {
-      await toggleCircleInterest(circleCode)
+      await toggleCircleInterest(circleCode, false)
       showToast('已取消感兴趣')
     } catch (err) {
       // 失败时恢复

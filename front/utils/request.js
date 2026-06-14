@@ -219,7 +219,6 @@ function writeApiDebugRecord(stage, payload = {}) {
     // Ignore storage write failures during debugging.
   }
 
-  console.warn('[API DEBUG]', record)
   return record
 }
 

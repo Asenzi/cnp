@@ -128,7 +128,7 @@ const SPARSE_FIRST_PAGE_THRESHOLD = 3
 const LOCATION_HISTORY_STORAGE_KEY = 'network_location_history_v1'
 const LOCATION_HISTORY_LIMIT = 8
 const LOCATION_PAGE_RESULT_STORAGE_KEY = 'discover_location_page_result_v1'
-const RECOMMENDATION_CACHE_STORAGE_KEY = 'discover_recommendation_cache_v1'
+const RECOMMENDATION_CACHE_STORAGE_KEY = 'discover_recommendation_cache_v2'
 const RECOMMENDATION_CACHE_TTL_MS = 60 * 1000
 const RECOMMENDATION_CACHE_MAX_ENTRIES = 12
 const FILTER_OPTIONS_CACHE_STORAGE_KEY = 'discover_filter_options_cache_v1'
@@ -880,6 +880,7 @@ const mapMemberCard = (item = {}) => {
     verifyType: Boolean(item.is_verified) ? 'lv1' : '',
     verifyText: Boolean(item.is_verified) ? uiText.verifyLv1 : '',
     detailLine: joinNonEmpty(industryLabel, jobTitle) || industryLabel || cityName || uiText.defaultRole,
+    distanceText: String(item.distance_text || '').trim(),
     memberEnabled: resolveMemberEnabled(item),
     circleTags: visibleCircleTags,
     reasonTags,
@@ -1376,6 +1377,18 @@ const onFollowMember = async (member) => {
   }
 }
 
+const performPendingFollow = async (targetUserId) => {
+  try {
+    await toggleUserFollow(targetUserId, true)
+    showToast('关注成功')
+    // 清除标记
+    uni.removeStorageSync('pendingFollowUserId')
+  } catch (error) {
+    console.error('Pending follow failed:', error)
+    showToast('关注失败，请稍后重试')
+  }
+}
+
 const onGoVerify = () => {
   if (!ensureLoggedIn()) {
     return
@@ -1485,6 +1498,14 @@ onShow(() => {
     hasShownOnce = true
     return
   }
+
+  // 检查是否有待关注的用户
+  const pendingFollowUserId = uni.getStorageSync('pendingFollowUserId')
+  if (pendingFollowUserId) {
+    // 执行关注操作
+    performPendingFollow(pendingFollowUserId)
+  }
+
   consumePendingLocationResult()
   // 页面重新显示时，如果有数据则刷新以获取最新的关注状态
   if (members.value.length > 0) {

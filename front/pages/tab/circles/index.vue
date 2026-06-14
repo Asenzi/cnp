@@ -109,6 +109,12 @@ import {
   saveCurrentCity,
   saveLocationFilterCache
 } from '../discover/modules/location'
+import {
+  consumeLatestCircleInterestChange,
+  publishCircleInterestChange,
+  subscribeCircleInterestChange,
+  unsubscribeCircleInterestChange
+} from '../../../utils/circle-interest'
 
 const PAGE_SIZE = 20
 const FIRST_PAGE_HISTORY_STORAGE_KEY = 'circle_first_page_history_v1'
@@ -168,6 +174,7 @@ const currentRequestId = ref(0) // 请求ID，用于取消过期请求
 // 暂时隐藏城市定位筛选入口，但保留相关状态和逻辑，便于后续恢复
 const showLocationFilter = false
 let searchTimer = null
+const interestSubmittingCodes = new Set()
 
 const topTabs = [
   { key: 'recommend', label: texts.recommend }
@@ -449,8 +456,30 @@ const mapCircleCard = (item = {}, index = 0) => {
     coverImage: sanitizeCircleImage(item.avatar_url || item.cover_url || ''),
     ownerName: String(item.owner_nickname || '').trim(),
     ownerAvatar: String(item.owner_avatar_url || '').trim(),
-    ownerVerified: Boolean(item.owner_is_verified)
+    ownerVerified: Boolean(item.owner_is_verified),
+    interested: Boolean(item.is_interested ?? item.interested),
+    isInterested: Boolean(item.is_interested ?? item.interested),
+    is_interested: Boolean(item.is_interested ?? item.interested)
   }
+}
+
+const applyCircleInterestChange = (payload) => {
+  const circleCode = String(payload?.circleCode || '').trim()
+  if (!circleCode) {
+    return
+  }
+  const interested = Boolean(payload?.interested)
+  circles.value = circles.value.map((item) => {
+    if (String(item?.circleCode || '').trim() !== circleCode) {
+      return item
+    }
+    return {
+      ...item,
+      interested,
+      isInterested: interested,
+      is_interested: interested
+    }
+  })
 }
 
 const fetchCircles = async (reset = false) => {
@@ -687,9 +716,10 @@ const onToggleInterest = async (circle) => {
   }
 
   const circleCode = String(circle?.circleCode || '').trim()
-  if (!circleCode) {
+  if (!circleCode || interestSubmittingCodes.has(circleCode)) {
     return
   }
+  interestSubmittingCodes.add(circleCode)
 
   const wasInterested = Boolean(
     circle?.interested ||
@@ -712,10 +742,13 @@ const onToggleInterest = async (circle) => {
   }
 
   try {
-    await toggleCircleInterest(circleCode)
+    const result = await toggleCircleInterest(circleCode, !wasInterested)
+    const nextInterested = Boolean(result?.is_interested ?? result?.interested)
+    applyCircleInterestChange({ circleCode, interested: nextInterested })
+    publishCircleInterestChange(circleCode, nextInterested)
 
     uni.showToast({
-      title: wasInterested ? '已取消感兴趣' : '已标记感兴趣',
+      title: nextInterested ? '已标记感兴趣' : '已取消感兴趣',
       icon: 'none'
     })
   } catch (err) {
@@ -734,6 +767,8 @@ const onToggleInterest = async (circle) => {
       title: message,
       icon: 'none'
     })
+  } finally {
+    interestSubmittingCodes.delete(circleCode)
   }
 }
 
@@ -784,6 +819,7 @@ const stopKeywordWatch = watch(keyword, () => {
 
 onMounted(async () => {
   isPageAlive.value = true
+  subscribeCircleInterestChange(applyCircleInterestChange)
   hasPromptedLogin.value = false
   firstPageHistoryByContext.value = loadStoredFirstPageHistory()
   if (!hasInitialLocationCache) {
@@ -794,6 +830,7 @@ onMounted(async () => {
 
 onShow(() => {
   isPageAlive.value = true
+  applyCircleInterestChange(consumeLatestCircleInterestChange())
   if (!hasShownOnce) {
     hasShownOnce = true
     return
@@ -807,6 +844,7 @@ onPullDownRefresh(async () => {
 
 onUnmounted(() => {
   isPageAlive.value = false
+  unsubscribeCircleInterestChange(applyCircleInterestChange)
 
   // 停止 watch
   if (stopKeywordWatch) {

@@ -119,6 +119,25 @@
               <image class="arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
             </view>
           </view>
+
+          <view class="field">
+            <text class="label">位置坐标</text>
+            <view class="location-field">
+              <view class="location-content">
+                <text class="location-value" :class="{ 'location-placeholder': !hasCoordinates }">
+                  {{ coordinateDisplayText }}
+                </text>
+              </view>
+              <button
+                class="location-btn"
+                :disabled="locating"
+                hover-class="location-btn-active"
+                @tap="onGetLocation"
+              >
+                {{ locating ? '定位中' : '获取定位' }}
+              </button>
+            </view>
+          </view>
         </view>
 
         <!-- 联系方式 -->
@@ -126,10 +145,6 @@
           <view class="section-header">
             <view class="section-line"></view>
             <text class="section-title">联系方式</text>
-          </view>
-
-          <view class="notice">
-            <text class="notice-text">完善联系方式并完成实名认证后,开通会员或购买人群包,才可查看别人的联系方式</text>
           </view>
 
           <view class="field">
@@ -197,6 +212,7 @@ const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 const loading = ref(false)
 const saving = ref(false)
 const uploadingAvatar = ref(false)
+const locating = ref(false)
 const hasSelectedNewAvatar = ref(false) // 标记是否选择了新头像
 
 const avatarUrl = ref(DEFAULT_AVATAR)
@@ -207,6 +223,8 @@ const jobTitle = ref('')
 const displayPhone = ref('')
 const displayWechat = ref('')
 const email = ref('')
+const latitude = ref(null)
+const longitude = ref(null)
 const DISPLAY_PHONE_REGEX = /^1\d{10}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -262,6 +280,26 @@ const cityDisplayText = computed(() => {
   return `${currentProvince.value.label} / ${currentSelectedCity.value.label}`
 })
 
+const normalizeCoordinate = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+  const coordinate = Number(value)
+  return Number.isFinite(coordinate) ? coordinate : null
+}
+
+const hasCoordinates = computed(() => (
+  normalizeCoordinate(latitude.value) !== null
+  && normalizeCoordinate(longitude.value) !== null
+))
+
+const coordinateDisplayText = computed(() => {
+  if (!hasCoordinates.value) {
+    return '暂未获取经纬度'
+  }
+  return `纬度 ${Number(latitude.value).toFixed(7)}\n经度 ${Number(longitude.value).toFixed(7)}`
+})
+
 const showToast = (title) => {
   uni.showToast({
     title,
@@ -307,6 +345,60 @@ const onCityColumnChange = (event) => {
   }
   if (changedColumn === 1) {
     syncCityIndex(changedValue)
+  }
+}
+
+const onGetLocation = async () => {
+  if (locating.value) {
+    return
+  }
+
+  locating.value = true
+  try {
+    const location = await new Promise((resolve, reject) => {
+      uni.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
+        highAccuracyExpireTime: 5000,
+        success: resolve,
+        fail: reject
+      })
+    })
+    const nextLatitude = Number(location?.latitude)
+    const nextLongitude = Number(location?.longitude)
+    if (
+      !Number.isFinite(nextLatitude)
+      || !Number.isFinite(nextLongitude)
+      || nextLatitude < -90
+      || nextLatitude > 90
+      || nextLongitude < -180
+      || nextLongitude > 180
+    ) {
+      throw new Error('定位结果无效')
+    }
+
+    latitude.value = Number(nextLatitude.toFixed(7))
+    longitude.value = Number(nextLongitude.toFixed(7))
+    showToast('定位成功，请点击保存修改')
+  } catch (error) {
+    const message = String(error?.errMsg || error?.message || '').toLowerCase()
+    const denied = message.includes('auth deny') || message.includes('permission')
+    if (denied) {
+      uni.showModal({
+        title: '需要定位权限',
+        content: '请在小程序设置中允许使用位置信息后重试',
+        confirmText: '去设置',
+        success: (result) => {
+          if (result.confirm) {
+            uni.openSetting()
+          }
+        }
+      })
+    } else {
+      showToast(error?.message || '定位失败，请稍后重试')
+    }
+  } finally {
+    locating.value = false
   }
 }
 
@@ -360,6 +452,8 @@ const applyProfile = (profile = {}) => {
   displayPhone.value = typeof profile?.display_phone === 'string' ? profile.display_phone : ''
   displayWechat.value = typeof profile?.display_wechat === 'string' ? profile.display_wechat : ''
   email.value = typeof profile?.email === 'string' ? profile.email : ''
+  latitude.value = normalizeCoordinate(profile?.latitude)
+  longitude.value = normalizeCoordinate(profile?.longitude)
 
   const code = typeof profile?.industry_code === 'string' ? profile.industry_code.trim() : ''
   const label = typeof profile?.industry_label === 'string' ? profile.industry_label.trim() : ''
@@ -558,6 +652,8 @@ const onSave = async () => {
         normalizedDisplayPhone !== (currentProfile.display_phone || '') ||
         normalizedDisplayWechat !== (currentProfile.display_wechat || '') ||
         normalizedEmail !== (currentProfile.email || '') ||
+        normalizeCoordinate(latitude.value) !== normalizeCoordinate(currentProfile.latitude) ||
+        normalizeCoordinate(longitude.value) !== normalizeCoordinate(currentProfile.longitude) ||
         (selectedIndustry.value && selectedIndustry.value !== (currentProfile.industry_code || '')) ||
         (selectedCity?.value && selectedCity.value !== (currentProfile.city_code || ''))
 
@@ -585,7 +681,9 @@ const onSave = async () => {
       display_wechat: normalizedDisplayWechat || null,
       email: normalizedEmail || null,
       city_code: selectedCity?.value || null,
-      city_name: selectedCity?.label || null
+      city_name: selectedCity?.label || null,
+      latitude: hasCoordinates.value ? Number(latitude.value) : null,
+      longitude: hasCoordinates.value ? Number(longitude.value) : null
     }
 
     console.log('提交的数据:', JSON.stringify(payload, null, 2))
@@ -849,6 +947,73 @@ onShow(() => {
 
 .picker-placeholder {
   color: #98a5b8;
+}
+
+.location-field {
+  min-height: 112rpx;
+  padding: 18rpx 18rpx 18rpx 24rpx;
+  border: 1rpx solid #e7ecf3;
+  border-radius: 12rpx;
+  background: #f6f8fc;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.location-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.location-value,
+.location-tip {
+  display: block;
+}
+
+.location-value {
+  color: #172033;
+  font-size: 25rpx;
+  line-height: 44rpx;
+  word-break: break-all;
+  white-space: pre-line;
+}
+
+.location-placeholder {
+  color: #98a5b8;
+}
+
+.location-tip {
+  margin-top: 6rpx;
+  color: #98a5b8;
+  font-size: 20rpx;
+  line-height: 28rpx;
+}
+
+.location-btn {
+  flex-shrink: 0;
+  height: 60rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  border: 0;
+  border-radius: 30rpx;
+  background: #e8f0ff;
+  color: #2563eb;
+  font-size: 23rpx;
+  line-height: 60rpx;
+  font-weight: 500;
+}
+
+.location-btn::after {
+  border: 0;
+}
+
+.location-btn[disabled] {
+  opacity: 0.6;
+}
+
+.location-btn-active {
+  opacity: 0.76;
 }
 
 .arrow {

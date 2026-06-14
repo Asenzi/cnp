@@ -15,12 +15,11 @@
           <text class="circle-title">{{ circle.title }}</text>
           <view
             class="interest-action"
-            :class="{ 'interest-action-active': isInterested }"
-            hover-class="interest-action-hover"
+            :class="{ 'interest-active': isInterested }"
+            hover-class="interest-hover"
             @tap.stop="$emit('interest', circle)"
           >
             <text class="interest-icon">{{ isInterested ? '♥' : '♡' }}</text>
-            <text class="interest-text">{{ isInterested ? '已感兴趣' : '感兴趣' }}</text>
           </view>
         </view>
 
@@ -225,43 +224,33 @@ const openCircle = () => {
 
 .interest-action {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 6rpx 12rpx;
-  border-radius: 999rpx;
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 12rpx;
   background: #f8fafc;
   border: 1rpx solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.interest-action-hover {
+.interest-hover {
   background: #f1f5f9;
 }
 
-.interest-action-active {
-  background: rgba(239, 68, 68, 0.06);
-  border-color: rgba(239, 68, 68, 0.15);
+.interest-active {
+  background: rgba(236, 72, 153, 0.08);
+  border-color: rgba(236, 72, 153, 0.2);
 }
 
 .interest-icon {
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1;
   color: #94a3b8;
 }
 
-.interest-action-active .interest-icon {
-  color: #ef4444;
-}
-
-.interest-text {
-  color: #64748b;
-  font-size: 20rpx;
-  line-height: 1.3;
-  font-weight: 500;
-}
-
-.interest-action-active .interest-text {
-  color: #ef4444;
+.interest-active .interest-icon {
+  color: #ec4899;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -308,16 +297,17 @@ const openCircle = () => {
   }
 
   .interest-action {
-    background: #111827;
+    background: #1e293b;
     border-color: #334155;
   }
 
-  .interest-action-hover {
-    background: #1f2937;
+  .interest-hover {
+    background: #334155;
   }
 
-  .interest-text {
-    color: #cbd5e1;
+  .interest-active {
+    background: rgba(236, 72, 153, 0.14);
+    border-color: rgba(236, 72, 153, 0.28);
   }
 }
 </style>

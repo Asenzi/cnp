@@ -48,8 +48,15 @@
       </view>
     </view>
 
+    <!-- 未登录时显示固定的感兴趣按钮 -->
+    <view v-if="!isLoggedIn()" class="login-action-bar">
+      <button class="login-interest-btn" hover-class="login-interest-btn-active" @tap="onInterestBeforeLogin">
+        感兴趣
+      </button>
+    </view>
+
     <CircleBottomBar
-      v-if="!isOwner && !isJoined"
+      v-else-if="!isOwner && !isJoined"
       :price="detail.price"
       :interested="isInterested"
       :action-text="joinActionText"
@@ -81,6 +88,7 @@ import CircleMemberCard from './components/CircleMemberCard.vue'
 import VenueEventCard from '../../tab/resources/components/VenueEventCard.vue'
 import { mapProfilePostItem } from '../../me/card/modules/profile-home-view-model'
 import { circleDetailData, detailTabs } from './modules/detail-data'
+import { publishCircleInterestChange } from '../../../utils/circle-interest'
 
 const detail = ref(circleDetailData)
 const tabs = detailTabs
@@ -90,6 +98,7 @@ const circleCode = ref('')
 const currentUserId = ref('')
 const shouldRefreshOnShow = ref(false)
 const joinSubmitting = ref(false)
+const interestSubmitting = ref(false)
 
 const activeTabIndex = ref(0)
 
@@ -136,6 +145,25 @@ const showToast = (title) => {
     title,
     icon: 'none'
   })
+}
+
+const wait = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
+
+const requestWithGatewayRetry = async (requestFn, maxRetries = 2) => {
+  let lastError = null
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await requestFn()
+    } catch (error) {
+      lastError = error
+      const statusCode = Number(error?.statusCode || 0)
+      if (![502, 503].includes(statusCode) || attempt >= maxRetries) {
+        throw error
+      }
+      await wait(400 * (attempt + 1))
+    }
+  }
+  throw lastError
 }
 
 const isLoggedIn = () => {
@@ -228,7 +256,7 @@ const applyServerDetail = (serverDetail) => {
 
 const loadCircleDetail = async (circleCode) => {
   try {
-    const serverDetail = await getCircleDetail(circleCode)
+    const serverDetail = await requestWithGatewayRetry(() => getCircleDetail(circleCode))
     applyServerDetail(serverDetail)
   } catch (err) {
     showToast(err?.message || '圈子详情加载失败')
@@ -237,7 +265,7 @@ const loadCircleDetail = async (circleCode) => {
 
 const loadCirclePosts = async (circleCode) => {
   try {
-    const payload = await getCirclePosts(circleCode, { limit: 50 })
+    const payload = await requestWithGatewayRetry(() => getCirclePosts(circleCode, { limit: 50 }))
     allPosts.value = Array.isArray(payload?.items) ? payload.items : []
   } catch (err) {
     allPosts.value = []
@@ -247,7 +275,7 @@ const loadCirclePosts = async (circleCode) => {
 
 const loadCircleMembers = async (circleCode) => {
   try {
-    const payload = await getCircleMembers(circleCode, { offset: 0, limit: 50 })
+    const payload = await requestWithGatewayRetry(() => getCircleMembers(circleCode, { offset: 0, limit: 50 }))
     members.value = Array.isArray(payload?.items) ? payload.items : []
   } catch (err) {
     members.value = []
@@ -268,6 +296,16 @@ onLoad((options = {}) => {
 
 onShow(() => {
   currentUserId.value = resolveCurrentUserId()
+
+  // 检查是否有待标记感兴趣的圈子
+  const pendingCircleCode = uni.getStorageSync('pendingInterestCircleCode')
+  const currentCircleCode = String(circleCode.value || '').trim()
+
+  if (isLoggedIn() && pendingCircleCode && pendingCircleCode === currentCircleCode) {
+    // 登录成功且需要标记感兴趣
+    performPendingInterest()
+  }
+
   if (!shouldRefreshOnShow.value || !circleCode.value) {
     return
   }
@@ -276,6 +314,32 @@ onShow(() => {
   loadCirclePosts(circleCode.value)
   loadCircleMembers(circleCode.value)
 })
+
+const performPendingInterest = async () => {
+  try {
+    const code = String(circleCode.value || '').trim()
+    if (!code) {
+      uni.removeStorageSync('pendingInterestCircleCode')
+      return
+    }
+
+    const result = await toggleCircleInterest(code, true)
+    const nextInterested = Boolean(result?.is_interested ?? result?.interested)
+    detail.value = {
+      ...detail.value,
+      isInterested: nextInterested
+    }
+    publishCircleInterestChange(code, nextInterested)
+    showToast('已标记感兴趣')
+    // 清除标记
+    uni.removeStorageSync('pendingInterestCircleCode')
+  } catch (error) {
+    console.error('Pending interest failed:', error)
+    showToast('标记失败，请稍后重试')
+    // 即使失败也清除标记，避免重复尝试
+    uni.removeStorageSync('pendingInterestCircleCode')
+  }
+}
 
 onShareAppMessage(() => {
   const title = String(detail.value?.title || '圈子详情').trim()
@@ -340,16 +404,49 @@ const onToggleInterest = async () => {
     showToast('\u8bf7\u5148\u767b\u5f55')
     return
   }
+  if (interestSubmitting.value) {
+    return
+  }
+
+  const code = String(circleCode.value || '').trim()
+  if (!code) {
+    showToast('圈子信息缺失')
+    return
+  }
+
+  const desired = !isInterested.value
+  interestSubmitting.value = true
   try {
-    const result = await toggleCircleInterest(circleCode.value)
+    const result = await toggleCircleInterest(code, desired)
+    const nextInterested = Boolean(result?.is_interested ?? result?.interested)
     detail.value = {
       ...detail.value,
-      isInterested: Boolean(result?.is_interested ?? result?.interested)
+      isInterested: nextInterested
     }
+    publishCircleInterestChange(code, nextInterested)
     showToast(detail.value.isInterested ? '已标记感兴趣' : '已取消感兴趣')
   } catch (err) {
     showToast(err?.message || '操作失败')
+  } finally {
+    interestSubmitting.value = false
   }
+}
+
+const onInterestBeforeLogin = () => {
+  // 保存当前圈子编码，表示登录后需要标记感兴趣
+  const code = String(circleCode.value || '').trim()
+  if (!code) {
+    showToast('圈子信息缺失')
+    return
+  }
+
+  // 保存标记
+  uni.setStorageSync('pendingInterestCircleCode', code)
+
+  // 跳转到登录页
+  uni.navigateTo({
+    url: '/pages/auth/login/index'
+  })
 }
 
 const invokeJoinPayment = async (result) => {
@@ -509,6 +606,44 @@ const onEditCircle = () => {
   line-height: 36rpx;
 }
 
+.login-action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  padding: 16rpx 32rpx;
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 20%, #ffffff 100%);
+  backdrop-filter: blur(10rpx);
+}
+
+.login-interest-btn {
+  width: 100%;
+  height: 88rpx;
+  background: linear-gradient(135deg, #1a57db 0%, #2563eb 100%);
+  border-radius: 44rpx;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.2);
+}
+
+.login-interest-btn::after {
+  border: 0;
+}
+
+.login-interest-btn-active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
 @media (prefers-color-scheme: dark) {
   .detail-page {
     background: #111827;
@@ -524,6 +659,15 @@ const onEditCircle = () => {
 
   .empty-text {
     color: #6b7280;
+  }
+
+  .login-action-bar {
+    background: linear-gradient(180deg, rgba(17, 22, 33, 0) 0%, rgba(17, 22, 33, 0.95) 20%, #111621 100%);
+  }
+
+  .login-interest-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
   }
 }
 </style>

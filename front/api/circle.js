@@ -191,10 +191,11 @@ export function uploadCircleAvatar(filePath, fileName = 'circle-avatar') {
   return uploadCircleImage(filePath, fileName)
 }
 
-export function toggleCircleInterest(circleCode) {
+export function toggleCircleInterest(circleCode, desired) {
   const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  const query = typeof desired === 'boolean' ? `?desired=${desired}` : ''
   return request({
-    url: `/api/v1/circle/${safeCode}/interest/toggle`,
+    url: `/api/v1/circle/${safeCode}/interest/toggle${query}`,
     method: 'POST'
   })
 }

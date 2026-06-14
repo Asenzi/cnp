@@ -69,6 +69,7 @@ const isInterested = computed(() => {
     props.item?.interested ||
     props.item?.isInterested ||
     props.item?.is_interested ||
+    props.item?.liked ||
     props.item?.followed ||
     props.item?.isFollowed ||
     props.item?.is_followed
@@ -153,8 +154,8 @@ const isInterested = computed(() => {
 }
 
 .interest-active {
-  background: rgba(239, 68, 68, 0.06);
-  border-color: rgba(239, 68, 68, 0.15);
+  background: rgba(236, 72, 153, 0.08);
+  border-color: rgba(236, 72, 153, 0.2);
 }
 
 .interest-icon {
@@ -164,7 +165,7 @@ const isInterested = computed(() => {
 }
 
 .interest-active .interest-icon {
-  color: #ef4444;
+  color: #ec4899;
 }
 
 .resource-title {
@@ -299,8 +300,8 @@ const isInterested = computed(() => {
   }
 
   .interest-active {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.2);
+    background: rgba(236, 72, 153, 0.14);
+    border-color: rgba(236, 72, 153, 0.28);
   }
 
   .resource-title {

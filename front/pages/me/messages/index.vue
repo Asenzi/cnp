@@ -123,10 +123,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { cancelCircleJoinRequest, getCircleJoinRequests, reviewCircleJoinRequest } from '../../../api/circle'
 import { getSystemNotifications, markNotificationAsRead } from '../../../api/notification'
+import { connectRealtimeSocket, subscribeRealtime } from '../../../utils/realtime'
 
 // 获取状态栏高度
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
@@ -136,6 +137,7 @@ const loading = ref(false)
 const activeTab = ref('circle')
 const circleList = ref([])
 const systemList = ref([])
+let realtimeRefreshTimer = null
 
 // 选项卡配置
 const tabs = computed(() => [
@@ -277,6 +279,23 @@ const loadData = async () => {
     loading.value = false
   }
 }
+
+const scheduleRealtimeRefresh = () => {
+  if (realtimeRefreshTimer) return
+  realtimeRefreshTimer = setTimeout(async () => {
+    realtimeRefreshTimer = null
+    await Promise.all([
+      loadCircleRequests(),
+      loadSystemNotifications()
+    ])
+  }, 250)
+}
+
+const unsubscribeRealtime = subscribeRealtime((payload) => {
+  if (payload?.event === 'notification.changed') {
+    scheduleRealtimeRefresh()
+  }
+})
 
 // 加载圈子申请
 const loadCircleRequests = async () => {
@@ -477,7 +496,16 @@ const goBack = () => {
 }
 
 onShow(() => {
+  connectRealtimeSocket()
   loadData()
+})
+
+onUnmounted(() => {
+  unsubscribeRealtime()
+  if (realtimeRefreshTimer) {
+    clearTimeout(realtimeRefreshTimer)
+    realtimeRefreshTimer = null
+  }
 })
 </script>
 

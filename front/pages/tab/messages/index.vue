@@ -355,7 +355,9 @@ const startSocket = () => {
   closeSocket()
   const wsUrl = `${getImWebSocketUrl()}?token=${encodeURIComponent(token)}`
   const task = uni.connectSocket({
-    url: wsUrl
+    url: wsUrl,
+    success: () => {},
+    fail: () => {}
   })
   socketTask.value = task
 

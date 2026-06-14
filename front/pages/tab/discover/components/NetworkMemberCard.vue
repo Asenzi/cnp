@@ -33,6 +33,7 @@
           </text>
         </view>
         <text class="detail-text">{{ member.detailLine }}</text>
+        <text v-if="member.distanceText" class="distance-text">{{ member.distanceText }}</text>
         <text v-if="member.postCount && member.postCount > 0" class="post-count-line">已发布 {{ member.postCount }}</text>
       </view>
 
@@ -248,6 +249,15 @@ defineEmits(['view', 'verify', 'follow'])
   line-height: 28rpx;
 }
 
+.distance-text {
+  display: block;
+  margin-bottom: 6rpx;
+  color: #2563eb;
+  font-size: 22rpx;
+  line-height: 28rpx;
+  font-weight: 500;
+}
+
 .follow-btn-header {
   position: absolute;
   top: 0;
@@ -419,6 +429,10 @@ defineEmits(['view', 'verify', 'follow'])
 
   .post-count-line {
     color: #64748b;
+  }
+
+  .distance-text {
+    color: #60a5fa;
   }
 
   .detail-text {

@@ -264,10 +264,11 @@ export function uploadResourceImage(filePath, fileName = 'resource-image') {
   })
 }
 
-export function toggleResourceInterest(postCode) {
+export function toggleResourceInterest(postCode, desired) {
   const safeCode = encodeURIComponent(String(postCode || '').trim())
+  const query = typeof desired === 'boolean' ? `?desired=${desired}` : ''
   return request({
-    url: `/api/v1/post/${safeCode}/interest/toggle`,
+    url: `/api/v1/post/${safeCode}/interest/toggle${query}`,
     method: 'POST'
   })
 }

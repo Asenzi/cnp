@@ -20,6 +20,8 @@ class UpdateCurrentUserProfileRequest(BaseModel):
     email: str | None = Field(default=None, max_length=100)
     city_code: str | None = Field(default=None, max_length=16)
     city_name: str | None = Field(default=None, max_length=32)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     card_files: list[CardFileItem] | None = None
     show_contact: bool | None = None
 

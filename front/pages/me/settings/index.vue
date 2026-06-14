@@ -94,6 +94,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { disconnectRealtimeSocket } from '../../../utils/realtime'
 
 const cacheSizeText = ref('24MB')
 
@@ -151,6 +152,7 @@ const showToast = (title) => {
 }
 
 const clearLoginState = () => {
+  disconnectRealtimeSocket()
   uni.removeStorageSync('token')
   uni.removeStorageSync('isLoggedIn')
   uni.removeStorageSync('userInfo')

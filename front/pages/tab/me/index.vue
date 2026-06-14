@@ -95,10 +95,15 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getCurrentUserProfile } from '../../../api/user'
 import { getUnreadNotificationCount } from '../../../api/notification'
+import {
+  connectRealtimeSocket,
+  disconnectRealtimeSocket,
+  subscribeRealtime
+} from '../../../utils/realtime'
 import { serviceList, settingList } from './modules/me-data'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
@@ -120,7 +125,11 @@ const isVerified = computed(() => {
 
 const visibleServiceList = computed(() => {
   return serviceList
-    .filter((item) => item.key !== 'auth' || !isVerified.value)
+    .filter((item) => {
+      if (item.key === 'auth') return !isVerified.value
+      if (item.key === 'member_center') return isMemberOpened.value
+      return true
+    })
     .map((item) => {
       if (item.key !== 'create_circle') {
         return item
@@ -245,6 +254,7 @@ const showMemberCenter = computed(() => {
 let walletNavigating = false
 
 const clearLoginState = () => {
+  disconnectRealtimeSocket()
   uni.removeStorageSync('token')
   uni.removeStorageSync('isLoggedIn')
   uni.removeStorageSync('userInfo')
@@ -401,13 +411,30 @@ const loadUnreadMessageCount = async () => {
   }
 }
 
+const handleRealtimeEvent = (payload) => {
+  if (payload?.event !== 'notification.changed') return
+  const count = Number(payload?.data?.unread_count)
+  if (Number.isFinite(count) && count >= 0) {
+    unreadMessageCount.value = count
+    return
+  }
+  loadUnreadMessageCount()
+}
+
+const unsubscribeRealtime = subscribeRealtime(handleRealtimeEvent)
+
 syncLoginState()
 
 onShow(() => {
   syncLoginState()
   if (isLoggedIn.value) {
+    connectRealtimeSocket()
     refreshUserProfileFromServer()
   }
+})
+
+onUnmounted(() => {
+  unsubscribeRealtime()
 })
 </script>
 

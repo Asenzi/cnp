@@ -182,6 +182,7 @@ const isPageAlive = ref(true) // 页面生命周期标记
 const loginRedirectTimer = ref(null) // 登录跳转定时器
 const currentRequestId = ref(0) // 请求ID，用于取消过期请求
 const reportedImpressionKeys = ref(new Set())
+const interestSubmittingCodes = new Set()
 // 暂时隐藏城市定位筛选入口，但保留相关状态和逻辑，便于后续恢复
 const showLocationFilter = false
 
@@ -609,9 +610,10 @@ const onToggleInterest = async (post) => {
   }
 
   const postCode = String(post?.postCode || post?.rawPost?.post_code || post?.post_code || '').trim()
-  if (!postCode) {
+  if (!postCode || interestSubmittingCodes.has(postCode)) {
     return
   }
+  interestSubmittingCodes.add(postCode)
 
   const wasInterested = Boolean(
     post?.interested ||
@@ -620,6 +622,8 @@ const onToggleInterest = async (post) => {
     post?.rawPost?.interested ||
     post?.rawPost?.isInterested ||
     post?.rawPost?.is_interested ||
+    post?.liked ||
+    post?.rawPost?.liked ||
     post?.followed ||
     post?.isFollowed ||
     post?.is_followed
@@ -633,16 +637,27 @@ const onToggleInterest = async (post) => {
       ...posts.value[targetIndex],
       interested: !wasInterested,
       isInterested: !wasInterested,
-      is_interested: !wasInterested
+      is_interested: !wasInterested,
+      liked: !wasInterested
     }
   }
 
   try {
-    await toggleResourceInterest(postCode)
-    reportFeedFeedback(postCode, wasInterested ? 'cancel_interest' : 'interest', { source: 'resource_feed' })
+    const result = await toggleResourceInterest(postCode, !wasInterested)
+    const nextInterested = Boolean(result?.is_interested ?? result?.interested ?? result?.liked)
+    if (targetIndex >= 0) {
+      posts.value[targetIndex] = {
+        ...posts.value[targetIndex],
+        interested: nextInterested,
+        isInterested: nextInterested,
+        is_interested: nextInterested,
+        liked: nextInterested
+      }
+    }
+    reportFeedFeedback(postCode, nextInterested ? 'interest' : 'cancel_interest', { source: 'resource_feed' })
 
     uni.showToast({
-      title: wasInterested ? '已取消感兴趣' : '已标记感兴趣',
+      title: nextInterested ? '已标记感兴趣' : '已取消感兴趣',
       icon: 'none'
     })
   } catch (err) {
@@ -652,7 +667,8 @@ const onToggleInterest = async (post) => {
         ...posts.value[targetIndex],
         interested: wasInterested,
         isInterested: wasInterested,
-        is_interested: wasInterested
+        is_interested: wasInterested,
+        liked: wasInterested
       }
     }
 
@@ -661,6 +677,8 @@ const onToggleInterest = async (post) => {
       title: message,
       icon: 'none'
     })
+  } finally {
+    interestSubmittingCodes.delete(postCode)
   }
 }
 

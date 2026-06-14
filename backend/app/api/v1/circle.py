@@ -445,6 +445,24 @@ def get_discover_circles(
     )
     items = payload.get('items') if isinstance(payload, dict) else None
     if isinstance(items, list):
+        circle_codes = [
+            str(item.get('circle_code') or '').strip()
+            for item in items
+            if isinstance(item, dict) and str(item.get('circle_code') or '').strip()
+        ]
+        interested_circle_codes = set()
+        if circle_codes:
+            interested_circle_codes = {
+                str(code or '').strip()
+                for code in db.execute(
+                    select(Circle.circle_code)
+                    .join(CircleInterest, CircleInterest.circle_pk == Circle.id)
+                    .where(
+                        CircleInterest.user_pk == int(user_id),
+                        Circle.circle_code.in_(circle_codes),
+                    )
+                ).scalars().all()
+            }
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -454,6 +472,9 @@ def get_discover_circles(
             item['cover_url'] = _to_public_circle_asset_url(raw_cover_url, request)
             item['avatar_url'] = _to_public_circle_asset_url(raw_avatar_url, request)
             item['owner_avatar_url'] = _to_public_file_url(raw_owner_avatar_url, request) if raw_owner_avatar_url else ''
+            is_interested = str(item.get('circle_code') or '').strip() in interested_circle_codes
+            item['interested'] = is_interested
+            item['is_interested'] = is_interested
     return success_response(data=payload)
 
 
@@ -545,6 +566,8 @@ def _serialize_public_discover_circle(circle: Circle, owner: User, request: Requ
         'owner_is_verified': bool(owner.is_verified),
         'ownerVerified': bool(owner.is_verified),
         'is_joined': False,
+        'interested': False,
+        'is_interested': False,
         'reason_tags': [],
         'last_active_at': circle.last_active_at.isoformat() if circle.last_active_at else None,
         'created_at': circle.created_at.isoformat() if circle.created_at else None,
@@ -963,6 +986,22 @@ def review_join_request(
     else:
         raise BusinessException(code=400, message='无效的操作')
 
+    approved = action == 'approve'
+    db.add(
+        Notification(
+            user_pk=int(join_request.user_pk),
+            type='circle',
+            title='入圈申请已通过' if approved else '入圈申请已拒绝',
+            content=(
+                f'您加入“{circle.name}”的申请已通过'
+                if approved
+                else f'您加入“{circle.name}”的申请已被拒绝'
+            ),
+            link_type='circle',
+            link_id=str(circle.circle_code),
+            is_read=False,
+        )
+    )
     db.commit()
 
     # Notify the applicant after the owner reviews the join request.
@@ -972,7 +1011,7 @@ def review_join_request(
         user_id=int(join_request.user_pk),
         circle_name=str(circle.name or "").strip(),
         circle_code=str(circle.circle_code or "").strip(),
-        approved=(action == "approve"),
+        approved=approved,
         reason=reject_reason if action == "reject" else None,
     )
 

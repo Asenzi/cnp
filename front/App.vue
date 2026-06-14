@@ -1,5 +1,6 @@
 <script>
 	import { clearLocationSessionCache, getQqMapKeyInfo } from './pages/tab/discover/modules/location'
+	import { connectRealtimeSocket, disconnectRealtimeSocket } from './utils/realtime'
 
 	export default {
 		onLaunch: function() {
@@ -9,12 +10,15 @@
         uni.setStorageSync('__QQ_MAP_KEY__', mapKeyInfo.key)
       }
       clearLocationSessionCache()
+			connectRealtimeSocket()
 		},
 		onShow: function() {
 			console.log('App Show')
+			connectRealtimeSocket()
 		},
 		onHide: function() {
 			console.log('App Hide')
+			disconnectRealtimeSocket()
 		}
 	}
 </script>

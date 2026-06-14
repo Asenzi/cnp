@@ -36,13 +36,12 @@ function resolveMemberEnabled(profile = {}) {
 
 function resolveMetaLine(profile = {}) {
   const industry = String(profile?.industry_label || '').trim()
-  const company = String(profile?.company_name || profile?.company || '').trim()
   const jobTitle = String(profile?.job_title || profile?.card_title || profile?.position || '').trim()
-  const parts = [industry, company, jobTitle].filter(Boolean)
+  const parts = [industry, jobTitle].filter(Boolean)
 
   return parts.length
     ? parts.join(' | ')
-    : '暂未完善行业 | 公司 | 职位'
+    : '暂未完善行业 | 职位'
 }
 
 function resolveStats(profile, options = {}) {
@@ -108,6 +107,7 @@ export function mapProfilePostItem(post = {}) {
     ? post.images.map((item) => String(item || '').trim()).filter(Boolean)
     : []
   const industryLabels = resolveIndustryLabels(post.industry_label)
+  const isInterested = Boolean(post.is_interested ?? post.interested ?? post.liked)
 
   return {
     id:
@@ -124,6 +124,10 @@ export function mapProfilePostItem(post = {}) {
     likes: toNumber(post.like_count, 0),
     comments: toNumber(post.comment_count, 0),
     readers: toNumber(post.view_count, 0),
+    interested: isInterested,
+    isInterested,
+    is_interested: isInterested,
+    liked: isInterested,
     avatars: images.length ? [] : [...FEED_AVATAR_STACK_COLORS],
     images
   }

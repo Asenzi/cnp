@@ -72,6 +72,13 @@
       </view>
     </view>
 
+    <!-- 未登录时固定在底部的关注按钮 -->
+    <view v-if="!isLoggedIn && !isSelfProfile" class="follow-action-fixed">
+      <button class="follow-btn" hover-class="follow-btn-active" @tap="onFollowBeforeLogin">
+        关注
+      </button>
+    </view>
+
     <!-- 隐藏的Canvas用于生成分享图 -->
     <canvas canvas-id="shareCanvas" style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 900px; border: none;"></canvas>
   </view>
@@ -81,6 +88,7 @@
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom, onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { getMyCircles, getUserCircles } from '../../../api/circle'
+import { toggleUserFollow } from '../../../api/network'
 import { getMyResourceFeed, getUserResourceFeed } from '../../../api/post'
 import { getCurrentUserProfile, getUserProfileById } from '../../../api/user'
 import { generateProfileShareImage } from '../../../utils/profile-share-image'
@@ -162,6 +170,11 @@ const isSelfProfile = computed(() => {
     return false
   }
   return target === current
+})
+
+const isLoggedIn = computed(() => {
+  const token = String(uni.getStorageSync('token') || '').trim()
+  return Boolean(token)
 })
 
 const hasProfileData = computed(() => Boolean(String(rawProfile.value?.user_id || '').trim()))
@@ -429,6 +442,23 @@ const onRetryCircles = () => {
   fetchJoinedCircles(true)
 }
 
+const onFollowBeforeLogin = () => {
+  // 保存当前用户ID和标记，表示登录后需要关注
+  const target = String(targetUserId.value || '').trim()
+  if (!target) {
+    showToast('用户信息缺失')
+    return
+  }
+
+  // 设置标记
+  uni.setStorageSync('pendingFollowUserId', target)
+
+  // 跳转到登录页
+  uni.navigateTo({
+    url: '/pages/auth/login/index'
+  })
+}
+
 onShareAppMessage(() => {
   const target = String(rawProfile.value?.user_id || rawProfile.value?.userId || targetUserId.value || '').trim()
   const nickname = String(rawProfile.value?.nickname || pageData.value?.profile?.name || '好友名片').trim() || '好友名片'
@@ -526,14 +556,20 @@ onReachBottom(() => {
   max-width: 750rpx;
   margin: 0 auto;
   min-height: 100vh;
+  overflow: visible;
   background: #ffffff;
   box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.08);
 }
 
 .tabs-sticky {
+  position: -webkit-sticky;
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: 0rpx;
+  z-index: 50;
+  width: 100%;
+  box-sizing: border-box;
+  background: #ffffff;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.05);
 }
 
 .tab-divider {
@@ -623,6 +659,42 @@ onReachBottom(() => {
   line-height: 30rpx;
 }
 
+.follow-action-fixed {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  padding: 16rpx 32rpx;
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 20%, #ffffff 100%);
+  backdrop-filter: blur(10rpx);
+}
+
+.follow-btn {
+  width: 100%;
+  height: 88rpx;
+  background: linear-gradient(135deg, #1a57db 0%, #2563eb 100%);
+  border-radius: 44rpx;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.2);
+}
+
+.follow-btn::after {
+  border: 0;
+}
+
+.follow-btn-active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
 @media (prefers-color-scheme: dark) {
   .profile-home-page {
     background: #111621;
@@ -643,6 +715,11 @@ onReachBottom(() => {
     background: rgba(17, 22, 33, 0.7);
   }
 
+  .tabs-sticky {
+    background: #0f172a;
+    box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.24);
+  }
+
   .section-status-wrap {
     background: #0f172a;
     border-color: #334155;
@@ -650,6 +727,15 @@ onReachBottom(() => {
 
   .section-empty-wrap {
     background: transparent;
+  }
+
+  .follow-action-fixed {
+    background: linear-gradient(180deg, rgba(17, 22, 33, 0) 0%, rgba(17, 22, 33, 0.95) 20%, #111621 100%);
+  }
+
+  .follow-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
   }
 }
 </style>

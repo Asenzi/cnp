@@ -131,6 +131,62 @@ def _clamp_score(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
+def _calculate_distance_km(
+    start_latitude: Any,
+    start_longitude: Any,
+    end_latitude: Any,
+    end_longitude: Any,
+) -> float | None:
+    coordinates = (
+        start_latitude,
+        start_longitude,
+        end_latitude,
+        end_longitude,
+    )
+    if any(value is None for value in coordinates):
+        return None
+
+    try:
+        start_lat, start_lng, end_lat, end_lng = (float(value) for value in coordinates)
+    except (TypeError, ValueError):
+        return None
+
+    if not (
+        -90 <= start_lat <= 90
+        and -180 <= start_lng <= 180
+        and -90 <= end_lat <= 90
+        and -180 <= end_lng <= 180
+    ):
+        return None
+
+    earth_radius_km = 6371.0088
+    lat_delta = math.radians(end_lat - start_lat)
+    lng_delta = math.radians(end_lng - start_lng)
+    start_lat_rad = math.radians(start_lat)
+    end_lat_rad = math.radians(end_lat)
+    haversine = (
+        math.sin(lat_delta / 2) ** 2
+        + math.cos(start_lat_rad)
+        * math.cos(end_lat_rad)
+        * math.sin(lng_delta / 2) ** 2
+    )
+    angular_distance = 2 * math.atan2(
+        math.sqrt(haversine),
+        math.sqrt(max(0.0, 1 - haversine)),
+    )
+    return earth_radius_km * angular_distance
+
+
+def _format_distance_text(distance_km: float | None) -> str | None:
+    if distance_km is None or not math.isfinite(distance_km):
+        return None
+    if distance_km < 1:
+        return f"距你 {max(round(distance_km * 1000), 1)}m"
+    if distance_km < 100:
+        return f"距你 {distance_km:.1f}km"
+    return f"距你 {round(distance_km):d}km"
+
+
 def _to_float(value: str | None, default: float) -> float:
     try:
         return float(str(value).strip())
@@ -1185,9 +1241,15 @@ def list_network_recommendations(
         ][:3]
         safe_reason_detail["shared_connection_source"] = _clean_reason_text(safe_reason_detail.get("shared_connection_source"))
         member_snapshot = resolve_member_snapshot(db=db, user_pk=int(row.user.id))
+        distance_km = _calculate_distance_km(
+            viewer.latitude,
+            viewer.longitude,
+            row.user.latitude,
+            row.user.longitude,
+        )
+        distance_text = _format_distance_text(distance_km)
 
-        items.append(
-            {
+        item_payload = {
                 "user_id": row.user.user_id,
                 "nickname": row.user.nickname,
                 "avatar_url": row.user.avatar_url,
@@ -1218,7 +1280,10 @@ def list_network_recommendations(
                 "postCount": post_count_map.get(int(row.user.id), 0),
                 "posts_count": post_count_map.get(int(row.user.id), 0),
             }
-        )
+        if distance_km is not None and distance_text:
+            item_payload["distance_km"] = round(distance_km, 3)
+            item_payload["distance_text"] = distance_text
+        items.append(item_payload)
 
     return {
         "request_id": stable_request_id,
