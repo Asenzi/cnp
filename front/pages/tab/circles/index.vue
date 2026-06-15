@@ -1086,6 +1086,7 @@ onUnmounted(() => {
 .load-more-wrap {
   flex-direction: row;
   gap: 12rpx;
+  justify-content: center;
 }
 
 .retry-btn {
