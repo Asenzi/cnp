@@ -1,6 +1,6 @@
 from collections import defaultdict
 from typing import Any
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,28 @@ from app.models.user_connection import UserConnection
 from app.models.user_interest import UserInterest
 
 
+def _city_name_candidates(city_name: str | None) -> list[str]:
+    normalized = str(city_name or "").strip()
+    if not normalized:
+        return []
+
+    candidates = [normalized]
+    if normalized.endswith("市") and len(normalized) > 1:
+        candidates.append(normalized[:-1])
+    else:
+        candidates.append(f"{normalized}市")
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in candidates:
+        value = str(item or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
 def list_candidate_users(
     db: Session,
     *,
@@ -25,11 +47,13 @@ def list_candidate_users(
     city_name: str | None = None,
     industry_label: str | None = None,
     domain: str | None = None,
+    include_self: bool = False,
 ) -> list[User]:
     stmt = select(User).where(
         User.is_active.is_(True),
-        User.id != viewer_user_pk,
     )
+    if not include_self:
+        stmt = stmt.where(User.id != viewer_user_pk)
 
     normalized_keyword = str(keyword or "").strip()
     if normalized_keyword:
@@ -45,7 +69,7 @@ def list_candidate_users(
 
     normalized_city_name = str(city_name or "").strip()
     if normalized_city_name:
-        stmt = stmt.where(User.city_name == normalized_city_name)
+        stmt = stmt.where(User.city_name.in_(_city_name_candidates(normalized_city_name)))
 
     normalized_industry_label = str(industry_label or "").strip()
     if normalized_industry_label:
@@ -349,7 +373,7 @@ def get_impression_counts_in_days(
     if not candidate_user_pks:
         return {}
 
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = (
         select(NetworkRecoImpression.target_user_pk, func.count(NetworkRecoImpression.id))
         .where(
@@ -372,7 +396,7 @@ def get_global_impression_counts_in_days(
     if not candidate_user_pks:
         return {}
 
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = (
         select(NetworkRecoImpression.target_user_pk, func.count(NetworkRecoImpression.id))
         .where(
@@ -395,7 +419,7 @@ def get_recent_impression_target_user_pks(
     limit: int = 60,
 ) -> list[int]:
     safe_limit = min(max(int(limit or 60), 1), 500)
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = (
         select(NetworkRecoImpression.target_user_pk)
         .where(
@@ -436,7 +460,7 @@ def get_feedback_counts_in_days(
     if not candidate_user_pks or not event_types:
         return {}
 
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = (
         select(NetworkRecoFeedback.target_user_pk, func.count(NetworkRecoFeedback.id))
         .where(
@@ -461,7 +485,7 @@ def get_global_feedback_counts_in_days(
     if not candidate_user_pks or not event_types:
         return {}
 
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = (
         select(NetworkRecoFeedback.target_user_pk, func.count(NetworkRecoFeedback.id))
         .where(
@@ -485,7 +509,7 @@ def get_feedback_targets_in_days(
     if not event_types:
         return set()
 
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = select(NetworkRecoFeedback.target_user_pk).where(
         NetworkRecoFeedback.viewer_user_pk == viewer_user_pk,
         NetworkRecoFeedback.event_type.in_(event_types),
@@ -505,7 +529,7 @@ def get_feedback_ext_rows_in_days(
     if not candidate_user_pks or not event_types:
         return []
 
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = (
         select(
             NetworkRecoFeedback.target_user_pk,
@@ -540,7 +564,7 @@ def list_recent_feedback_target_profiles(
         return []
 
     safe_limit = min(max(int(limit or 80), 1), 300)
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(days, 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(days, 1))
     stmt = (
         select(
             NetworkRecoFeedback.target_user_pk,

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from random import randint
 
@@ -86,6 +86,7 @@ def _build_discover_circles_stmt(
     keyword: str | None = None,
     city_name: str | None = None,
     industry_label: str | None = None,
+    exclude_owner_user_pk: int | None = None,
 ):
     owner_user = aliased(User)
     stmt = (
@@ -104,6 +105,9 @@ def _build_discover_circles_stmt(
     normalized_industry_label = str(industry_label or "").strip()
     if normalized_industry_label:
         stmt = stmt.where(Circle.industry_label == normalized_industry_label)
+
+    if exclude_owner_user_pk is not None:
+        stmt = stmt.where(Circle.owner_user_pk != int(exclude_owner_user_pk))
 
     stmt = _apply_circle_keyword_filter(stmt, keyword=keyword)
     return stmt
@@ -126,6 +130,7 @@ def list_user_joined_circles(
         .where(
             UserCircleMembership.user_pk == user_pk,
             UserCircleMembership.is_active.is_(True),
+            Circle.owner_user_pk != user_pk,
         )
         .order_by(
             UserCircleMembership.created_at.desc(),
@@ -154,6 +159,7 @@ def count_user_joined_circles(
         .where(
             UserCircleMembership.user_pk == user_pk,
             UserCircleMembership.is_active.is_(True),
+            Circle.owner_user_pk != user_pk,
         )
     )
     stmt = _apply_circle_keyword_filter(stmt, keyword=keyword)
@@ -169,11 +175,13 @@ def list_discover_circles(
     industry_label: str | None = None,
     order_by: str = "default",
     candidate_limit: int | None = None,
+    exclude_owner_user_pk: int | None = None,
 ) -> list[tuple[Circle, User]]:
     stmt = _build_discover_circles_stmt(
         keyword=keyword,
         city_name=city_name,
         industry_label=industry_label,
+        exclude_owner_user_pk=exclude_owner_user_pk,
     )
 
     if order_by == "latest":
@@ -211,11 +219,13 @@ def count_discover_circles(
     keyword: str | None = None,
     city_name: str | None = None,
     industry_label: str | None = None,
+    exclude_owner_user_pk: int | None = None,
 ) -> int:
     stmt = _build_discover_circles_stmt(
         keyword=keyword,
         city_name=city_name,
         industry_label=industry_label,
+        exclude_owner_user_pk=exclude_owner_user_pk,
     )
     count_stmt = select(func.count()).select_from(stmt.with_only_columns(Circle.id).order_by(None).subquery())
     value = db.execute(count_stmt).scalar_one_or_none()
@@ -231,11 +241,13 @@ def list_latest_discover_circles_page(
     keyword: str | None = None,
     city_name: str | None = None,
     industry_label: str | None = None,
+    exclude_owner_user_pk: int | None = None,
 ) -> list[tuple[Circle, User]]:
     stmt = _build_discover_circles_stmt(
         keyword=keyword,
         city_name=city_name,
         industry_label=industry_label,
+        exclude_owner_user_pk=exclude_owner_user_pk,
     )
     if joined_circle_codes:
         stmt = stmt.order_by(
@@ -254,7 +266,7 @@ def list_latest_discover_circles_page(
 
 
 def _generate_circle_code() -> str:
-    millis_tail = str(int(datetime.now(UTC).timestamp() * 1000))[-8:]
+    millis_tail = str(int(datetime.now(timezone.utc).timestamp() * 1000))[-8:]
     rand_tail = f"{randint(0, 9999):04d}"
     return f"C{millis_tail}{rand_tail}"
 
@@ -298,7 +310,7 @@ def create_circle(
             need_post_review=need_post_review,
             member_count=1,
             post_count=0,
-            last_active_at=datetime.now(UTC).replace(tzinfo=None),
+            last_active_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         membership = UserCircleMembership(
             user_pk=owner_user_pk,

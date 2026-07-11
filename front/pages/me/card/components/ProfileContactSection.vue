@@ -9,7 +9,11 @@
         :height="canvasHeight"
         :style="canvasStyle"
       ></canvas>
-      <cover-view v-if="showAccessMask" class="business-card-cover-mask">
+      <cover-view
+        v-if="showAccessMask"
+        class="business-card-cover-mask"
+        @tap.stop="onTapLockedCard"
+      >
         <cover-view class="cover-title-row">
           <cover-image class="cover-mask-icon" src="https://cos.cnptec.site/static/icon/suo.png" />
           <cover-view class="cover-mask-title">{{ maskTitle }}</cover-view>
@@ -18,9 +22,6 @@
       </cover-view>
     </view>
 
-    <view v-if="showPackageRemaining" class="contact-package-tip">
-      <text class="contact-package-tip-text">人群包剩余 {{ packageRemainingText }} 次</text>
-    </view>
   </view>
 </template>
 
@@ -55,7 +56,7 @@ const canvasStyle = computed(() => {
 
 const hasVisibleContact = computed(() => {
   return Boolean(
-    props.contact?.contactVisible && (props.contact?.displayPhone || props.contact?.displayWechat)
+    props.contact?.contactVisible && (props.contact?.displayPhone || props.contact?.displayWechat || props.contact?.displayEmail)
   )
 })
 
@@ -74,62 +75,24 @@ const maskedContactName = computed(() => {
   return String(props.contact?.name || '').trim() || '该用户'
 })
 
-const viewerHasContactPackage = computed(() => {
-  return Number(props.contact?.viewerContactPackageRemainingViews || 0) > 0
-})
-
-const canUnlockWithContactPackage = computed(() => {
-  const reason = String(props.contact?.contactLockedReason || '').trim()
-  return Boolean(viewerHasContactPackage.value && reason.includes('消耗1人脉值'))
-})
-
 const maskTitle = computed(() => {
-  if (canUnlockWithContactPackage.value) {
-    return '消耗1人脉值可查看该用户联系方式'
-  }
   return `查看${maskedContactName.value}的联系方式`
 })
 
 const maskDesc = computed(() => {
-  if (canUnlockWithContactPackage.value) {
-    return ''
-  }
-  return '开通年度会员即可解锁'
+  return '开通会员即可解锁'
 })
 
 const lockedTitle = computed(() => {
   return String(props.contact?.contactLockedReason || '').trim() || '暂时无法查看联系方式'
 })
 
-const lockedDesc = computed(() => {
-  if (props.contact?.isSelf) {
-    return '完善联系方式后可生成完整名片'
-  }
-  if (!props.contact?.targetContactEnabled || !props.contact?.targetHasContact) {
-    return '对方公开并完善展示联系方式后，你才能在这里看到'
-  }
-  return '完成实名认证、开通会员或购买人群包后，可查看完整联系方式'
-})
-
-const showPackageRemaining = computed(() => {
-  return Boolean(
-    hasVisibleContact.value
-    && !props.contact?.isSelf
-    && props.contact?.viewerContactPackageUsedForView
-  )
-})
-
-const packageRemainingText = computed(() => {
-  return Number(props.contact?.viewerContactPackageRemainingViews || 0).toLocaleString('zh-CN')
-})
-
 const profileName = computed(() => {
   return String(props.contact?.name || '').trim() || '未命名用户'
 })
 
-const industryLine = computed(() => {
-  return String(props.contact?.industryLabel || '').trim() || '暂未完善行业'
-})
+const companyLine = computed(() => String(props.contact?.companyName || '').trim())
+const jobTitleLine = computed(() => String(props.contact?.jobTitle || '').trim())
 
 const cityText = computed(() => String(props.contact?.cityName || '').trim() || '圈脉链个人名片')
 const contactRows = computed(() => {
@@ -338,45 +301,9 @@ function drawContactRow(ctx, label, value, x, y, maxWidth) {
   })
 }
 
-function drawQrPlaceholder(ctx, x, y, size) {
-  fillRoundRect(ctx, x - 8, y - 8, size + 16, size + 16, 12, '#F8FAFD')
-  ctx.setFillStyle('#111827')
-  const cells = 9
-  const gap = 2
-  const cell = Math.floor((size - gap * (cells - 1)) / cells)
-
-  for (let row = 0; row < cells; row += 1) {
-    for (let col = 0; col < cells; col += 1) {
-      const finder =
-        (row < 3 && col < 3)
-        || (row < 3 && col > cells - 4)
-        || (row > cells - 4 && col < 3)
-      const noise = (row * 7 + col * 5 + row * col) % 4 === 0
-      if (finder || noise) {
-        const px = x + col * (cell + gap)
-        const py = y + row * (cell + gap)
-        ctx.fillRect(px, py, cell, cell)
-      }
-    }
-  }
-
-  ctx.setStrokeStyle('#111827')
-  ctx.setLineWidth(2)
-  ;[
-    [x, y],
-    [x + size - cell * 3 - gap * 2, y],
-    [x, y + size - cell * 3 - gap * 2]
-  ].forEach(([fx, fy]) => {
-    ctx.strokeRect(fx, fy, cell * 3 + gap * 2, cell * 3 + gap * 2)
-    ctx.fillRect(fx + cell + gap, fy + cell + gap, cell, cell)
-  })
-
-}
-
 function drawMiniappCode(ctx, x, y, size) {
   const path = String(miniappCodeDrawPath.value || '').trim()
   if (!path) {
-    drawQrPlaceholder(ctx, x, y, size)
     return
   }
 
@@ -538,10 +465,22 @@ function drawBusinessCard() {
     fontWeight: '700',
     color: '#172033'
   })
-  drawTextLine(ctx, industryLine.value, margin + 1, topY + 27, brandX - margin - 12, {
-    fontSize: Math.max(10, Math.round(width * 0.031)),
-    color: '#374151'
-  })
+  const subLineFontSize = Math.max(10, Math.round(width * 0.031))
+  const subLineWidth = brandX - margin - 12
+  let subLineY = topY + 27
+  if (companyLine.value) {
+    drawTextLine(ctx, companyLine.value, margin + 1, subLineY, subLineWidth, {
+      fontSize: subLineFontSize,
+      color: '#374151'
+    })
+    subLineY += subLineFontSize + 7
+  }
+  if (jobTitleLine.value) {
+    drawTextLine(ctx, jobTitleLine.value, margin + 1, subLineY, subLineWidth, {
+      fontSize: subLineFontSize,
+      color: '#374151'
+    })
+  }
   drawCardAvatar(ctx, brandX, topY - 10, avatarSize)
 
   contactRows.value.forEach(([label, value], index) => {
@@ -576,9 +515,12 @@ function onTapCard() {
   if (hasVisibleContact.value && props.contact?.displayPhone) {
     actions.push({ label: '复制手机号', value: props.contact.displayPhone, title: '展示手机号已复制' })
   }
+  if (hasVisibleContact.value && props.contact?.displayEmail) {
+    actions.push({ label: '复制邮箱', value: props.contact.displayEmail, title: '展示邮箱已复制' })
+  }
 
   if (!actions.length) {
-    if (showAccessMask.value && canUnlockWithContactPackage.value) {
+    if (showAccessMask.value) {
       emit('unlock-contact')
       return
     }
@@ -599,6 +541,10 @@ function onTapCard() {
       }
     }
   })
+}
+
+function onTapLockedCard() {
+  emit('unlock-contact')
 }
 
 onMounted(() => {
@@ -773,16 +719,4 @@ watch(
   white-space: normal;
 }
 
-.contact-package-tip {
-  border-radius: 18rpx;
-  background: rgba(37, 99, 235, 0.08);
-  padding: 18rpx 20rpx;
-}
-
-.contact-package-tip-text {
-  color: #2563eb;
-  font-size: 22rpx;
-  line-height: 30rpx;
-  font-weight: 600;
-}
 </style>

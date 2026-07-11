@@ -127,13 +127,17 @@ const overview = ref({
   is_circle_owner: false,
   lifetime: true,
   wallet_balance: 0,
+  member: {
+    opened: false,
+    plan_id: ''
+  },
   plan: {
     price: 0,
     original_price: 0,
     enabled: true
   },
   payment: {
-    default_channel: 'wallet',
+    default_channel: 'wxpay',
     channels: []
   }
 })
@@ -169,6 +173,12 @@ const showOriginalPrice = computed(() => {
   return Number(overview.value?.plan?.original_price || 0) > Number(overview.value?.plan?.price || 0)
 })
 const planEnabled = computed(() => Boolean(overview.value?.plan?.enabled))
+const isYearlyMemberOpened = computed(() => {
+  const member = overview.value?.member || {}
+  const opened = Boolean(member.opened || member.is_member || member.member_opened)
+  const planId = String(member.plan_id || member.member_plan_id || '').trim().toLowerCase()
+  return opened && planId === 'yearly'
+})
 const walletInsufficient = computed(() => {
   return Number(overview.value?.wallet_balance || 0) < Number(overview.value?.plan?.price || 0)
 })
@@ -187,6 +197,7 @@ const selectedPaymentLabel = computed(() => {
 const purchaseButtonText = computed(() => {
   if (submitting.value) return '处理中...'
   if (!planEnabled.value) return '暂不可开通'
+  if (!isYearlyMemberOpened.value) return '年度会员后开通'
   return `支付 ¥${priceText.value} 永久开通`
 })
 
@@ -203,11 +214,7 @@ const syncPaymentChannel = () => {
   const defaultChannel = String(overview.value?.payment?.default_channel || '').trim()
   const wxpay = channels.find((item) => item.key === 'wxpay')
   const defaultItem = channels.find((item) => item.key === defaultChannel)
-  if (defaultItem?.key === 'wallet' && walletInsufficient.value && wxpay) {
-    selectedPaymentChannel.value = 'wxpay'
-    return
-  }
-  selectedPaymentChannel.value = String(defaultItem?.key || channels[0]?.key || '')
+  selectedPaymentChannel.value = String(wxpay?.key || defaultItem?.key || channels[0]?.key || '')
 }
 
 const loadOverview = async () => {
@@ -250,18 +257,17 @@ const confirmPurchase = () => {
 
 const invokeWxpayAndConfirm = async (result) => {
   const orderNo = String(result?.order_no || '').trim()
-  const wxpay = result?.wxpay || {}
-  if (!orderNo || !wxpay.timeStamp || !wxpay.nonceStr || !wxpay.package || !wxpay.signType || !wxpay.paySign) {
-    throw new Error('微信支付参数异常')
+  const virtualPayment = result?.virtual_payment || {}
+  if (!orderNo || !virtualPayment?.signData || !virtualPayment?.paySig || !virtualPayment?.signature || !virtualPayment?.mode) {
+    throw new Error('小程序虚拟支付参数异常')
   }
 
   const payResult = await new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: String(wxpay.timeStamp),
-      nonceStr: String(wxpay.nonceStr),
-      package: String(wxpay.package),
-      signType: String(wxpay.signType),
-      paySign: String(wxpay.paySign),
+    uni.requestVirtualPayment({
+      signData: String(virtualPayment.signDataJson || JSON.stringify(virtualPayment.signData)),
+      mode: String(virtualPayment.mode),
+      paySig: String(virtualPayment.paySig),
+      signature: String(virtualPayment.signature),
       success: (res) => resolve(res || {}),
       fail: (err) => reject({ ...(err || {}), order_no: orderNo })
     })
@@ -285,6 +291,20 @@ const syncUserCache = async () => {
 
 const purchase = async () => {
   if (submitting.value || !planEnabled.value) return
+  if (!isYearlyMemberOpened.value) {
+    uni.showModal({
+      title: '需要年度会员',
+      content: '购买圈主身份前需要先开通年度会员，是否现在前往会员中心？',
+      confirmText: '去开通',
+      cancelText: '取消',
+      success: (res) => {
+        if (res?.confirm) {
+          uni.navigateTo({ url: '/pages/me/member-center/index?planId=yearly' })
+        }
+      }
+    })
+    return
+  }
   if (!selectedPaymentChannel.value) {
     showToast('暂无可用支付方式')
     return
@@ -297,7 +317,7 @@ const purchase = async () => {
     const result = await purchaseCircleOwner({
       pay_channel: selectedPaymentChannel.value
     })
-    if (String(result?.action || '') === 'wxpay_required') {
+    if (String(result?.action || '') === 'virtualpay_required') {
       await invokeWxpayAndConfirm(result)
     }
     await syncUserCache()

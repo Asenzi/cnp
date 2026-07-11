@@ -1,12 +1,7 @@
 ﻿<template>
-  <view class="bottom-wrap">
-    <button
-      class="create-btn"
-      :class="{ 'create-btn-disabled': loading }"
-      :disabled="loading"
-      hover-class="create-btn-active"
-      @tap="emit('submit')"
-    >
+  <view class="action-card">
+    <button class="create-btn" :class="{ 'create-btn-disabled': loading }" :disabled="loading"
+      hover-class="create-btn-active" @tap="emit('submit')">
       {{ loading ? loadingText : text }}
     </button>
   </view>
@@ -32,15 +27,10 @@ const emit = defineEmits(['submit'])
 </script>
 
 <style scoped>
-.bottom-wrap {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(12rpx);
-  padding: 12rpx 32rpx calc(12rpx + env(safe-area-inset-bottom));
+.action-card {
+  margin: 0;
+  /* background: #ffffff; */
+  padding: 24rpx 32rpx;
 }
 
 .create-btn {
@@ -66,8 +56,8 @@ const emit = defineEmits(['submit'])
 }
 
 @media (prefers-color-scheme: dark) {
-  .bottom-wrap {
-    background: rgba(15, 23, 42, 0.92);
+  .action-card {
+    background: #0f172a;
   }
 
   .create-btn {

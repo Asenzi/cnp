@@ -6,32 +6,26 @@
       <view class="meta-wrap">
         <view class="name-row">
           <text class="name">{{ profile.name }}</text>
-          <image
-            v-if="profile.memberEnabled && !memberIconLoadFailed"
-            class="member-badge"
-            mode="aspectFit"
-            :src="memberIconUrl"
-            @error="onMemberIconError"
-          />
-          <view v-else-if="profile.memberEnabled" class="member-badge member-badge-fallback">
-            <ProfileSymbol name="member_badge" :size="16" color="#f59e0b" />
+          <view v-if="identityBadges.length" class="badge-row">
+            <image
+              v-for="badge in identityBadges"
+              :key="badge.key"
+              class="identity-badge"
+              mode="aspectFit"
+              :src="badge.icon"
+            />
           </view>
         </view>
 
-        <text class="meta-line">{{ profile.metaLine }}</text>
-
-        <view class="verify-row">
-          <text class="verify-text" :class="profile.isVerified ? 'verify-text-active' : 'verify-text-idle'">
-            {{ profile.verifiedText }}
-          </text>
-        </view>
+        <text v-if="profile.metaLine" class="meta-line">{{ profile.metaLine }}</text>
+        <text v-if="profile.locationLine" class="location-line">{{ profile.locationLine }}</text>
       </view>
 
-      <button
+      <!-- <button
         v-if="showAction"
         class="message-btn"
         hover-class="message-btn-hover"
-        :open-type="actionType === 'share' ? 'share' : ''"
+        :open-type="actionType === 'share' && isSelf ? 'share' : ''"
         @tap.stop="onTapAction"
       >
         <image
@@ -39,14 +33,13 @@
           :src="actionType === 'share' ? 'https://cos.cnptec.site/static/icon/share.png' : 'https://cos.cnptec.site/static/icon/chat.png'"
           mode="aspectFit"
         />
-      </button>
+      </button> -->
     </view>
   </view>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import ProfileSymbol from './ProfileSymbol.vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   profile: {
@@ -60,43 +53,33 @@ const props = defineProps({
   actionType: {
     type: String,
     default: 'message'
+  },
+  isSelf: {
+    type: Boolean,
+    default: false
   }
 })
 
-const LOCAL_MEMBER_ICON_URL = 'https://cos.cnptec.site/static/icon/mennber1.png'
+const emit = defineEmits(['message', 'share'])
 
-const memberIconLoadFailed = ref(false)
-const memberIconUrl = ref(LOCAL_MEMBER_ICON_URL)
-
-const remoteMemberIconUrl = computed(() => {
-  return LOCAL_MEMBER_ICON_URL
+const identityBadges = computed(() => {
+  return Array.isArray(props.profile?.badges)
+    ? props.profile.badges.filter((badge) => badge?.key && badge?.icon)
+    : []
 })
-
-const onMemberIconError = () => {
-  if (memberIconUrl.value !== LOCAL_MEMBER_ICON_URL) {
-    memberIconUrl.value = LOCAL_MEMBER_ICON_URL
-    return
-  }
-  memberIconLoadFailed.value = true
-}
-
-const emit = defineEmits(['message'])
 
 const onTapAction = () => {
   if (props.actionType === 'share') {
+    // 如果是自己的名片，使用微信原生分享（open-type="share"）
+    // 如果是别人的名片，触发 share 事件显示菜单
+    if (!props.isSelf) {
+      emit('share')
+    }
+    // isSelf=true 时，由 open-type="share" 自动触发微信分享
     return
   }
   emit('message')
 }
-
-watch(
-  () => props.profile?.memberEnabled,
-  () => {
-    memberIconLoadFailed.value = false
-    memberIconUrl.value = remoteMemberIconUrl.value || LOCAL_MEMBER_ICON_URL
-  },
-  { immediate: true }
-)
 
 </script>
 
@@ -139,7 +122,7 @@ watch(
 }
 
 .name {
-  max-width: 100%;
+  max-width: 290rpx;
   color: #111827;
   font-size: 36rpx;
   line-height: 48rpx;
@@ -149,47 +132,27 @@ watch(
   white-space: nowrap;
 }
 
-.member-badge {
+.badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+
+.identity-badge {
   width: 32rpx;
   height: 32rpx;
   flex-shrink: 0;
 }
 
-.member-badge-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999rpx;
-  background: rgba(245, 158, 11, 0.1);
-}
-
-.meta-line {
+.meta-line,
+.location-line {
   color: #6b7280;
   font-size: 26rpx;
   line-height: 36rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.verify-row {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.verify-text {
-  font-size: 24rpx;
-  line-height: 32rpx;
-  font-weight: 600;
-}
-
-.verify-text-active {
-  color: #1a57db;
-}
-
-.verify-text-idle {
-  color: #9ca3af;
 }
 
 .message-btn {
@@ -235,7 +198,8 @@ watch(
     color: #f8fafc;
   }
 
-  .meta-line {
+  .meta-line,
+  .location-line {
     color: #94a3b8;
   }
 

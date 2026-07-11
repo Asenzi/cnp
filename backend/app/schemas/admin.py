@@ -63,3 +63,15 @@ class AdminContactPackagePlanPayload(BaseModel):
 class AdminContactPackageConfigPayload(BaseModel):
     display_enabled: bool = False
     plans: list[AdminContactPackagePlanPayload] = Field(default_factory=list)
+
+
+class AdminSplitConfigPayload(BaseModel):
+    service_fee_rate: float = Field(..., ge=0, lt=1)
+    auto_settle_enabled: bool = True
+    wechat_profit_sharing_enabled: bool = False
+
+
+class AdminWithdrawalReviewPayload(BaseModel):
+    action: Literal["approve", "reject"]
+    transaction_id: str | None = Field(default=None, max_length=128)
+    remark: str | None = Field(default=None, max_length=1000)

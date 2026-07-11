@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -33,7 +33,7 @@ def create_user_real_name_verification_session(
         request_payload_json=json.dumps(request_payload or {}, ensure_ascii=False, separators=(",", ":")),
         result_payload_json=None,
         fail_reason=None,
-        started_at=datetime.now(UTC).replace(tzinfo=None),
+        started_at=datetime.now(timezone.utc).replace(tzinfo=None),
         finished_at=None,
     )
     db.add(record)
@@ -87,7 +87,7 @@ def update_user_real_name_verification_session_result(
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    session_record.finished_at = datetime.now(UTC).replace(tzinfo=None)
+    session_record.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(session_record)
     db.commit()
     db.refresh(session_record)

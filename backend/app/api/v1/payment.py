@@ -2,19 +2,16 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id
+from app.core.exceptions import BusinessException
 from app.core.response import success_response
 from app.payment import (
     CIRCLE_OWNER_PLAN_ID,
     confirm_member_order_payment,
-    confirm_wallet_recharge_payment,
-    create_wallet_recharge,
     get_circle_owner_overview,
     get_member_center_overview,
     get_member_order_status,
-    get_wallet_recharge_status,
     handle_wechat_pay_notify_xml,
     list_member_orders,
-    list_wallet_recharge_orders,
     subscribe_member_plan,
 )
 from app.payment.statistics import get_payment_statistics, get_user_payment_summary
@@ -22,8 +19,6 @@ from app.schemas.payment import (
     CircleOwnerPurchaseRequest,
     MemberOrderConfirmRequest,
     MemberSubscribeRequest,
-    WalletRechargeConfirmRequest,
-    WalletRechargeRequest,
 )
 
 router = APIRouter(prefix="/payment", tags=["Payment"])
@@ -67,8 +62,8 @@ def post_circle_owner_purchase(
         request_client_ip=request.client.host if request.client else None,
         request_base_url=str(request.base_url).rstrip("/"),
     )
-    if str(data.get("action") or "").strip() == "wxpay_required":
-        return success_response(data=data, message="请完成微信支付")
+    if str(data.get("action") or "").strip() == "virtualpay_required":
+        return success_response(data=data, message="请完成小程序虚拟支付")
     return success_response(data=data, message="永久圈主已开通")
 
 
@@ -89,8 +84,8 @@ def post_member_subscribe(
         request_base_url=str(request.base_url).rstrip("/"),
     )
     action = str(data.get("action") or "").strip()
-    if action == "wxpay_required":
-        return success_response(data=data, message="请完成微信支付")
+    if action == "virtualpay_required":
+        return success_response(data=data, message="请完成小程序虚拟支付")
     return success_response(data=data, message="会员开通成功")
 
 
@@ -141,71 +136,24 @@ def get_member_orders(
     return success_response(data=payload)
 
 
-@router.post("/wallet/recharge", summary="Create wallet recharge order")
-def post_wallet_recharge(
-    request: Request,
-    payload: WalletRechargeRequest,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(db_session),
-):
-    data = create_wallet_recharge(
-        db=db,
-        user_pk=user_id,
-        amount=payload.amount,
-        pay_channel=payload.pay_channel,
-        request_client_ip=request.client.host if request.client else None,
-        request_base_url=str(request.base_url).rstrip("/"),
-    )
-    if str(data.get("action") or "").strip() == "wxpay_required":
-        return success_response(data=data, message="请完成微信支付")
-    return success_response(data=data, message="充值成功")
+@router.post("/wallet/recharge", summary="Wallet recharge is disabled")
+def post_wallet_recharge():
+    raise BusinessException(message="储值充值功能已下线", code=4599, status_code=410)
 
 
-@router.post("/wallet/recharge/{order_no}/confirm", summary="Confirm wallet recharge payment")
-def post_wallet_recharge_confirm(
-    order_no: str,
-    payload: WalletRechargeConfirmRequest,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(db_session),
-):
-    data = confirm_wallet_recharge_payment(
-        db=db,
-        user_pk=user_id,
-        order_no=order_no,
-        transaction_id=payload.transaction_id,
-        ext_payload=payload.ext,
-    )
-    return success_response(data=data, message="充值确认成功")
+@router.post("/wallet/recharge/{order_no}/confirm", summary="Wallet recharge is disabled")
+def post_wallet_recharge_confirm(order_no: str):
+    raise BusinessException(message="储值充值功能已下线", code=4599, status_code=410)
 
 
-@router.get("/wallet/recharge/orders", summary="List wallet recharge orders")
-def get_wallet_recharge_orders(
-    cursor: str | None = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=50),
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(db_session),
-):
-    payload = list_wallet_recharge_orders(
-        db=db,
-        user_pk=user_id,
-        cursor=cursor,
-        limit=limit,
-    )
-    return success_response(data=payload)
+@router.get("/wallet/recharge/orders", summary="Wallet recharge is disabled")
+def get_wallet_recharge_orders():
+    raise BusinessException(message="储值充值功能已下线", code=4599, status_code=410)
 
 
-@router.get("/wallet/recharge/{order_no}", summary="Get wallet recharge order status")
-def get_wallet_recharge_order(
-    order_no: str,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(db_session),
-):
-    payload = get_wallet_recharge_status(
-        db=db,
-        user_pk=user_id,
-        order_no=order_no,
-    )
-    return success_response(data=payload)
+@router.get("/wallet/recharge/{order_no}", summary="Wallet recharge is disabled")
+def get_wallet_recharge_order(order_no: str):
+    raise BusinessException(message="储值充值功能已下线", code=4599, status_code=410)
 
 
 def _wechat_notify_xml(success: bool, message: str = "OK") -> str:

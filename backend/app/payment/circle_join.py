@@ -3,7 +3,7 @@ from __future__ import annotations
 import ssl
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from secrets import token_hex
 
@@ -19,14 +19,22 @@ from app.models.notification import Notification
 from app.models.user_circle_membership import UserCircleMembership
 from app.payment.service import (
     PAY_CHANNEL_MOCK,
+    PAY_CHANNEL_VIRTUAL,
     PAY_CHANNEL_WALLET,
     PAY_CHANNEL_WXPAY,
+    build_virtual_payment_payload,
     _dict_to_xml,
     _prepare_wxpay_params,
     _resolve_payment_options,
     _sign_wechat_v2,
     _verify_wechat_v2_sign,
     _xml_to_dict,
+)
+from app.settlement import (
+    cancel_circle_join_split,
+    create_or_update_circle_join_split,
+    is_wechat_profit_sharing_enabled,
+    settle_circle_join_split,
 )
 
 PAYMENT_UNPAID = "unpaid"
@@ -35,10 +43,15 @@ PAYMENT_PAID = "paid"
 PAYMENT_REFUNDED = "refunded"
 REFUND_NONE = "none"
 REFUND_SUCCESS = "success"
+CIRCLE_JOIN_PRICE_TIERS = tuple(Decimal(str(value)) for value in (98, 198, 398, 598, 980, 1980, 3980, 5980, 9980))
+DEFAULT_CIRCLE_JOIN_PRODUCT_IDS = {
+    price: f"CIRCLE_JOIN_{int(price)}"
+    for price in CIRCLE_JOIN_PRICE_TIERS
+}
 
 
 def _now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _next_business_deadline(start: datetime) -> datetime:
@@ -50,6 +63,34 @@ def _next_business_deadline(start: datetime) -> datetime:
 
 def _generate_order_no() -> str:
     return f"J{_now().strftime('%Y%m%d%H%M%S')}{token_hex(3).upper()}"
+
+
+def normalize_circle_join_price_tier(value: object) -> Decimal:
+    price = Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    if price not in CIRCLE_JOIN_PRICE_TIERS:
+        raise BusinessException(
+            message="付费入圈价格请选择固定档位",
+            code=4354,
+            status_code=400,
+            data={"allowed_prices": [int(item) for item in CIRCLE_JOIN_PRICE_TIERS]},
+        )
+    return price
+
+
+def _circle_join_product_id_for_amount(amount: Decimal) -> str:
+    price = normalize_circle_join_price_tier(amount)
+    mapping = dict(DEFAULT_CIRCLE_JOIN_PRODUCT_IDS)
+    raw = str(settings.WECHAT_VIRTUAL_PAY_CIRCLE_JOIN_PRODUCT_IDS or "").strip()
+    if raw:
+        for item in raw.split(","):
+            key, _, value = item.partition(":")
+            product_id = value.strip()
+            if key.strip() and product_id:
+                mapping[normalize_circle_join_price_tier(key.strip())] = product_id
+    product_id = str(mapping.get(price) or "").strip()
+    if not product_id:
+        raise BusinessException(message="付费入圈虚拟支付商品未配置", code=4387, status_code=500)
+    return product_id
 
 
 def _get_request_by_order(db: Session, order_no: str) -> CircleJoinRequest | None:
@@ -123,6 +164,7 @@ def approve_join_request(
     _add_membership(db, join_request, circle)
     join_request.status = "approved"
     join_request.reviewed_at = _now()
+    settle_circle_join_split(db, join_request=join_request, circle=circle)
     if automatic:
         join_request.message = str(join_request.message or "").strip() or "圈主未在1个工作日内处理，系统已自动通过"
 
@@ -167,12 +209,16 @@ def create_circle_join_payment(
         if join_request.payment_status == PAYMENT_PAID:
             return {"action": "already_paid", **_serialize(join_request)}
 
-    amount = Decimal(str(circle.join_price or 0)).quantize(Decimal("0.01"))
+    amount = normalize_circle_join_price_tier(circle.join_price or 0)
     now = _now()
     order_no = _generate_order_no()
     payment_options = _resolve_payment_options(db=db)
     enabled = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
     channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
+    if channel == PAY_CHANNEL_WXPAY:
+        channel = PAY_CHANNEL_VIRTUAL
+    if channel == PAY_CHANNEL_WALLET:
+        raise BusinessException(message="钱包余额支付已下线，请使用微信支付", code=4383, status_code=410)
     if channel not in enabled or not enabled[channel]:
         raise BusinessException(message="当前支付方式不可用", code=4383, status_code=400)
 
@@ -206,12 +252,6 @@ def create_circle_join_payment(
 
     wallet = ensure_user_wallet(db=db, user_pk=user_pk, default_balance=user.balance or 0)
     wallet_balance = Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))
-    if channel == PAY_CHANNEL_WALLET and wallet_balance < amount:
-        if enabled.get(PAY_CHANNEL_WXPAY):
-            channel = PAY_CHANNEL_WXPAY
-            join_request.pay_channel = channel
-        else:
-            raise BusinessException(message="钱包余额不足", code=4384, status_code=400)
 
     if channel == PAY_CHANNEL_WALLET:
         wallet.balance = (wallet_balance - amount).quantize(Decimal("0.01"))
@@ -229,6 +269,7 @@ def create_circle_join_payment(
             remark=f"圈子编号: {circle_code}",
         )
         db.flush()
+        create_or_update_circle_join_split(db, join_request=join_request, circle=circle)
         _notify_owner(db, circle=circle, join_request=join_request, nickname=str(user.nickname or ""))
         db.commit()
         db.refresh(join_request)
@@ -243,31 +284,27 @@ def create_circle_join_payment(
         join_request.paid_at = now
         join_request.auto_approve_at = _next_business_deadline(now)
         db.flush()
+        create_or_update_circle_join_split(db, join_request=join_request, circle=circle)
         _notify_owner(db, circle=circle, join_request=join_request, nickname=str(user.nickname or ""))
         db.commit()
         db.refresh(join_request)
         return {"action": "mock_paid", **_serialize(join_request)}
 
-    if channel != PAY_CHANNEL_WXPAY:
+    if channel != PAY_CHANNEL_VIRTUAL:
         raise BusinessException(message="当前支付方式不支持", code=4386, status_code=400)
-    if not user.wechat_openid:
-        raise BusinessException(message="请先绑定微信账号", code=4387, status_code=400)
 
-    notify_url = str(settings.WECHAT_PAY_NOTIFY_URL or "").strip()
-    if not notify_url and base_url:
-        notify_url = f"{str(base_url).rstrip('/')}/api/v1/payment/wechat/notify"
-    wxpay = _prepare_wxpay_params(
-        user_openid=str(user.wechat_openid),
+    product_id = _circle_join_product_id_for_amount(amount)
+    virtual_payment = build_virtual_payment_payload(
+        session_key=getattr(user, "wechat_session_key", None),
         order_no=order_no,
         amount_yuan=amount,
-        plan_name=f"加入圈子-{circle.name}",
-        client_ip=client_ip or "127.0.0.1",
-        notify_url=notify_url,
+        product_id=product_id,
+        attach=str(circle_code),
     )
     join_request.payment_status = PAYMENT_PENDING
     db.commit()
     db.refresh(join_request)
-    return {"action": "wxpay_required", "wxpay": wxpay, **_serialize(join_request)}
+    return {"action": "virtualpay_required", "virtual_payment": virtual_payment, **_serialize(join_request)}
 
 
 def confirm_circle_join_payment(
@@ -292,6 +329,7 @@ def confirm_circle_join_payment(
     circle = db.scalar(select(Circle).where(Circle.circle_code == join_request.circle_code))
     user = get_user_by_id(db=db, user_id=user_pk)
     if circle is not None:
+        create_or_update_circle_join_split(db, join_request=join_request, circle=circle)
         _notify_owner(
             db,
             circle=circle,
@@ -358,6 +396,7 @@ def refund_circle_join_payment(
         return
     amount = Decimal(str(join_request.amount or 0)).quantize(Decimal("0.01"))
     channel = str(join_request.pay_channel or "")
+    cancel_circle_join_split(db, join_request=join_request, reason=reason)
     if amount > 0 and channel == PAY_CHANNEL_WALLET:
         wallet = ensure_user_wallet(db=db, user_pk=join_request.user_pk, default_balance=0)
         wallet.balance = (Decimal(str(wallet.balance or 0)) + amount).quantize(Decimal("0.01"))
@@ -399,6 +438,7 @@ def handle_circle_join_wechat_notify(db: Session, *, payload: dict[str, str]) ->
         circle = db.scalar(select(Circle).where(Circle.circle_code == join_request.circle_code))
         user = get_user_by_id(db=db, user_id=join_request.user_pk)
         if circle is not None:
+            create_or_update_circle_join_split(db, join_request=join_request, circle=circle)
             _notify_owner(
                 db,
                 circle=circle,
@@ -440,3 +480,8 @@ def auto_approve_due_circle_joins(db: Session) -> int:
     if count:
         db.commit()
     return count
+
+
+if __name__ == "__main__":
+    assert normalize_circle_join_price_tier("98") == Decimal("98.00")
+    assert _circle_join_product_id_for_amount(Decimal("398")) == "CIRCLE_JOIN_398"

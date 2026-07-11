@@ -8,10 +8,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import db_session, get_current_user_id, get_optional_current_user_id
 from app.core.asset_urls import normalize_persisted_asset_url, sanitize_public_asset_url
 from app.core.exceptions import BusinessException
+from app.core.profile_display import public_avatar_url, public_nickname
 from app.core.response import success_response
 from app.core.storage import upload_public_asset
 from app.crud import get_user_by_business_user_id, get_user_by_id
 from app.models.resource_post import ResourcePost, ResourcePostLike
+from app.models.notification import Notification
+from app.models.circle import Circle
 from app.models.user import User
 from app.post import (
     create_resource_post,
@@ -37,6 +40,7 @@ from app.schemas.post import (
     ResourcePostRecoFeedbackRequest,
     ResourcePostStatusPayload,
 )
+from app.api.v1.user import _assert_profile_image_safe
 
 router = APIRouter(prefix="/post", tags=["Post"])
 
@@ -70,6 +74,38 @@ def _require_current_user(db: Session, current_user_pk: int):
     if user is None:
         raise BusinessException(message="用户不存在", code=4041, status_code=404)
     return user
+
+
+def _validate_circle_activity_publish(
+    *,
+    db: Session,
+    user: User,
+    mode: str,
+    sync_circle_codes: list[str],
+) -> None:
+    safe_mode = str(mode or "").strip().lower()
+    normalized_codes = [
+        str(code or "").strip().upper()
+        for code in sync_circle_codes or []
+        if str(code or "").strip()
+    ]
+    if safe_mode != "venue":
+        if normalized_codes:
+            raise BusinessException(message="普通资源无需关联圈子", code=5463, status_code=400)
+        return
+    if not bool(user.is_circle_owner):
+        raise BusinessException(message="只有圈主可以发布活动", code=5464, status_code=403)
+    if len(normalized_codes) != 1:
+        raise BusinessException(message="活动必须选择一个自己创建的圈子", code=5465, status_code=400)
+    owned_circle = db.execute(
+        select(Circle.id).where(
+            Circle.circle_code == normalized_codes[0],
+            Circle.owner_user_pk == int(user.id),
+            Circle.status == "active",
+        )
+    ).scalar_one_or_none()
+    if owned_circle is None:
+        raise BusinessException(message="活动只能发布到自己创建的圈子", code=5466, status_code=403)
 
 
 def _to_public_file_url(file_url: str, request: Request | None) -> str:
@@ -171,20 +207,25 @@ def _serialize_public_post(post: ResourcePost, author: User, request: Request) -
         "images": _parse_images_json(post.images_json),
         "view_count": int(post.view_count or 0),
         "like_count": int(post.like_count or 0),
+        "collect_count": int(post.like_count or 0),
+        "favorite_count": int(post.like_count or 0),
         "comment_count": int(post.comment_count or 0),
         "status": str(post.status or "active"),
         "is_pinned": bool(post.is_pinned),
         "pinned_at": post.pinned_at.isoformat() if post.pinned_at else None,
         "liked": False,
+        "collected": False,
+        "is_collected": False,
         "interested": False,
+        "is_interested": False,
         "is_author": False,
         "created_at": post.created_at.isoformat() if post.created_at else None,
         "author": {
             "user_id": str(author.user_id or "").strip(),
             "company_name": str(author.company_name or "").strip(),
             "job_title": str(author.job_title or "").strip(),
-            "nickname": str(author.nickname or "").strip() or "未命名用户",
-            "avatar_url": str(author.avatar_url or "").strip() or "/static/logo.png",
+            "nickname": public_nickname(author),
+            "avatar_url": public_avatar_url(author),
             "role": str(author.industry_label or "").strip() or "商务人士",
             "is_verified": bool(author.is_verified),
         },
@@ -287,7 +328,7 @@ def report_post_impressions_batch(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    user = _require_current_user(db=db, current_user_pk=user_id)
     recorded = save_resource_post_impressions(
         db=db,
         viewer_user_pk=user_id,
@@ -352,7 +393,7 @@ def get_post_feed(
         )
         return success_response(data=payload)
 
-    _require_current_user(db=db, current_user_pk=user_id)
+    user = _require_current_user(db=db, current_user_pk=user_id)
     normalized_excluded_post_codes = [
         str(item or "").strip()
         for item in str(exclude_post_codes or "").split(",")
@@ -443,9 +484,13 @@ def _serialize_interested_post(post: ResourcePost, author: User, like: ResourceP
         "images": [],
         "view_count": int(post.view_count or 0),
         "like_count": int(post.like_count or 0),
+        "collect_count": int(post.like_count or 0),
+        "favorite_count": int(post.like_count or 0),
         "comment_count": int(post.comment_count or 0),
         "status": str(post.status or "active"),
         "liked": True,
+        "collected": True,
+        "is_collected": True,
         "interested": True,
         "is_interested": True,
         "time_text": "最近收藏",
@@ -453,8 +498,8 @@ def _serialize_interested_post(post: ResourcePost, author: User, like: ResourceP
         "interested_at": like.created_at.isoformat() if like.created_at else None,
         "author": {
             "user_id": str(author.user_id or "").strip(),
-            "nickname": str(author.nickname or "").strip() or "未命名用户",
-            "avatar_url": str(author.avatar_url or "").strip() or "/static/logo.png",
+            "nickname": public_nickname(author),
+            "avatar_url": public_avatar_url(author),
             "company_name": str(author.company_name or "").strip(),
             "job_title": str(author.job_title or "").strip(),
             "role": str(author.industry_label or "").strip(),
@@ -471,7 +516,7 @@ def _serialize_interested_post(post: ResourcePost, author: User, like: ResourceP
     return _publicize_post_payload(payload, request=request)
 
 
-@router.get("/interests", summary="List interested resource posts")
+@router.get("/interests", summary="List collected resource posts")
 def get_post_interests(
     request: Request,
     cursor: str | None = Query(default=None),
@@ -508,6 +553,23 @@ def get_post_interests(
     )
 
 
+@router.get("/collections", summary="List collected resource posts")
+def get_post_collections(
+    request: Request,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    return get_post_interests(
+        request=request,
+        cursor=cursor,
+        limit=limit,
+        user_id=user_id,
+        db=db,
+    )
+
+
 @router.post("", summary="发布资源")
 def create_post(
     request: Request,
@@ -516,6 +578,12 @@ def create_post(
     db: Session = Depends(db_session),
 ):
     user = _require_current_user(db=db, current_user_pk=user_id)
+    _validate_circle_activity_publish(
+        db=db,
+        user=user,
+        mode=payload.mode,
+        sync_circle_codes=payload.sync_circle_codes,
+    )
     normalized_images = _normalize_post_images(payload.images, request)
     review_result = submit_post_review(
         db=db,
@@ -527,6 +595,7 @@ def create_post(
             "description": payload.description,
             "industry_label": payload.industry_label,
             "images": normalized_images,
+            "sync_circle_codes": payload.sync_circle_codes,
         },
     )
     if review_result["review_required"]:
@@ -584,6 +653,12 @@ def update_post(
     db: Session = Depends(db_session),
 ):
     user = _require_current_user(db=db, current_user_pk=user_id)
+    _validate_circle_activity_publish(
+        db=db,
+        user=user,
+        mode=payload.mode,
+        sync_circle_codes=payload.sync_circle_codes,
+    )
     normalized_images = _normalize_post_images(payload.images, request)
     review_result = submit_post_review(
         db=db,
@@ -596,6 +671,7 @@ def update_post(
             "description": payload.description,
             "industry_label": payload.industry_label,
             "images": normalized_images,
+            "sync_circle_codes": payload.sync_circle_codes,
         },
     )
     if review_result["review_required"]:
@@ -701,14 +777,13 @@ def delete_post_like(
     return success_response(data=payload, message="已取消点赞")
 
 
-@router.post("/{post_code}/interest/toggle", summary="Toggle resource interest status")
-def toggle_post_interest(
+def _toggle_post_collect(
     post_code: str = Path(..., min_length=4),
-    desired: bool | None = Query(default=None, description="Desired interest state"),
+    desired: bool | None = Query(default=None, description="Desired collect state"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    viewer = _require_current_user(db=db, current_user_pk=user_id)
     normalized_code = str(post_code or "").strip()
     post = db.execute(
         select(ResourcePost).where(ResourcePost.post_code == normalized_code)
@@ -731,9 +806,64 @@ def toggle_post_interest(
     )
     payload["interested"] = next_interested
     payload["is_interested"] = next_interested
+    payload["collected"] = next_interested
+    payload["is_collected"] = next_interested
+
+    if (
+        next_interested
+        and existing_like is None
+        and int(post.author_user_pk) != int(user_id)
+    ):
+        db.add(
+            Notification(
+                user_pk=int(post.author_user_pk),
+                actor_user_pk=int(viewer.id),
+                type="collection",
+                title="资源被收藏",
+                content=(
+                    f"{public_nickname(viewer)}"
+                    f"收藏了你的资源“{str(post.title or '未命名资源').strip()}”"
+                ),
+                link_type="resource",
+                link_id=str(post.post_code or "").strip(),
+                is_read=False,
+            )
+        )
+        db.commit()
+
     return success_response(
         data=payload,
-        message="已标记感兴趣" if next_interested else "已取消感兴趣",
+        message="已收藏" if next_interested else "已取消收藏",
+    )
+
+
+@router.post("/{post_code}/interest/toggle", summary="Toggle resource collect status")
+def toggle_post_interest(
+    post_code: str = Path(..., min_length=4),
+    desired: bool | None = Query(default=None, description="Desired collect state"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    return _toggle_post_collect(
+        post_code=post_code,
+        desired=desired,
+        user_id=user_id,
+        db=db,
+    )
+
+
+@router.post("/{post_code}/collect/toggle", summary="Toggle resource collect status")
+def toggle_post_collect(
+    post_code: str = Path(..., min_length=4),
+    desired: bool | None = Query(default=None, description="Desired collect state"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    return _toggle_post_collect(
+        post_code=post_code,
+        desired=desired,
+        user_id=user_id,
+        db=db,
     )
 
 
@@ -801,7 +931,7 @@ async def upload_post_image(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    _require_current_user(db=db, current_user_pk=user_id)
+    user = _require_current_user(db=db, current_user_pk=user_id)
 
     file_bytes = await file.read()
     if not file_bytes:
@@ -828,6 +958,7 @@ async def upload_post_image(
         content_type=content_type,
         request=request,
     )
+    _assert_profile_image_safe(user=user, media_url=stored.url)
     display_name = (file.filename or FsPath(stored.key).name).strip() or FsPath(stored.key).name
     return success_response(
         data={

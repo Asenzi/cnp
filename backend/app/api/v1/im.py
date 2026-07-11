@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path as FsPath
 from secrets import token_hex
 
@@ -19,6 +19,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id
+from app.api.v1.user import _assert_profile_image_safe, _assert_profile_text_safe
 from app.core.database import SessionLocal
 from app.core.exceptions import BusinessException
 from app.core.response import success_response
@@ -270,6 +271,11 @@ async def post_conversation_message(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
+    sender = get_user_by_id(db=db, user_id=user_id)
+    if sender is None:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+    if str(payload.content_type or "text").strip().lower() == "text":
+        _assert_profile_text_safe(user=sender, fields={"message": payload.content})
     result = send_conversation_message(
         db=db,
         viewer_user_pk=user_id,
@@ -409,7 +415,7 @@ async def im_websocket(
                     {
                         "event": "ws.pong",
                         "data": {
-                            "ts": int(datetime.now(UTC).timestamp() * 1000),
+                            "ts": int(datetime.now(timezone.utc).timestamp() * 1000),
                         },
                     }
                 )
@@ -578,6 +584,8 @@ async def post_im_asset_upload(
         content_type=content_type,
         request=request,
     )
+    if safe_kind == "image":
+        _assert_profile_image_safe(user=user, media_url=stored.url)
     display_name = (file.filename or FsPath(stored.key).name).strip() or FsPath(stored.key).name
     if len(display_name) > 128:
         display_name = display_name[:128]

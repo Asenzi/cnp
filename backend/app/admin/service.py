@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -39,14 +39,14 @@ def _normalize_lower(value: str | None) -> str:
 def _serialize_datetime(value: datetime | None) -> str | None:
     if value is None:
         return None
-    safe_value = value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
+    safe_value = value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
     return safe_value.isoformat()
 
 
 def _normalize_filter_datetime(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
+    return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
 
 
 def _serialize_decimal(value: Decimal | int | float | None) -> float:
@@ -118,7 +118,7 @@ def login_admin(db: Session, *, username: str, password: str) -> AdminLoginRespo
     if not bool(admin.is_active):
         raise BusinessException(message="管理员账号已被禁用", code=4602, status_code=403)
 
-    admin.last_login_at = datetime.now(UTC).replace(tzinfo=None)
+    admin.last_login_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(admin)
     db.commit()
     db.refresh(admin)
@@ -596,7 +596,7 @@ def set_admin_resource_post_pin(db: Session, *, post_code: str, pinned: bool) ->
         raise BusinessException(message="资源不存在", code=4607, status_code=404)
 
     post.is_pinned = bool(pinned)
-    post.pinned_at = datetime.now(UTC).replace(tzinfo=None) if bool(pinned) else None
+    post.pinned_at = datetime.now(timezone.utc).replace(tzinfo=None) if bool(pinned) else None
     db.add(post)
     db.commit()
     db.refresh(post)

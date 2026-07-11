@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -37,7 +37,7 @@ class TencentDetectInfoResult:
 
 
 def _utc_timestamp() -> int:
-    return int(datetime.now(UTC).timestamp())
+    return int(datetime.now(timezone.utc).timestamp())
 
 
 def _sha256_hex(data: str) -> str:
@@ -55,7 +55,7 @@ def _build_authorization(*, action: str, payload_json: str, timestamp: int) -> s
     if not secret_id or not secret_key:
         raise BusinessException(message="腾讯云实名认证配置不完整", code=4351, status_code=503)
 
-    date = datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%d")
+    date = datetime.fromtimestamp(timestamp, timezone.utc).strftime("%Y-%m-%d")
     credential_scope = f"{date}/{FACEID_SERVICE}/tc3_request"
     hashed_request_payload = _sha256_hex(payload_json)
     canonical_request = "\n".join(

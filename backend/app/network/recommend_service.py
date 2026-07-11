@@ -1,11 +1,11 @@
-﻿
+
 import base64
 import hashlib
 import json
 import math
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from secrets import token_hex
 from typing import Any
 
@@ -13,6 +13,8 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.profile_display import public_avatar_url, public_intro, public_nickname
 from app.crud.network import (
     create_reco_feedback,
     create_reco_impressions,
@@ -40,6 +42,7 @@ from app.crud.network import (
     map_business_user_ids_to_pks,
 )
 from app.crud.sys_config import get_sys_config_values
+from app.common.feed_visibility import is_feed_self_visible
 from app.models.user import User
 from app.models.user_verification import UserVerification
 from app.models.resource_post import ResourcePost
@@ -197,7 +200,7 @@ def _to_float(value: str | None, default: float) -> float:
 def _load_reco_config(db: Session) -> dict[str, float]:
     global _RECO_CONFIG_CACHE_TS, _RECO_CONFIG_CACHE_VALUE
 
-    now_ts = datetime.now(UTC).timestamp()
+    now_ts = datetime.now(timezone.utc).timestamp()
     if now_ts - _RECO_CONFIG_CACHE_TS <= RECO_CONFIG_CACHE_TTL_SECONDS:
         return _RECO_CONFIG_CACHE_VALUE
 
@@ -314,7 +317,7 @@ def _load_candidate_profile_lines(db: Session, candidate_user_pks: set[int]) -> 
 
 
 def _active_score(user: User) -> tuple[float, str]:
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     reference = user.last_login_at or user.updated_at or user.created_at
     if not reference:
         return 0.25, "最近活跃"
@@ -332,7 +335,7 @@ def _active_score(user: User) -> tuple[float, str]:
 
 
 def _freshness_score(user: User) -> float:
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     created_at = user.created_at or user.updated_at
     if not created_at:
         return 0.2
@@ -352,9 +355,10 @@ def _quality_score(user: User) -> float:
     score = 0.0
     if bool(user.is_verified):
         score += 0.35
-    if str(user.avatar_url or "").strip() and str(user.avatar_url or "").strip() != "/static/logo.png":
+    avatar_url = public_avatar_url(user)
+    if avatar_url and avatar_url != "/static/logo.png" and avatar_url != settings.DEFAULT_AVATAR_URL:
         score += 0.12
-    if str(user.intro or "").strip():
+    if public_intro(user):
         score += 0.16
     if str(user.industry_label or "").strip():
         score += 0.10
@@ -371,8 +375,8 @@ def _content_match_score(viewer: User, candidate: User, keyword: str | None, dom
     viewer_industry = str(viewer.industry_label or "").strip().lower()
     candidate_industry = str(candidate.industry_label or "").strip().lower()
     candidate_city = str(candidate.city_name or "").strip().lower()
-    candidate_intro = str(candidate.intro or "").strip().lower()
-    candidate_name = str(candidate.nickname or "").strip().lower()
+    candidate_intro = str(public_intro(candidate) or "").strip().lower()
+    candidate_name = public_nickname(candidate).lower()
 
     if viewer_industry and candidate_industry and viewer_industry == candidate_industry:
         score += 0.55
@@ -411,7 +415,7 @@ def _build_viewer_intent_profile(recent_positive_rows: list[dict[str, Any]]) -> 
     industry_weights: dict[str, float] = {}
     city_weights: dict[str, float] = {}
     verified_interest = 0.0
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     event_weight_map = {"click_card": 1.0, "apply_friend": 1.5, "chat_start": 1.8}
 
     for row in recent_positive_rows:
@@ -457,7 +461,7 @@ def _realtime_interest_score(*, candidate: User, intent_profile: ViewerIntentPro
 
 
 def _time_slot_bonus(*, candidate_active_score: float, is_same_city: bool, candidate: User) -> float:
-    hour = datetime.now(UTC).astimezone().hour
+    hour = datetime.now(timezone.utc).astimezone().hour
     bonus = 0.0
 
     if 11 <= hour <= 14 and candidate_active_score >= 0.85:
@@ -794,7 +798,8 @@ def list_network_recommendations(
     safe_limit = min(max(int(limit or 20), 1), 50)
     offset = _decode_cursor(cursor)
     reco_cfg = _load_reco_config(db)
-    stable_request_id = str(request_id or "").strip() or f"rec_{int(datetime.now(UTC).timestamp())}_{token_hex(4)}"
+    show_self_network = is_feed_self_visible(db=db, channel="network", default=False)
+    stable_request_id = str(request_id or "").strip() or f"rec_{int(datetime.now(timezone.utc).timestamp())}_{token_hex(4)}"
     request_salt = stable_request_id
     refresh_context_key = _build_refresh_context_key(
         viewer_user_pk=viewer.id,
@@ -823,14 +828,14 @@ def list_network_recommendations(
         cached_request_scope = _REQUEST_SCOPE_REFRESH_CACHE.get(stable_request_id)
         if cached_request_scope:
             cached_ts, cached_user_pks = cached_request_scope
-            if datetime.now(UTC).timestamp() - float(cached_ts) <= REQUEST_SCOPE_CACHE_TTL_SECONDS:
+            if datetime.now(timezone.utc).timestamp() - float(cached_ts) <= REQUEST_SCOPE_CACHE_TTL_SECONDS:
                 refresh_excluded_user_pks.update(int(item) for item in (cached_user_pks or []) if item)
                 request_scope_locked = True
             else:
                 _REQUEST_SCOPE_REFRESH_CACHE.pop(stable_request_id, None)
 
     if offset <= 0:
-        now_ts = datetime.now(UTC).timestamp()
+        now_ts = datetime.now(timezone.utc).timestamp()
         cached_value = _FIRST_PAGE_RECENT_CACHE.get(refresh_context_key)
         if cached_value:
             cached_ts, cached_user_pks = cached_value
@@ -856,7 +861,9 @@ def list_network_recommendations(
 
     rank_with_request_scope = bool(offset <= 0 or request_scope_locked)
 
-    soft_excluded_user_pks = {viewer.id, *blocked_set, *feedback_block_set}
+    soft_excluded_user_pks = {*blocked_set, *feedback_block_set}
+    if not show_self_network:
+        soft_excluded_user_pks.add(int(viewer.id))
     base_excluded_user_pks = {*soft_excluded_user_pks, *connected_set}
     strict_excluded_user_pks = {*base_excluded_user_pks, *negative_hide_set}
 
@@ -873,7 +880,19 @@ def list_network_recommendations(
         city_name=preferred_city,
         industry_label=industry_label,
         domain=domain,
+        include_self=show_self_network,
     )
+    if not raw_candidates and preferred_city:
+        raw_candidates = list_candidate_users(
+            db=db,
+            viewer_user_pk=viewer.id,
+            limit_pool=600,
+            keyword=keyword,
+            city_name=None,
+            industry_label=industry_label,
+            domain=domain,
+            include_self=show_self_network,
+        )
     candidate_exclude_levels = [
         {*strict_excluded_user_pks, *refresh_excluded_user_pks},
         strict_excluded_user_pks,
@@ -1213,7 +1232,7 @@ def list_network_recommendations(
 
     if offset <= 0 and page_rows:
         _FIRST_PAGE_RECENT_CACHE[refresh_context_key] = (
-            datetime.now(UTC).timestamp(),
+            datetime.now(timezone.utc).timestamp(),
             [int(row.user.id) for row in page_rows if row.user and row.user.id],
         )
 
@@ -1251,9 +1270,9 @@ def list_network_recommendations(
 
         item_payload = {
                 "user_id": row.user.user_id,
-                "nickname": row.user.nickname,
-                "avatar_url": row.user.avatar_url,
-                "intro": str(row.user.intro or "").strip(),
+                "nickname": public_nickname(row.user),
+                "avatar_url": public_avatar_url(row.user),
+                "intro": public_intro(row.user) or "",
                 "industry_label": row.user.industry_label,
                 "city_name": row.user.city_name,
                 "company_name": str(row.user.company_name or candidate_profile_map.get(int(row.user.id), {}).get("company_name", "")).strip(),

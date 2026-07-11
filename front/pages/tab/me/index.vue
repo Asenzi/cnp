@@ -13,44 +13,69 @@
             <view class="user-info">
               <view class="name-line">
                 <text class="name">{{ displayName }}</text>
-                <image v-if="isVerified" class="badge" mode="aspectFit" src="https://cos.cnptec.site/static/icon/certification.png" />
               </view>
               <text class="id">ID: {{ displayUserId }}</text>
-              <text class="meta">{{ displayMeta }}</text>
+              <view v-if="identityBadges.length" class="identity-badges">
+                <image
+                  v-for="badge in identityBadges"
+                  :key="badge.key"
+                  class="identity-badge"
+                  mode="aspectFit"
+                  :src="badge.icon"
+                />
+              </view>
             </view>
             <view class="edit" @tap="goEditInfo">
               <image class="edit-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/edit.png" />
             </view>
           </view>
 
-          <view v-if="displayIntro" class="intro">
+          <view class="intro" :class="{ 'intro-empty': isIntroEmpty }" @tap="onIntroTap">
             <text class="intro-text">{{ displayIntro }}</text>
           </view>
 
           <view class="stats">
             <view class="stat" @tap="goMyFollowing">
-              <text class="stat-num">{{ displayFollowingCount }}</text>
-              <text class="stat-name">关注</text>
-            </view>
-            <view class="stat" @tap="goMyFans">
-              <text class="stat-num">{{ displayFansCount }}</text>
-              <text class="stat-name">粉丝</text>
-            </view>
-            <view class="stat" @tap="goMyActivities">
-              <text class="stat-num">{{ displayActivityCount }}</text>
-              <text class="stat-name">活动</text>
+              <text class="stat-num">{{ displayCollectionCount }}</text>
+              <text class="stat-name">收藏</text>
             </view>
             <view class="stat" @tap="goMyCircles">
               <text class="stat-num">{{ displayCircleCount }}</text>
               <text class="stat-name">圈子</text>
             </view>
+            <view class="stat" @tap="goMyActivities">
+              <text class="stat-num">{{ displayActivityCount }}</text>
+              <text class="stat-name">活动</text>
+            </view>
+            <view class="stat" @tap="goMessages">
+              <text class="stat-num">{{ unreadMessageCount }}</text>
+              <text class="stat-name">消息</text>
+            </view>
           </view>
         </view>
 
         <!-- 会员提示 -->
-        <view v-if="showMemberCenter" class="member-tip" @tap="onOpenMember">
-          <text class="member-text">开通会员，解锁更多权益</text>
-          <text class="member-arrow">›</text>
+        <view class="member-cards">
+          <view class="member-card" @tap="onOpenMember">
+            <view class="member-card-content">
+              <view class="member-card-top">
+                <image class="member-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/huiyuan.png" />
+                <text class="member-title">{{ isMemberOpened ? '会员中心' : '开通会员' }}</text>
+              </view>
+              <text class="member-desc">{{ isMemberOpened ? '查看会员权益' : '解锁更多权益' }}</text>
+            </view>
+            <text class="member-arrow">›</text>
+          </view>
+          <view class="member-card" @tap="onCircleOwnerAction">
+            <view class="member-card-content">
+              <view class="member-card-top">
+                <image class="member-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/create.png" />
+                <text class="member-title">{{ isCircleOwner ? '管理圈子' : '成为圈主' }}</text>
+              </view>
+              <text class="member-desc">{{ isCircleOwner ? '创建与管理我的圈子' : '解锁更多圈主权益' }}</text>
+            </view>
+            <text class="member-arrow">›</text>
+          </view>
         </view>
       </view>
 
@@ -79,7 +104,7 @@
             <text class="setting-arrow">›</text>
           </view>
           <view
-            v-for="item in settingList"
+            v-for="item in visibleSettingList"
             :key="item.key"
             class="setting"
             @tap="onSettingTap(item)"
@@ -120,7 +145,9 @@ const displayAvatar = computed(() => {
 })
 
 const isVerified = computed(() => {
-  return Boolean(currentUser.value?.is_verified || currentUser.value?.real_name_verified)
+  return isTruthyValue(currentUser.value?.is_verified)
+    || isTruthyValue(currentUser.value?.real_name_verified)
+    || Boolean(String(currentUser.value?.verified_real_name || '').trim())
 })
 
 const visibleServiceList = computed(() => {
@@ -128,6 +155,7 @@ const visibleServiceList = computed(() => {
     .filter((item) => {
       if (item.key === 'auth') return !isVerified.value
       if (item.key === 'member_center') return isMemberOpened.value
+      if (item.key === 'income') return isCircleOwner.value
       return true
     })
     .map((item) => {
@@ -149,6 +177,10 @@ const visibleServiceList = computed(() => {
     })
 })
 
+const visibleSettingList = computed(() => {
+  return settingList.filter((item) => item.key !== 'account-security')
+})
+
 const displayName = computed(() => {
   return currentUser.value?.nickname?.trim() || '圈脉用户'
 })
@@ -158,15 +190,12 @@ const displayUserId = computed(() => {
   return id ? String(id) : '--'
 })
 
-const displayMeta = computed(() => {
-  const parts = []
-  if (currentUser.value?.job_title) parts.push(currentUser.value.job_title)
-  if (currentUser.value?.company_name) parts.push(currentUser.value.company_name)
-  return parts.join(' · ') || '完善资料，展示专业形象'
+const displayIntro = computed(() => {
+  return currentUser.value?.intro?.trim() || '一句话介绍你的行业、资源与合作方向，让更多合适的人脉主动找到你'
 })
 
-const displayIntro = computed(() => {
-  return currentUser.value?.intro?.trim() || ''
+const isIntroEmpty = computed(() => {
+  return !currentUser.value?.intro?.trim()
 })
 
 const displayCircleCount = computed(() => {
@@ -174,9 +203,29 @@ const displayCircleCount = computed(() => {
   return typeof count === 'number' ? String(count) : '--'
 })
 
-const displayFollowingCount = computed(() => {
-  const count = currentUser.value?.following_count ?? currentUser.value?.follow_count
-  return typeof count === 'number' ? String(count) : '0'
+const displayCollectionCount = computed(() => {
+  const info = currentUser.value || {}
+  const collectionParts = [
+    info.network_interest_count,
+    info.resource_interest_count,
+    info.circle_interest_count
+  ]
+  const hasCompleteParts = collectionParts.every((value) => {
+    const numericValue = Number(value)
+    return value !== null && value !== undefined && value !== '' && Number.isFinite(numericValue)
+  })
+
+  if (hasCompleteParts) {
+    return String(collectionParts.reduce((total, value) => total + Number(value), 0))
+  }
+
+  const fallbackCount = info.interest_count
+    ?? info.interested_count
+    ?? info.follow_favorite_count
+    ?? info.favorite_count
+    ?? info.collect_count
+  const numericCount = Number(fallbackCount)
+  return Number.isFinite(numericCount) && numericCount >= 0 ? String(numericCount) : '0'
 })
 
 const displayFansCount = computed(() => {
@@ -187,25 +236,6 @@ const displayFansCount = computed(() => {
 const displayActivityCount = computed(() => {
   const count = currentUser.value?.activity_count ?? currentUser.value?.event_count
   return typeof count === 'number' ? String(count) : '--'
-})
-
-const displayInterestCount = computed(() => {
-  const info = currentUser.value || {}
-  const count = info.follow_favorite_count
-    ?? info.favorite_count
-    ?? info.collect_count
-    ?? info.interest_count
-    ?? info.interested_count
-  const numericCount = Number(count)
-  return Number.isFinite(numericCount) && numericCount >= 0 ? String(numericCount) : '0'
-})
-
-const displayBalance = computed(() => {
-  const balance = currentUser.value?.balance
-  if (typeof balance === 'number') {
-    return `¥${balance.toFixed(2)}`
-  }
-  return '¥0.00'
 })
 
 const unreadMessageCountText = computed(() => {
@@ -247,11 +277,43 @@ const isMemberOpened = computed(() => {
   return false
 })
 
+const isYearlyMemberOpened = computed(() => {
+  if (!isMemberOpened.value) return false
+  const info = currentUser.value || {}
+  const planId = String(info.member_plan_id || info.plan_id || info.vip_plan_id || '').trim().toLowerCase()
+  return planId === 'yearly'
+})
+
+const identityBadges = computed(() => {
+  const badges = []
+  if (isVerified.value) {
+    badges.push({
+      key: 'verified',
+      icon: 'https://cos.cnptec.site/static/icon/certification.png'
+    })
+  }
+  if (isMemberOpened.value) {
+    badges.push({
+      key: 'member',
+      icon: 'https://cos.cnptec.site/static/icon/mennber1.png'
+    })
+  }
+  if (isCircleOwner.value) {
+    badges.push({
+      key: 'circle-owner',
+      icon: 'https://cos.cnptec.site/static/icon/leader.png?v=20260623'
+    })
+  }
+  return badges
+})
+
 const showMemberCenter = computed(() => {
   return isLoggedIn.value && !isMemberOpened.value
 })
 
-let walletNavigating = false
+const isCircleOwner = computed(() => {
+  return isTruthyValue(currentUser.value?.is_circle_owner)
+})
 
 const clearLoginState = () => {
   disconnectRealtimeSocket()
@@ -287,6 +349,11 @@ const goEditInfo = () => {
   uni.navigateTo({ url: '/pages/me/editInfo/index' })
 }
 
+const onIntroTap = () => {
+  if (!isIntroEmpty.value) return
+  goEditInfo()
+}
+
 const goLogin = () => {
   uni.navigateTo({ url: '/pages/auth/login/index' })
 }
@@ -307,23 +374,6 @@ const goMyActivities = () => {
   uni.showToast({ title: '我的活动功能开发中', icon: 'none' })
 }
 
-const goWallet = () => {
-  if (walletNavigating) return
-  walletNavigating = true
-  uni.navigateTo({
-    url: '/pages/me/wallet/index',
-    complete: () => {
-      setTimeout(() => {
-        walletNavigating = false
-      }, 400)
-    }
-  })
-}
-
-const goInterests = () => {
-  uni.navigateTo({ url: '/pages/me/interests/index' })
-}
-
 const goMessages = () => {
   uni.navigateTo({ url: '/pages/me/messages/index' })
 }
@@ -334,6 +384,33 @@ const onNeedLogin = () => {
 
 const onOpenMember = () => {
   uni.navigateTo({ url: '/pages/me/member-center/index' })
+}
+
+const onCircleOwnerAction = () => {
+  if (!isLoggedIn.value) {
+    onNeedLogin()
+    return
+  }
+
+  if (isCircleOwner.value) {
+    uni.navigateTo({ url: '/pages/circles/manage/index' })
+  } else {
+    if (!isYearlyMemberOpened.value) {
+      uni.showModal({
+        title: '需要年度会员',
+        content: '购买圈主身份前需要先开通年度会员，是否现在前往会员中心？',
+        confirmText: '去开通',
+        cancelText: '取消',
+        success: (res) => {
+          if (res?.confirm) {
+            uni.navigateTo({ url: '/pages/me/member-center/index?planId=yearly' })
+          }
+        }
+      })
+      return
+    }
+    uni.navigateTo({ url: '/pages/me/circle-owner/apply/index' })
+  }
 }
 
 const onServiceTap = (item) => {
@@ -511,11 +588,6 @@ onUnmounted(() => {
   color: #172033;
 }
 
-.badge {
-  width: 32rpx;
-  height: 32rpx;
-}
-
 .id {
   display: block;
   font-size: 24rpx;
@@ -523,10 +595,17 @@ onUnmounted(() => {
   margin-bottom: 4rpx;
 }
 
-.meta {
-  display: block;
-  font-size: 26rpx;
-  color: #66758a;
+.identity-badges {
+  min-height: 34rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.identity-badge {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
 }
 
 .edit {
@@ -552,10 +631,19 @@ onUnmounted(() => {
   margin-bottom: 24rpx;
 }
 
+.intro-empty {
+  background: #f5f8ff;
+
+}
+
 .intro-text {
   font-size: 26rpx;
   line-height: 38rpx;
   color: #66758a;
+}
+
+.intro-empty .intro-text {
+  color: #64748b;
 }
 
 .stats {
@@ -587,24 +675,57 @@ onUnmounted(() => {
   color: #66758a;
 }
 
-.member-tip {
+.member-cards {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #1296db;
-  border-radius: 12rpx;
-  padding: 43rpx 28rpx;
+  gap: 16rpx;
   margin-top: 16rpx;
 }
 
-.member-text {
-  font-size: 26rpx;
-  color: #fff;
+.member-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 32rpx 24rpx;
+}
+
+.member-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  flex: 1;
+}
+
+.member-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.member-icon {
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
+}
+
+.member-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.member-desc {
+  font-size: 22rpx;
+  color: #999;
+  padding-left: 52rpx;
 }
 
 .member-arrow {
   font-size: 32rpx;
-  color: #fff;
+  color: #999;
+  margin-left: 8rpx;
 }
 
 /* 未登录 */

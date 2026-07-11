@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, Index
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Index
 from sqlalchemy.sql import func
 
 from app.models.base import Base
@@ -12,6 +12,13 @@ class Notification(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="通知ID")
     user_pk = Column(Integer, nullable=False, index=True, comment="用户ID")
+    actor_user_pk = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="触发通知的用户ID",
+    )
     type = Column(String(50), nullable=False, default="system", comment="通知类型: system, circle, event, post")
     title = Column(String(200), nullable=False, comment="通知标题")
     content = Column(Text, nullable=False, comment="通知内容")

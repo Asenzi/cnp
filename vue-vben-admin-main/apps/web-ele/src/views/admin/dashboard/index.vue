@@ -16,7 +16,6 @@ import {
 
 import { getAdminDashboardOverviewApi } from '#/api/admin';
 import {
-  formatAmount,
   formatCompactNumber,
   formatDateTime,
   formatPostMode,
@@ -29,7 +28,6 @@ const loading = ref(false);
 const overview = ref<DashboardOverview>({
   recent_circles: [],
   recent_posts: [],
-  recent_recharges: [],
   recent_users: [],
   summary: {
     active_circle_total: 0,
@@ -37,10 +35,7 @@ const overview = ref<DashboardOverview>({
     active_user_total: 0,
     circle_total: 0,
     notice_total: 0,
-    paid_recharge_total: 0,
-    pending_recharge_total: 0,
     pending_verification_total: 0,
-    recharge_amount_total: 0,
     resource_total: 0,
     user_total: 0,
     verified_user_total: 0,
@@ -77,20 +72,6 @@ const statCards = computed(() => {
       key: 'verify',
       title: '待审认证',
       value: summary.pending_verification_total,
-    },
-    {
-      description: `待支付 ${formatCompactNumber(summary.pending_recharge_total)}`,
-      displayValue: formatCompactNumber(summary.paid_recharge_total),
-      key: 'recharge',
-      title: '已支付充值单',
-      value: summary.paid_recharge_total,
-    },
-    {
-      description: '累计已支付充值金额',
-      displayValue: formatAmount(summary.recharge_amount_total),
-      key: 'money',
-      title: '充值金额',
-      value: Number(summary.recharge_amount_total || 0),
     },
   ];
 });
@@ -263,41 +244,6 @@ onMounted(() => {
         </ElCard>
       </ElCol>
 
-      <ElCol :lg="12" :xs="24" class="mb-4">
-        <ElCard shadow="never" class="rounded-2xl border-0">
-          <template #header>
-            <div class="flex items-center justify-between">
-              <span class="font-semibold text-slate-900">最近充值订单</span>
-              <span class="text-xs text-slate-400">最近 5 条</span>
-            </div>
-          </template>
-          <ElTable :data="overview.recent_recharges" empty-text="暂无充值订单" stripe>
-            <ElTableColumn label="订单号" min-width="190" prop="order_no" />
-            <ElTableColumn label="用户" min-width="150">
-              <template #default="{ row }">
-                {{ row.nickname || '--' }} ({{ row.user_id || '--' }})
-              </template>
-            </ElTableColumn>
-            <ElTableColumn label="金额" width="90">
-              <template #default="{ row }">
-                {{ formatAmount(row.amount) }}
-              </template>
-            </ElTableColumn>
-            <ElTableColumn label="状态" width="100">
-              <template #default="{ row }">
-                <ElTag :type="resolveStatusTagType(row.status)">
-                  {{ row.status }}
-                </ElTag>
-              </template>
-            </ElTableColumn>
-            <ElTableColumn label="创建时间" min-width="160">
-              <template #default="{ row }">
-                {{ formatDateTime(row.created_at) }}
-              </template>
-            </ElTableColumn>
-          </ElTable>
-        </ElCard>
-      </ElCol>
     </ElRow>
   </div>
 </template>

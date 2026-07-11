@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from math import log1p
 from secrets import token_hex
 
 from sqlalchemy.orm import Session
 
+from app.common.feed_visibility import is_feed_self_visible
 from app.core.asset_urls import sanitize_public_asset_url
 from app.core.config import settings
+from app.core.profile_display import public_avatar_url, public_nickname
 from app.crud import count_discover_circles, list_discover_circles, list_joined_circle_codes, list_latest_discover_circles_page
 from app.schemas.circle import CircleDiscoverItem, CircleDiscoverListData
 
@@ -48,7 +50,7 @@ def _days_since(value: datetime | None, *, now: datetime) -> float:
         return 365.0
     safe_value = value
     if safe_value.tzinfo is not None:
-        safe_value = safe_value.astimezone(UTC).replace(tzinfo=None)
+        safe_value = safe_value.astimezone(timezone.utc).replace(tzinfo=None)
     return max((now - safe_value).total_seconds(), 0.0) / 86400.0
 
 
@@ -66,7 +68,7 @@ def _keyword_bonus(circle, owner, keyword: str | None) -> float:
     name = _normalize_lower(circle.name)
     industry = _normalize_lower(circle.industry_label)
     description = _normalize_lower(circle.description)
-    owner_name = _normalize_lower(owner.nickname)
+    owner_name = _normalize_lower(public_nickname(owner))
     owner_city = _normalize_lower(owner.city_name)
 
     score = 0.0
@@ -195,6 +197,8 @@ def list_circle_discover_recommendations(
     effective_city_name = _normalize_text(city_name) or _normalize_text(viewer.city_name)
     viewer_industry = _normalize_lower(viewer.industry_label)
     viewer_city = _normalize_lower(effective_city_name)
+    show_self_circle = is_feed_self_visible(db=db, channel="circle", default=False)
+    exclude_owner_user_pk = None if show_self_circle else int(viewer.id)
     joined_circle_codes = list_joined_circle_codes(db=db, user_pk=int(viewer.id))
     # Determine parameters for fetching circles based on tab
     fetch_city_name = None
@@ -212,6 +216,7 @@ def list_circle_discover_recommendations(
             keyword=keyword,
             city_name=fetch_city_name,
             industry_label=industry_label,
+            exclude_owner_user_pk=exclude_owner_user_pk,
         )
         page_rows = list_latest_discover_circles_page(
             db=db,
@@ -221,8 +226,9 @@ def list_circle_discover_recommendations(
             keyword=keyword,
             city_name=fetch_city_name,
             industry_label=industry_label,
+            exclude_owner_user_pk=exclude_owner_user_pk,
         )
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         items = []
         for circle, owner in page_rows:
             member_count = int(circle.member_count or 0)
@@ -259,8 +265,8 @@ def list_circle_discover_recommendations(
                     member_count=member_count,
                     post_count=post_count,
                     owner_user_id=_normalize_text(owner.user_id),
-                    owner_nickname=_normalize_text(owner.nickname),
-                    owner_avatar_url=_normalize_text(owner.avatar_url),
+                    owner_nickname=public_nickname(owner),
+                    owner_avatar_url=public_avatar_url(owner),
                     owner_city_name=_normalize_text(owner.city_name) or None,
                     owner_is_verified=owner_verified,
                     is_joined=is_joined,
@@ -304,9 +310,10 @@ def list_circle_discover_recommendations(
         industry_label=industry_label,
         order_by=fetch_order_by,
         candidate_limit=candidate_limit,
+        exclude_owner_user_pk=exclude_owner_user_pk,
     )
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     scored_rows: list[tuple[float, tuple]] = []
 
     for circle, owner in rows:
@@ -415,6 +422,7 @@ def list_circle_discover_recommendations(
         keyword=keyword,
         city_name=fetch_city_name,
         industry_label=industry_label,
+        exclude_owner_user_pk=exclude_owner_user_pk,
     )
     page_rows = scored_rows[safe_offset : safe_offset + safe_limit]
 
@@ -431,8 +439,8 @@ def list_circle_discover_recommendations(
             member_count=member_count,
             post_count=post_count,
             owner_user_id=_normalize_text(owner.user_id),
-            owner_nickname=_normalize_text(owner.nickname),
-            owner_avatar_url=_normalize_text(owner.avatar_url),
+            owner_nickname=public_nickname(owner),
+            owner_avatar_url=public_avatar_url(owner),
             owner_city_name=_normalize_text(owner.city_name) or None,
             owner_is_verified=owner_verified,
             is_joined=is_joined,

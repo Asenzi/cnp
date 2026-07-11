@@ -54,6 +54,14 @@ export function updateCurrentUserProfile(payload) {
   })
 }
 
+export function createContentReport(payload = {}) {
+  return request({
+    url: '/api/v1/product-safety/reports',
+    method: 'POST',
+    data: payload || {}
+  })
+}
+
 export function uploadCurrentUserAvatar(filePath) {
   const token = uni.getStorageSync('token')
   const headers = {}

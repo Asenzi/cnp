@@ -73,10 +73,29 @@ cp .env.example .env
 **启动 FastAPI 服务器：**
 
 ```bash
+# 在 backend 目录下执行
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
-# 或使用绝对路径
-python -m uvicorn app.main:app --app-dir F:\项目区\friends\backend --host 0.0.0.0 --port 8001 --reload
+# 或从项目根目录执行
+
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+如果项目目录移动过，旧的 `backend/.venv` 可能记录了原目录路径，建议删除后重建：
+
+```powershell
+cd backend
+Remove-Item -Recurse -Force .venv
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+如果提示 `No suitable Python runtime found`，说明本机没有安装 Python 3.11。先查看已安装版本，再用已有版本创建虚拟环境：
+
+```powershell
+py -0p
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 **启动 Celery Worker（异步任务处理）：**

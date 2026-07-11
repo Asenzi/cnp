@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from functools import wraps
 from typing import Any, Literal
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
-from app.crud import ensure_user_wallet, get_circle_by_code, get_user_by_id
+from app.crud import get_circle_by_code, get_user_by_id
 from app.models.circle import Circle
 from app.models.content_review import ContentReview
 from app.models.resource_post import ResourcePost
@@ -37,11 +37,6 @@ REVIEW_STATUS_REJECTED = "rejected"
 REVIEW_STATUS_AUTO_APPROVED = "auto_approved"
 
 TRIGGER_REASON_RISK = "risk_keywords"
-TRIGGER_REASON_MONTHLY_LIMIT = "monthly_limit"
-
-MONTHLY_FREE_CHANGE_LIMIT = 2
-CHANGE_REVIEW_FEE = Decimal("9.99")
-
 RISK_KEYWORD_GROUPS: dict[str, tuple[str, ...]] = {
     "反国家": (
         "推翻国家",
@@ -135,7 +130,7 @@ def _guard_content_review_storage(func):
 
 
 def _utc_now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -171,17 +166,15 @@ def _json_load_list(value: str | None) -> list[str]:
 def _json_dump(value: Any) -> str | None:
     if value in (None, "", [], {}):
         return None
-    return json.dumps(value, ensure_ascii=False)
 
+    def serialize_special_type(item: Any) -> str:
+        if isinstance(item, Decimal):
+            return str(item)
+        if isinstance(item, (date, datetime)):
+            return item.isoformat()
+        raise TypeError(f"Object of type {type(item).__name__} is not JSON serializable")
 
-def _month_range(now: datetime | None = None) -> tuple[datetime, datetime]:
-    safe_now = now or _utc_now()
-    start = safe_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if start.month == 12:
-        end = start.replace(year=start.year + 1, month=1)
-    else:
-        end = start.replace(month=start.month + 1)
-    return start, end
+    return json.dumps(value, ensure_ascii=False, default=serialize_special_type)
 
 
 def _collect_risk_tags(*texts: str | None) -> list[str]:
@@ -221,26 +214,6 @@ def _post_current_payload(post: ResourcePost) -> dict[str, Any]:
     }
 
 
-def _count_monthly_submissions(
-    db: Session,
-    *,
-    review_type: str,
-    submitter_user_pk: int,
-    target_circle_code: str | None = None,
-) -> int:
-    month_start, month_end = _month_range()
-    stmt = select(func.count(ContentReview.id)).where(
-        ContentReview.review_type == review_type,
-        ContentReview.submitter_user_pk == int(submitter_user_pk),
-        ContentReview.created_at >= month_start,
-        ContentReview.created_at < month_end,
-    )
-    if target_circle_code:
-        stmt = stmt.where(ContentReview.target_circle_code == _normalize_text(target_circle_code))
-    value = db.execute(stmt).scalar_one_or_none()
-    return int(value or 0)
-
-
 def _find_pending_review(
     db: Session,
     *,
@@ -259,23 +232,6 @@ def _find_pending_review(
     if target_post_code is not None:
         stmt = stmt.where(ContentReview.target_post_code == _normalize_text(target_post_code).upper())
     return db.execute(stmt.order_by(ContentReview.id.desc()).limit(1)).scalar_one_or_none()
-
-
-def _ensure_wallet_fee_paid(db: Session, *, user: User, amount: Decimal) -> None:
-    wallet = ensure_user_wallet(db=db, user_pk=int(user.id), default_balance=user.balance or 0)
-    wallet_balance = Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))
-    if wallet_balance < amount:
-        raise BusinessException(
-            message=f"本月已超过免费修改次数，需支付审核费 ¥{amount:.2f}，请先充值钱包余额",
-            code=5701,
-            status_code=400,
-            data={
-                "required_amount": float(amount),
-                "wallet_balance": float(wallet_balance),
-            },
-        )
-    wallet.balance = (wallet_balance - amount).quantize(Decimal("0.01"))
-    db.add(wallet)
 
 
 def _build_review_meta(review: ContentReview, risk_tags: list[str]) -> dict[str, Any]:
@@ -307,12 +263,6 @@ def submit_profile_update_review(
     ):
         raise BusinessException(message="当前有个人资料审核中的申请，请先等待处理结果", code=5702, status_code=400)
 
-    monthly_count = _count_monthly_submissions(
-        db=db,
-        review_type=REVIEW_TYPE_PROFILE,
-        submitter_user_pk=int(user.id),
-    )
-    over_limit = monthly_count >= MONTHLY_FREE_CHANGE_LIMIT
     current_payload = _profile_current_payload(user, updates)
     risk_tags = _collect_risk_tags(
         updates.get("nickname"),
@@ -322,9 +272,8 @@ def submit_profile_update_review(
         updates.get("job_title"),
         updates.get("city_name"),
     )
-    review_required = over_limit or bool(risk_tags)
+    review_required = bool(risk_tags)
     now = _utc_now()
-    fee_amount = CHANGE_REVIEW_FEE if over_limit else Decimal("0.00")
 
     review = ContentReview(
         review_type=REVIEW_TYPE_PROFILE,
@@ -332,17 +281,14 @@ def submit_profile_update_review(
         status=REVIEW_STATUS_PENDING if review_required else REVIEW_STATUS_AUTO_APPROVED,
         submitter_user_pk=int(user.id),
         target_user_pk=int(user.id),
-        review_fee_amount=fee_amount,
-        fee_paid=bool(over_limit),
-        trigger_reason=TRIGGER_REASON_MONTHLY_LIMIT if over_limit else (TRIGGER_REASON_RISK if risk_tags else None),
+        review_fee_amount=Decimal("0.00"),
+        fee_paid=False,
+        trigger_reason=TRIGGER_REASON_RISK if risk_tags else None,
         risk_tags_json=_json_dump(risk_tags),
         submit_payload_json=_json_dump(updates),
         current_payload_json=_json_dump(current_payload),
         reviewed_at=None if review_required else now,
     )
-
-    if over_limit:
-        _ensure_wallet_fee_paid(db=db, user=user, amount=CHANGE_REVIEW_FEE)
 
     if not review_required:
         for field_name, field_value in updates.items():
@@ -383,13 +329,6 @@ def submit_circle_update_review(
     ):
         raise BusinessException(message="当前圈子已有审核中的资料变更，请先等待处理结果", code=5704, status_code=400)
 
-    monthly_count = _count_monthly_submissions(
-        db=db,
-        review_type=REVIEW_TYPE_CIRCLE,
-        submitter_user_pk=int(owner.id),
-        target_circle_code=circle.circle_code,
-    )
-    over_limit = monthly_count >= MONTHLY_FREE_CHANGE_LIMIT
     current_payload = _circle_current_payload(circle, updates)
     risk_tags = _collect_risk_tags(
         updates.get("name"),
@@ -397,9 +336,8 @@ def submit_circle_update_review(
         updates.get("description"),
         updates.get("rules_text"),
     )
-    review_required = over_limit or bool(risk_tags)
+    review_required = bool(risk_tags)
     now = _utc_now()
-    fee_amount = CHANGE_REVIEW_FEE if over_limit else Decimal("0.00")
 
     review = ContentReview(
         review_type=REVIEW_TYPE_CIRCLE,
@@ -407,17 +345,14 @@ def submit_circle_update_review(
         status=REVIEW_STATUS_PENDING if review_required else REVIEW_STATUS_AUTO_APPROVED,
         submitter_user_pk=int(owner.id),
         target_circle_code=str(circle.circle_code or "").strip(),
-        review_fee_amount=fee_amount,
-        fee_paid=bool(over_limit),
-        trigger_reason=TRIGGER_REASON_MONTHLY_LIMIT if over_limit else (TRIGGER_REASON_RISK if risk_tags else None),
+        review_fee_amount=Decimal("0.00"),
+        fee_paid=False,
+        trigger_reason=TRIGGER_REASON_RISK if risk_tags else None,
         risk_tags_json=_json_dump(risk_tags),
         submit_payload_json=_json_dump(updates),
         current_payload_json=_json_dump(current_payload),
         reviewed_at=None if review_required else now,
     )
-
-    if over_limit:
-        _ensure_wallet_fee_paid(db=db, user=owner, amount=CHANGE_REVIEW_FEE)
 
     if not review_required:
         for field_name, field_value in updates.items():
@@ -680,6 +615,11 @@ def review_content_submission(
                 description=str(payload.get("description") or "").strip(),
                 industry_label=str(payload.get("industry_label") or "").strip() or None,
                 images=payload.get("images") if isinstance(payload.get("images"), list) else [],
+                sync_circle_codes=(
+                    payload.get("sync_circle_codes")
+                    if isinstance(payload.get("sync_circle_codes"), list)
+                    else []
+                ),
             )
             review.target_post_code = _normalize_text(created.get("post_code"))
         else:
@@ -695,6 +635,11 @@ def review_content_submission(
                 description=str(payload.get("description") or "").strip(),
                 industry_label=str(payload.get("industry_label") or "").strip() or None,
                 images=payload.get("images") if isinstance(payload.get("images"), list) else [],
+                sync_circle_codes=(
+                    payload.get("sync_circle_codes")
+                    if isinstance(payload.get("sync_circle_codes"), list)
+                    else []
+                ),
             )
         review.status = REVIEW_STATUS_APPROVED
         review.reject_reason = None

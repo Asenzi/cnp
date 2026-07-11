@@ -4,9 +4,12 @@
     <view class="member-info">
       <view class="member-name-row">
         <text class="member-name">{{ member.nickname || '未命名用户' }}</text>
-        <view v-if="member.is_verified" class="verified-badge">
-          <text class="verified-text">已认证</text>
-        </view>
+        <image
+          v-if="member.is_verified"
+          class="verified-icon"
+          mode="aspectFit"
+          src="https://cos.cnptec.site/static/icon/certification.png"
+        />
       </view>
       <text v-if="memberMetaText" class="member-meta">{{ memberMetaText }}</text>
     </view>
@@ -84,17 +87,10 @@ const memberMetaText = computed(() => {
   white-space: nowrap;
 }
 
-.verified-badge {
-  padding: 2rpx 8rpx;
-  border-radius: 4rpx;
-  background: #dcfce7;
+.verified-icon {
+  width: 30rpx;
+  height: 30rpx;
   flex-shrink: 0;
-}
-
-.verified-text {
-  color: #16a34a;
-  font-size: 20rpx;
-  line-height: 28rpx;
 }
 
 .member-meta {
@@ -124,12 +120,5 @@ const memberMetaText = computed(() => {
     color: #9ca3af;
   }
 
-  .verified-badge {
-    background: rgba(34, 197, 94, 0.2);
-  }
-
-  .verified-text {
-    color: #4ade80;
-  }
 }
 </style>

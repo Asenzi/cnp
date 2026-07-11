@@ -1,68 +1,44 @@
 <template>
-  <view
-    class="member-card"
-    :class="{ 'member-card-faded': member.faded }"
-    hover-class="member-card-active"
-    @tap="$emit('view', member)"
-  >
+  <view class="member-card" :class="{ 'member-card-faded': member.faded }" hover-class="member-card-active"
+    @tap="$emit('view', member)">
     <view class="card-header">
       <view class="avatar-wrap">
         <image
           class="avatar-image"
           :class="{ 'avatar-image-gray': member.verifyType === 'realname' }"
           mode="aspectFill"
-          :src="member.avatar"
+          :src="displayAvatarUrl"
         />
       </view>
 
       <view class="header-info">
         <view class="name-row">
           <text class="name">{{ member.name }}</text>
-          <image
-            v-if="member.memberEnabled"
-            class="member-badge"
-            src="https://cos.cnptec.site/static/icon/mennber1.png"
-            mode="aspectFit"
-          />
-          <text
-            v-if="member.verifyType"
-            class="verify-tag"
-            :class="member.verifyType === 'realname' ? 'verify-tag-amber' : 'verify-tag-primary'"
-          >
-            已认证
-          </text>
+          <image v-if="member.verifyType" class="identity-badge" src="https://cos.cnptec.site/static/icon/certification.png"
+            mode="aspectFit" />
+          <image v-if="member.memberEnabled" class="identity-badge" src="https://cos.cnptec.site/static/icon/mennber1.png"
+            mode="aspectFit" />
+          <image v-if="member.circleOwner" class="identity-badge" src="https://cos.cnptec.site/static/icon/leader.png?v=20260623"
+            mode="aspectFit" />
         </view>
         <text class="detail-text">{{ member.detailLine }}</text>
         <text v-if="member.distanceText" class="distance-text">{{ member.distanceText }}</text>
-        <text v-if="member.postCount && member.postCount > 0" class="post-count-line">已发布 {{ member.postCount }}</text>
+        <!-- <text v-if="member.postCount && member.postCount > 0" class="post-count-line">已发布 {{ member.postCount }}</text> -->
       </view>
 
-      <button
-        v-if="showFollow && !member.privacyHint"
-        class="follow-btn-header"
-        :class="{ 'follow-btn-followed': isFollowed(member) }"
-        :disabled="followPending"
-        hover-class="follow-btn-active"
-        @tap.stop="$emit('follow', member)"
-      >
+      <!-- <button v-if="showFollow && !member.privacyHint" class="follow-btn-header"
+        :class="{ 'follow-btn-followed': isFollowed(member) }" :disabled="followPending" hover-class="follow-btn-active"
+        @tap.stop="$emit('follow', member)">
         <text class="follow-icon">{{ isFollowed(member) ? '♥' : '♡' }}</text>
-      </button>
+      </button> -->
     </view>
 
     <view class="card-body">
       <view class="tag-row">
-        <text
-          v-if="!member.circleTags || member.circleTags.length === 0"
-          class="tag-chip tag-chip-placeholder"
-        >
+        <text v-if="!member.circleTags || member.circleTags.length === 0" class="tag-chip tag-chip-placeholder">
           该用户很低调，暂未进行个人介绍
         </text>
-        <text
-          v-else
-          v-for="tag in member.circleTags"
-          :key="`${member.id}-${tag}`"
-          class="tag-chip"
-        >
+        <text v-else v-for="tag in member.circleTags" :key="`${member.id}-${tag}`" class="tag-chip">
           {{ tag }}
         </text>
       </view>
@@ -84,15 +60,9 @@
 </template>
 
 <script setup>
-const isFollowed = (item = {}) => {
-  return Boolean(
-    item.followed
-    || item.isFollowed
-    || item.is_followed
-  )
-}
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   member: {
     type: Object,
     default: () => ({})
@@ -107,6 +77,26 @@ defineProps({
   }
 })
 
+const isFollowed = (item = {}) => {
+  return Boolean(
+    item.followed
+    || item.isFollowed
+    || item.is_followed
+  )
+}
+
+const invalidAvatarValues = new Set(['', 'null', 'undefined', 'none'])
+const DEFAULT_AVATAR_URL = 'https://cpn-1422327087.cos.ap-guangzhou.myqcloud.com/static/logo.png'
+
+const avatarUrl = computed(() => String(props.member?.avatar || '').trim())
+const displayAvatarUrl = computed(() => {
+  const normalized = avatarUrl.value.trim()
+  const lower = normalized.toLowerCase()
+  if (invalidAvatarValues.has(lower)) return DEFAULT_AVATAR_URL
+  if (lower.includes('/static/logo.png')) return DEFAULT_AVATAR_URL
+  return normalized
+})
+
 defineEmits(['view', 'verify', 'follow'])
 </script>
 
@@ -114,8 +104,8 @@ defineEmits(['view', 'verify', 'follow'])
 .member-card {
   border-radius: 20rpx;
   background: #fefdfb;
-  border: 1rpx solid rgba(148, 163, 184, 0.08);
-  box-shadow: 0 1rpx 3rpx rgba(100, 116, 139, 0.04), 0 4rpx 16rpx rgba(148, 163, 184, 0.06);
+  /* border: 1rpx solid rgba(148, 163, 184, 0.08);
+  box-shadow: 0 1rpx 3rpx rgba(100, 116, 139, 0.04), 0 4rpx 16rpx rgba(148, 163, 184, 0.06); */
   padding: 28rpx;
   transition: all 0.2s ease;
   margin-top: 10rpx;
@@ -123,7 +113,7 @@ defineEmits(['view', 'verify', 'follow'])
 
 .member-card-active {
   background: #faf9f7;
-  box-shadow: 0 1rpx 2rpx rgba(100, 116, 139, 0.06), 0 2rpx 8rpx rgba(148, 163, 184, 0.08);
+  /* box-shadow: 0 1rpx 2rpx rgba(100, 116, 139, 0.06), 0 2rpx 8rpx rgba(148, 163, 184, 0.08); */
 }
 
 .member-card-faded {
@@ -148,8 +138,8 @@ defineEmits(['view', 'verify', 'follow'])
   width: 100%;
   height: 100%;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
-  box-shadow: 0 0 0 3rpx #fefdfb, 0 0 0 4rpx rgba(148, 163, 184, 0.12), 0 2rpx 8rpx rgba(100, 116, 139, 0.08);
+  /* background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  box-shadow: 0 0 0 3rpx #fefdfb, 0 0 0 4rpx rgba(148, 163, 184, 0.12), 0 2rpx 8rpx rgba(100, 116, 139, 0.08); */
 }
 
 .avatar-image-gray {
@@ -209,26 +199,11 @@ defineEmits(['view', 'verify', 'follow'])
   text-overflow: ellipsis;
 }
 
-.member-badge {
+.identity-badge {
   width: 32rpx;
   height: 32rpx;
   flex-shrink: 0;
   display: block;
-}
-
-.verify-tag {
-  flex-shrink: 0;
-  border-radius: 8rpx;
-  padding: 3rpx 10rpx;
-  font-size: 18rpx;
-  line-height: 24rpx;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.verify-tag-primary {
-  color: #1e40af;
-  background: rgba(37, 99, 235, 0.08);
 }
 
 .detail-text {
@@ -239,7 +214,7 @@ defineEmits(['view', 'verify', 'follow'])
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  margin-bottom: 8rpx;
+  margin-bottom: 4rpx;
 }
 
 .post-count-line {
@@ -415,16 +390,6 @@ defineEmits(['view', 'verify', 'follow'])
 
   .name {
     color: #f1f5f9;
-  }
-
-  .verify-tag-primary {
-    color: #93c5fd;
-    background: rgba(59, 130, 246, 0.12);
-  }
-
-  .verify-tag-amber {
-    color: #fcd34d;
-    background: rgba(251, 191, 36, 0.15);
   }
 
   .post-count-line {

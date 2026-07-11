@@ -12,31 +12,6 @@
         </view>
 
         <template v-else>
-          <view class="publisher-card">
-            <view class="publisher-left">
-              <view class="avatar-wrap">
-                <image class="avatar" :src="authorAvatar" mode="aspectFill" />
-              </view>
-              <view class="publisher-main">
-                <view class="name-row">
-                  <text class="publisher-name">{{ authorName }}</text>
-                  <view v-if="authorVerified" class="verified-dot"></view>
-                </view>
-                <text class="publisher-role">{{ authorRole }}</text>
-              </view>
-            </view>
-            <button
-              v-if="isSelfPost"
-              class="publisher-share-btn"
-              hover-class="publisher-share-btn-active"
-              open-type="share"
-              @tap="onShare"
-            >
-              <image class="publisher-share-icon" src="https://cos.cnptec.site/static/icon/share.png" mode="aspectFit" />
-            </button>
-            <button v-else class="profile-btn" hover-class="profile-btn-active" @tap="onTapProfile">查看主页</button>
-          </view>
-
           <view class="content-card">
             <view class="content-head">
               <view class="tag-row">
@@ -53,20 +28,10 @@
             </view>
 
             <view v-if="imageList.length" class="gallery">
-              <image
-                class="gallery-image gallery-image-main"
-                mode="aspectFill"
-                :src="imageList[0]"
-                @tap="previewImage(0)"
-              />
-              <image
-                v-for="(url, index) in subImages"
-                :key="`img-${index}`"
-                class="gallery-image gallery-image-sub"
-                mode="aspectFill"
-                :src="url"
-                @tap="previewImage(index + 1)"
-              />
+              <image class="gallery-image gallery-image-main" mode="aspectFill" :src="imageList[0]"
+                @tap="previewImage(0)" />
+              <image v-for="(url, index) in subImages" :key="`img-${index}`" class="gallery-image gallery-image-sub"
+                mode="aspectFill" :src="url" @tap="previewImage(index + 1)" />
             </view>
 
             <view class="stats-wrap">
@@ -77,8 +42,8 @@
                     <text class="stat-text">{{ formatNumber(post.view_count) }}</text>
                   </view>
                   <view class="stat-item">
-                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/like.png" mode="aspectFit" />
-                    <text class="stat-text">{{ formatNumber(post.like_count) }}</text>
+                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/interested.png" mode="aspectFit" />
+                    <text class="stat-text">{{ formatNumber(resourceCollectCount) }}</text>
                   </view>
                 </view>
                 <text class="publish-time">发布于 {{ publishDateText }}</text>
@@ -113,32 +78,48 @@
       </view>
     </scroll-view>
 
-    <view v-if="!isSelfPost" class="bottom-nav">
-      <!-- 未登录时只显示感兴趣按钮 -->
-      <template v-if="!isLoggedIn()">
-        <button class="bottom-btn bottom-btn-single" hover-class="bottom-btn-hover" @tap="onInterestBeforeLogin">
-          <text class="btn-label-primary">感兴趣</text>
-        </button>
-      </template>
-      <!-- 已登录时显示分享、感兴趣和联系方式按钮 -->
-      <template v-else>
-        <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
-          <image class="btn-icon-image" src="https://cos.cnptec.site/static/icon/share.png" mode="aspectFit" />
-          <text class="btn-label">分享</text>
-        </button>
-        <button class="bottom-btn bottom-btn-plain" hover-class="bottom-btn-hover" @tap="onToggleInterestForPost">
-          <image
-            class="btn-icon-image"
-            :src="isPostInterested ? 'https://cos.cnptec.site/static/icon/like.png' : 'https://cos.cnptec.site/static/icon/ulike.png'"
-            mode="aspectFit"
-          />
-          <text class="btn-label">{{ isPostInterested ? '已感兴趣' : '感兴趣' }}</text>
-        </button>
-        <button class="bottom-btn bottom-btn-primary" hover-class="bottom-btn-hover" @tap="onChat">
-          <image class="btn-icon-image btn-icon-image-primary" src="https://cos.cnptec.site/static/icon/chat-he.png" mode="aspectFit" />
-          <text class="btn-label-primary">联系方式</text>
-        </button>
-      </template>
+    <view v-if="!isSelfPost && post.post_code" class="bottom-nav">
+      <view class="publisher-card-bottom">
+        <view class="publisher-left">
+          <view class="avatar-wrap">
+            <image class="avatar" :src="authorAvatar" mode="aspectFill" />
+          </view>
+          <view class="publisher-main">
+            <view class="name-row">
+              <text class="publisher-name">{{ authorName }}</text>
+              <view v-if="authorBadges.length" class="badge-row">
+                <image
+                  v-for="badge in authorBadges"
+                  :key="badge.key"
+                  class="identity-badge"
+                  :src="badge.icon"
+                  mode="aspectFit"
+                />
+              </view>
+            </view>
+            <text class="publisher-role">{{ authorRole }}</text>
+          </view>
+        </view>
+        <button class="profile-btn" hover-class="profile-btn-active" @tap="onTapProfile">查看主页</button>
+      </view>
+
+      <view class="bottom-buttons">
+        <!-- 未登录时只显示收藏按钮 -->
+        <template v-if="!isLoggedIn()">
+          <button class="bottom-btn bottom-btn-single" hover-class="bottom-btn-hover" @tap="onCollectBeforeLogin">
+            <text class="btn-label-primary">去收藏</text>
+          </button>
+        </template>
+        <!-- 已登录时显示分享和收藏按钮 -->
+        <template v-else>
+          <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
+            <text class="btn-label">分享</text>
+          </button>
+          <button class="bottom-btn bottom-btn-plain" hover-class="bottom-btn-hover" @tap="onToggleResourceCollect">
+            <text class="btn-label">{{ isPostInterested ? '已收藏' : '去收藏' }}</text>
+          </button>
+        </template>
+      </view>
     </view>
 
     <view v-if="cardPopupVisible" class="card-popup-mask" @tap="closeCardPopup">
@@ -169,13 +150,8 @@
 
             <view class="contact-list">
               <view v-if="visibleContactRows.length" class="contact-list-inner">
-                <view
-                  v-for="row in visibleContactRows"
-                  :key="row.key"
-                  class="contact-row"
-                  hover-class="contact-row-hover"
-                  @tap="copyContact(row.value, row.copyText)"
-                >
+                <view v-for="row in visibleContactRows" :key="row.key" class="contact-row"
+                  hover-class="contact-row-hover" @tap="copyContact(row.value, row.copyText)">
                   <text class="contact-label">{{ row.label }}</text>
                   <text class="contact-value">{{ row.value }}</text>
                   <text class="contact-copy">复制</text>
@@ -205,20 +181,83 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onShareAppMessage, onShow } from '@dcloudio/uni-app'
-import { toggleUserInterest } from '../../../api/network'
-import { getResourceDetail, reportResourceFeedback, reportResourceView } from '../../../api/post'
+import { getResourceDetail, reportResourceFeedback, reportResourceView, toggleResourceCollection } from '../../../api/post'
 import { getUserProfileById } from '../../../api/user'
 
 const postCode = ref('')
 const post = ref({})
 const loading = ref(false)
 const loadError = ref('')
-const isPostInterested = ref(false) // 当前资源是否已感兴趣
+const isPostInterested = ref(false) // 当前资源是否已收藏，保留变量名兼容旧状态字段。
 const cardPopupVisible = ref(false)
 const cardLoading = ref(false)
 const cardProfile = ref({})
 const cardProfileUserId = ref('')
 const cardLoadError = ref('')
+
+const ACTIVE_TEXT_VALUES = new Set(['1', 'true', 'yes', 'y', 'active', 'opened', 'member', 'vip', 'paid', 'enabled', 'on', 'approved', 'verified', '已开通', '会员', '已认证', '已实名', '圈主'])
+const IDENTITY_BADGE_ICONS = {
+  certification: 'https://cos.cnptec.site/static/icon/certification.png',
+  member: 'https://cos.cnptec.site/static/icon/mennber1.png',
+  leader: 'https://cos.cnptec.site/static/icon/leader.png?v=20260623'
+}
+
+const isActiveValue = (value) => {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return value > 0
+  }
+  const text = String(value ?? '').trim().toLowerCase()
+  return Boolean(text && ACTIVE_TEXT_VALUES.has(text))
+}
+
+const resolveVerified = (profile = {}) => Boolean(
+  isActiveValue(profile?.is_verified) ||
+  isActiveValue(profile?.real_name_verified) ||
+  isActiveValue(profile?.verified) ||
+  isActiveValue(profile?.verifyType) ||
+  isActiveValue(profile?.verifyText) ||
+  String(profile?.verified_real_name || '').trim()
+)
+
+const resolveMemberEnabled = (profile = {}) => {
+  const candidateFlags = [
+    profile?.is_member,
+    profile?.member_opened,
+    profile?.pro_member,
+    profile?.vip_opened,
+    profile?.vip_member
+  ]
+  if (candidateFlags.some(isActiveValue)) {
+    return true
+  }
+  const statusText = String(profile?.member_status || profile?.vip_status || '').trim().toLowerCase()
+  return ACTIVE_TEXT_VALUES.has(statusText)
+}
+
+const resolveCircleOwner = (profile = {}) => Boolean(
+  isActiveValue(profile?.is_circle_owner) ||
+  isActiveValue(profile?.circle_owner) ||
+  isActiveValue(profile?.is_owner) ||
+  isActiveValue(profile?.circle_owner_status) ||
+  isActiveValue(profile?.owner_status)
+)
+
+const resolveIdentityBadges = (profile = {}) => {
+  const badges = []
+  if (resolveVerified(profile)) {
+    badges.push({ key: 'certification', icon: IDENTITY_BADGE_ICONS.certification })
+  }
+  if (resolveMemberEnabled(profile)) {
+    badges.push({ key: 'member', icon: IDENTITY_BADGE_ICONS.member })
+  }
+  if (resolveCircleOwner(profile)) {
+    badges.push({ key: 'leader', icon: IDENTITY_BADGE_ICONS.leader })
+  }
+  return badges
+}
 
 const imageList = computed(() => {
   return Array.isArray(post.value?.images)
@@ -263,6 +302,15 @@ const cardSource = computed(() => {
     ...profile
   }
 })
+const authorIdentitySource = computed(() => {
+  const profile = cardProfile.value && typeof cardProfile.value === 'object' ? cardProfile.value : {}
+  const author = post.value?.author && typeof post.value.author === 'object' ? post.value.author : {}
+  return {
+    ...author,
+    ...profile
+  }
+})
+const authorBadges = computed(() => resolveIdentityBadges(authorIdentitySource.value))
 const cardName = computed(() => String(cardSource.value?.nickname || authorName.value || '未命名用户').trim())
 const cardAvatar = computed(() => String(cardSource.value?.avatar_url || authorAvatar.value || 'https://cos.cnptec.site/static/logo.png').trim() || 'https://cos.cnptec.site/static/logo.png')
 const cardVerified = computed(() => Boolean(cardSource.value?.is_verified || authorVerified.value))
@@ -387,6 +435,10 @@ const remainDays = computed(() => {
   return Math.max(days, 0)
 })
 
+const resourceCollectCount = computed(() => {
+  return Number(post.value?.collect_count ?? post.value?.favorite_count ?? post.value?.like_count ?? 0)
+})
+
 const showToast = (title) => {
   uni.showToast({
     title,
@@ -439,11 +491,12 @@ const fetchDetail = async () => {
   try {
     const data = await getResourceDetail(postCode.value)
     post.value = data || {}
-
-    // 获取感兴趣状态（如果资源数据中有）
-    if (typeof data?.is_interested !== 'undefined') {
-      isPostInterested.value = Boolean(data.is_interested)
+    const targetUserId = authorUserId.value
+    if (targetUserId) {
+      loadCardProfile(targetUserId, { silent: true })
     }
+
+    isPostInterested.value = Boolean(data?.is_collected ?? data?.collected ?? data?.is_interested ?? data?.interested ?? data?.liked)
 
     const viewData = await reportResourceView(postCode.value)
     if (typeof viewData?.view_count !== 'undefined') {
@@ -453,7 +506,7 @@ const fetchDetail = async () => {
       }
     }
 
-    // 数据加载完成后，检查是否需要执行待处理的感兴趣操作
+    // 数据加载完成后，检查是否需要执行待处理的收藏操作。
     checkAndPerformPendingInterest()
   } catch (err) {
     loadError.value = err?.message || '资源详情加载失败'
@@ -464,11 +517,11 @@ const fetchDetail = async () => {
 }
 
 const checkAndPerformPendingInterest = () => {
-  const pendingPostCode = uni.getStorageSync('pendingInterestPostCode')
+  const pendingPostCode = uni.getStorageSync('pendingResourceCollectPostCode') || uni.getStorageSync('pendingInterestPostCode')
   const currentPostCode = String(postCode.value || '').trim()
 
   if (isLoggedIn() && pendingPostCode && pendingPostCode === currentPostCode) {
-    // 登录成功且需要标记感兴趣，并且数据已加载
+    // 登录成功且需要收藏资源，并且数据已加载。
     performPendingInterest()
   }
 }
@@ -504,13 +557,16 @@ const onShare = () => {
   }
 }
 
-const loadCardProfile = async (targetUserId) => {
+const loadCardProfile = async (targetUserId, options = {}) => {
   if (!targetUserId || cardProfileUserId.value === targetUserId) {
     return
   }
+  const silent = Boolean(options?.silent)
   cardProfile.value = {}
   cardProfileUserId.value = ''
-  cardLoading.value = true
+  if (!silent) {
+    cardLoading.value = true
+  }
   cardLoadError.value = ''
   try {
     const profile = await getUserProfileById(targetUserId)
@@ -519,7 +575,9 @@ const loadCardProfile = async (targetUserId) => {
   } catch (err) {
     cardLoadError.value = err?.message || '名片加载失败'
   } finally {
-    cardLoading.value = false
+    if (!silent) {
+      cardLoading.value = false
+    }
   }
 }
 
@@ -538,8 +596,8 @@ const onChat = async () => {
   await loadCardProfile(targetUserId)
 }
 
-const onInterestBeforeLogin = () => {
-  // 保存当前资源编码，表示登录后需要标记感兴趣
+const onCollectBeforeLogin = () => {
+  // 保存当前资源编码，登录后自动完成收藏。
   const postCode = String(post.value?.post_code || '').trim()
   if (!postCode) {
     showToast('资源信息缺失')
@@ -547,7 +605,7 @@ const onInterestBeforeLogin = () => {
   }
 
   // 保存标记
-  uni.setStorageSync('pendingInterestPostCode', postCode)
+  uni.setStorageSync('pendingResourceCollectPostCode', postCode)
 
   // 跳转到登录页
   uni.navigateTo({
@@ -555,19 +613,33 @@ const onInterestBeforeLogin = () => {
   })
 }
 
-const onToggleInterestForPost = async () => {
-  const targetUserId = authorUserId.value
-  if (!targetUserId) {
-    showToast('作者信息缺失')
+const onToggleResourceCollect = async () => {
+  const currentPostCode = String(post.value?.post_code || postCode.value || '').trim()
+  if (!currentPostCode) {
+    showToast('资源信息缺失')
     return
   }
 
   try {
-    const result = await toggleUserInterest(targetUserId, !isPostInterested.value)
-    isPostInterested.value = Boolean(result?.is_interested)
-    showToast(isPostInterested.value ? '已标记感兴趣' : '已取消感兴趣')
+    const result = await toggleResourceCollection(currentPostCode, !isPostInterested.value)
+    const nextCollected = Boolean(result?.is_collected ?? result?.collected ?? result?.is_interested ?? result?.interested ?? result?.liked)
+    const nextCount = Number(result?.collect_count ?? result?.favorite_count ?? result?.like_count ?? resourceCollectCount.value)
+    isPostInterested.value = nextCollected
+    post.value = {
+      ...post.value,
+      liked: nextCollected,
+      interested: nextCollected,
+      is_interested: nextCollected,
+      collected: nextCollected,
+      is_collected: nextCollected,
+      like_count: nextCount,
+      collect_count: nextCount,
+      favorite_count: nextCount
+    }
+    reportDetailFeedback(nextCollected ? 'interest' : 'cancel_interest', { action: 'resource_collect' })
+    showToast(nextCollected ? '已收藏' : '已取消收藏')
   } catch (error) {
-    console.error('Toggle interest failed:', error)
+    console.error('Toggle resource collect failed:', error)
     showToast('操作失败，请稍后重试')
   }
 }
@@ -628,22 +700,37 @@ onShow(() => {
 
 const performPendingInterest = async () => {
   try {
-    const targetUserId = authorUserId.value
-    if (!targetUserId) {
-      showToast('作者信息缺失')
+    const currentPostCode = String(post.value?.post_code || postCode.value || '').trim()
+    if (!currentPostCode) {
+      showToast('资源信息缺失')
+      uni.removeStorageSync('pendingResourceCollectPostCode')
       uni.removeStorageSync('pendingInterestPostCode')
       return
     }
 
-    const result = await toggleUserInterest(targetUserId, true)
-    isPostInterested.value = Boolean(result?.is_interested)
-    showToast('已标记感兴趣')
+    const result = await toggleResourceCollection(currentPostCode, true)
+    const nextCount = Number(result?.collect_count ?? result?.favorite_count ?? result?.like_count ?? resourceCollectCount.value)
+    isPostInterested.value = Boolean(result?.is_collected ?? result?.collected ?? result?.is_interested ?? result?.interested ?? result?.liked)
+    post.value = {
+      ...post.value,
+      liked: isPostInterested.value,
+      interested: isPostInterested.value,
+      is_interested: isPostInterested.value,
+      collected: isPostInterested.value,
+      is_collected: isPostInterested.value,
+      like_count: nextCount,
+      collect_count: nextCount,
+      favorite_count: nextCount
+    }
+    showToast('已收藏')
     // 清除标记
+    uni.removeStorageSync('pendingResourceCollectPostCode')
     uni.removeStorageSync('pendingInterestPostCode')
   } catch (error) {
     console.error('Pending interest failed:', error)
-    showToast('标记失败，请稍后重试')
+    showToast('收藏失败，请稍后重试')
     // 即使失败也清除标记，避免重复尝试
+    uni.removeStorageSync('pendingResourceCollectPostCode')
     uni.removeStorageSync('pendingInterestPostCode')
   }
 }
@@ -664,7 +751,7 @@ onPullDownRefresh(async () => {
 }
 
 .detail-scroll {
-  height: calc(100vh - 124rpx - env(safe-area-inset-bottom));
+  height: calc(100vh - 220rpx - env(safe-area-inset-bottom));
 }
 
 .detail-scroll-self {
@@ -723,10 +810,11 @@ onPullDownRefresh(async () => {
   display: flex;
   align-items: center;
   gap: 8rpx;
+  min-width: 0;
 }
 
 .publisher-name {
-  max-width: 320rpx;
+  max-width: 260rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -736,11 +824,19 @@ onPullDownRefresh(async () => {
   font-weight: 600;
 }
 
-.verified-dot {
-  width: 12rpx;
-  height: 12rpx;
-  border-radius: 6rpx;
-  background: #2563eb;
+.badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.identity-badge {
+  display: block;
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
 }
 
 .publisher-role {
@@ -1080,19 +1176,34 @@ onPullDownRefresh(async () => {
   right: 0;
   bottom: 0;
   z-index: 20;
-  padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.publisher-card-bottom {
+  padding: 16rpx 32rpx;
   border-top: 1rpx solid #e7ecf3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.bottom-buttons {
+  padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   gap: 16rpx;
 }
 
 .bottom-btn {
+  flex: 1;
   border: 0;
   border-radius: 12rpx;
   height: 72rpx;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 8rpx;
@@ -1103,7 +1214,6 @@ onPullDownRefresh(async () => {
 }
 
 .bottom-btn-plain {
-  min-width: 136rpx;
   padding: 0 20rpx;
   background: #f6f8fc;
   color: #66758a;
@@ -1402,10 +1512,15 @@ onPullDownRefresh(async () => {
   }
 
   .publisher-card,
+  .publisher-card-bottom,
   .content-card,
   .recommend-card,
   .status-wrap {
     background: #1a1a1a;
+  }
+
+  .publisher-card-bottom {
+    border-top-color: #2a2a2a;
   }
 
   .publisher-name,
@@ -1455,6 +1570,9 @@ onPullDownRefresh(async () => {
 
   .bottom-nav {
     background: #1a1a1a;
+  }
+
+  .publisher-card-bottom {
     border-top-color: #2a2a2a;
   }
 
@@ -1499,5 +1617,4 @@ onPullDownRefresh(async () => {
     color: #8a8a8a;
   }
 }
-
 </style>

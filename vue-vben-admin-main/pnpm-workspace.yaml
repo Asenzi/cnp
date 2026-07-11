@@ -6,6 +6,7 @@ packages:
   - packages/@core/ui-kit/*
   - packages/@core/*
   - packages/effects/*
+  - apps/web-antd
   - apps/web-ele
   - scripts/*
 

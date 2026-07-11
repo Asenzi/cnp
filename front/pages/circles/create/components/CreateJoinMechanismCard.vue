@@ -1,35 +1,36 @@
-﻿<template>
+<template>
   <view class="card">
-    <text class="card-title">加入机制</text>
+    <view class="option-row">
+      <view class="radio">
+        <view class="radio-dot"></view>
+      </view>
 
-    <view class="options-wrap">
-      <view
-        v-for="option in joinTypeOptions"
-        :key="option.key"
-        class="option-row"
-        :class="{ 'option-row-active': joinType === option.key }"
-        @tap="emit('update:joinType', option.key)"
-      >
-        <view class="radio">
-          <view v-if="joinType === option.key" class="radio-dot"></view>
+      <view class="option-main">
+        <text class="option-title">付费入圈</text>
+        <text class="option-desc">支付入圈费用后，由圈主审核通过</text>
+      </view>
+
+      <view class="price-trigger" @tap="pricePickerVisible = true">
+        <text class="price-trigger-text">￥{{ currentPrice }}</text>
+      </view>
+    </view>
+
+    <view v-if="pricePickerVisible" class="drawer-mask" @tap="pricePickerVisible = false">
+      <view class="price-drawer" @tap.stop>
+        <view class="drawer-header">
+          <text class="drawer-title">选择入圈价格</text>
+          <text class="drawer-close" @tap="pricePickerVisible = false">取消</text>
         </view>
-
-        <view class="option-main">
-          <text class="option-title">{{ option.title }}</text>
-          <text class="option-desc">{{ option.desc }}</text>
-        </view>
-
-        <view v-if="option.key === 'paid'" class="price-wrap" @tap.stop>
-          <text class="price-symbol">￥</text>
-          <input
-            :value="price"
-            class="price-input"
-            type="digit"
-            maxlength="10"
-            placeholder="0.00"
-            placeholder-class="price-placeholder"
-            @input="emit('update:price', $event?.detail?.value || '')"
-          />
+        <view class="price-grid">
+          <view
+            v-for="tier in priceTiers"
+            :key="tier"
+            class="price-tier"
+            :class="{ 'price-tier-active': Number(price) === tier }"
+            @tap="selectPrice(tier)"
+          >
+            <text>￥{{ tier }}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -37,22 +38,24 @@
 </template>
 
 <script setup>
-defineProps({
-  joinType: {
-    type: String,
-    default: 'free'
-  },
+import { computed, ref } from 'vue'
+
+const props = defineProps({
   price: {
     type: String,
     default: ''
-  },
-  joinTypeOptions: {
-    type: Array,
-    default: () => []
   }
 })
 
-const emit = defineEmits(['update:joinType', 'update:price'])
+const emit = defineEmits(['update:price'])
+const pricePickerVisible = ref(false)
+const priceTiers = [98, 198, 398, 598, 980, 1980, 3980, 5980, 9980]
+const currentPrice = computed(() => (priceTiers.includes(Number(props.price)) ? Number(props.price) : 98))
+
+const selectPrice = (tier) => {
+  emit('update:price', String(tier))
+  pricePickerVisible.value = false
+}
 </script>
 
 <style scoped>
@@ -62,49 +65,24 @@ const emit = defineEmits(['update:joinType', 'update:price'])
   padding: 24rpx 32rpx;
 }
 
-.card-title {
-  display: block;
-  color: #0f172a;
-  font-size: 28rpx;
-  line-height: 1.3;
-  font-weight: 600;
-  margin-bottom: 16rpx;
-}
-
-.options-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
 .option-row {
   border-radius: 12rpx;
-  border: 1rpx solid rgba(15, 23, 42, 0.08);
   background: #f8fafc;
-  padding: 16rpx 20rpx;
+  padding: 20rpx;
   display: flex;
   align-items: center;
   gap: 12rpx;
-}
-
-.option-row-active {
-  border-color: rgba(37, 99, 235, 0.2);
-  background: rgba(37, 99, 235, 0.04);
 }
 
 .radio {
   width: 32rpx;
   height: 32rpx;
   border-radius: 999rpx;
-  border: 2rpx solid #cbd5e1;
+  border: 2rpx solid #2563eb;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.option-row-active .radio {
-  border-color: #2563eb;
 }
 
 .radio-dot {
@@ -122,9 +100,9 @@ const emit = defineEmits(['update:joinType', 'update:price'])
 .option-title {
   display: block;
   color: #0f172a;
-  font-size: 26rpx;
+  font-size: 28rpx;
   line-height: 1.3;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .option-desc {
@@ -132,84 +110,113 @@ const emit = defineEmits(['update:joinType', 'update:price'])
   margin-top: 4rpx;
   color: #64748b;
   font-size: 22rpx;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
-.price-wrap {
+.price-trigger {
   flex-shrink: 0;
+  min-width: 136rpx;
+  height: 56rpx;
   border-radius: 8rpx;
-  background: rgba(15, 23, 42, 0.04);
-  padding: 8rpx 12rpx;
+  background: rgba(37, 99, 235, 0.1);
   display: flex;
   align-items: center;
-  gap: 4rpx;
-}
-
-.price-symbol {
-  color: #64748b;
-  font-size: 22rpx;
-  font-weight: 500;
-}
-
-.price-input {
-  width: 92rpx;
-  height: 36rpx;
-  border: 0;
-  background: transparent;
+  justify-content: center;
   color: #2563eb;
-  font-size: 24rpx;
-  font-weight: 600;
 }
 
-.price-placeholder {
-  color: #94a3b8;
+.price-trigger-text {
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.drawer-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 999;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-end;
+}
+
+.price-drawer {
+  width: 100%;
+  border-radius: 28rpx 28rpx 0 0;
+  background: #ffffff;
+  padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.drawer-title {
+  color: #0f172a;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.drawer-close {
+  color: #64748b;
+  font-size: 26rpx;
+}
+
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+}
+
+.price-tier {
+  height: 84rpx;
+  border-radius: 12rpx;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 28rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.price-tier-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
 }
 
 @media (prefers-color-scheme: dark) {
-  .card {
+  .card,
+  .price-drawer {
     background: #0f172a;
   }
 
-  .card-title,
-  .option-title {
-    color: #f1f5f9;
-  }
-
-  .option-row {
-    border-color: rgba(255, 255, 255, 0.08);
+  .option-row,
+  .price-tier {
     background: #1e293b;
   }
 
-  .option-row-active {
-    border-color: rgba(59, 130, 246, 0.25);
-    background: rgba(59, 130, 246, 0.08);
+  .option-title,
+  .drawer-title {
+    color: #f1f5f9;
   }
 
-  .option-desc {
+  .option-desc,
+  .drawer-close {
     color: #94a3b8;
   }
 
-  .radio {
-    border-color: #475569;
+  .price-tier {
+    color: #cbd5e1;
   }
 
-  .option-row-active .radio {
-    border-color: #60a5fa;
-  }
-
-  .radio-dot {
-    background: #60a5fa;
-  }
-
-  .price-wrap {
-    background: rgba(255, 255, 255, 0.04);
-  }
-
-  .price-symbol {
-    color: #94a3b8;
-  }
-
-  .price-input {
+  .price-tier-active {
+    background: rgba(59, 130, 246, 0.18);
     color: #60a5fa;
   }
 }

@@ -50,27 +50,6 @@ export function getCircleMembers(circleCode, params = {}) {
   })
 }
 
-export function getPendingCirclePostSyncs(circleCode) {
-  const safeCode = encodeURIComponent(String(circleCode || '').trim())
-  return request({
-    url: `/api/v1/circle/${safeCode}/post-syncs/pending`,
-    method: 'GET'
-  })
-}
-
-export function reviewCirclePostSync(circleCode, syncId, payload = {}) {
-  const safeCode = encodeURIComponent(String(circleCode || '').trim())
-  const safeSyncId = encodeURIComponent(String(syncId || '').trim())
-  return request({
-    url: `/api/v1/circle/${safeCode}/post-syncs/${safeSyncId}/review`,
-    method: 'POST',
-    data: {
-      action: String(payload.action || '').trim(),
-      reject_reason: String(payload.reject_reason || '').trim()
-    }
-  })
-}
-
 export function getDiscoverCircles(params = {}) {
   const query = []
   const appendQuery = (key, value) => {
@@ -114,6 +93,20 @@ export function getMyCircles(params = {}) {
   }
   return request({
     url: `/api/v1/circle/me?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function getOwnedCircles(params = {}) {
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const keyword = String(params.keyword || '').trim()
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (keyword) {
+    query.push(`keyword=${encodeURIComponent(keyword)}`)
+  }
+  return request({
+    url: `/api/v1/circle/owned?${query.join('&')}`,
     method: 'GET'
   })
 }
@@ -200,6 +193,15 @@ export function toggleCircleInterest(circleCode, desired) {
   })
 }
 
+export function toggleCircleCollection(circleCode, desired) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  const query = typeof desired === 'boolean' ? `?desired=${desired}` : ''
+  return request({
+    url: `/api/v1/circle/${safeCode}/collect/toggle${query}`,
+    method: 'POST'
+  })
+}
+
 export function getInterestedCircles(params = {}) {
   const query = []
   const appendQuery = (key, value) => {
@@ -217,6 +219,27 @@ export function getInterestedCircles(params = {}) {
 
   return request({
     url: `/api/v1/circle/interests${query.length ? `?${query.join('&')}` : ''}`,
+    method: 'GET'
+  })
+}
+
+export function getCollectedCircles(params = {}) {
+  const query = []
+  const appendQuery = (key, value) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+    query.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  }
+
+  const cursor = String(params.cursor || '').trim()
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+
+  appendQuery('cursor', cursor)
+  appendQuery('limit', limit)
+
+  return request({
+    url: `/api/v1/circle/collections${query.length ? `?${query.join('&')}` : ''}`,
     method: 'GET'
   })
 }

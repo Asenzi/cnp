@@ -21,10 +21,7 @@
         />
 
         <CreateJoinMechanismCard
-          :join-type="form.joinType"
           :price="form.price"
-          :join-type-options="joinTypeOptions"
-          @update:joinType="form.joinType = $event"
           @update:price="form.price = normalizePrice($event)"
         />
 
@@ -32,10 +29,10 @@
           :rules="form.rules"
           @update:rules="form.rules = $event"
         />
+
+        <CreateBottomAction :loading="submitting" :text="submitButtonText" @submit="onSubmit" />
       </view>
     </scroll-view>
-
-    <CreateBottomAction :loading="submitting" :text="submitButtonText" @submit="onSubmit" />
 
     <IndustryPickerPanel
       :visible="industryPickerVisible"
@@ -60,8 +57,7 @@ import CreateRulesCard from './components/CreateRulesCard.vue'
 import IndustryPickerPanel from './components/IndustryPickerPanel.vue'
 import {
   defaultCircleAvatar,
-  defaultCoverImage,
-  joinTypeOptions
+  defaultCoverImage
 } from './modules/create-circle-form'
 
 const submitting = ref(false)
@@ -74,11 +70,11 @@ const form = reactive({
   industry: '',
   description: '',
   joinType: 'paid',
-  price: '',
-  rules: '',
-  needPostReview: false
+  price: '98',
+  rules: ''
 })
 const currentUser = ref({})
+const joinPriceTiers = [98, 198, 398, 598, 980, 1980, 3980, 5980, 9980]
 
 const parseStoredUserInfo = () => {
   const stored = uni.getStorageSync('userInfo')
@@ -203,12 +199,10 @@ const validateForm = () => {
     showToast('请输入圈子简介')
     return false
   }
-  if (form.joinType === 'paid') {
-    const value = Number(form.price)
-    if (!form.price || Number.isNaN(value) || value <= 0) {
-      showToast('请输入有效的付费金额')
-      return false
-    }
+  const value = Number(form.price)
+  if (!joinPriceTiers.includes(value)) {
+    showToast('请选择固定付费档位')
+    return false
   }
   return true
 }
@@ -259,10 +253,9 @@ const onSubmit = async () => {
       description: String(form.description || '').trim(),
       cover_url: finalCoverUrl,
       avatar_url: finalAvatarUrl,
-      join_type: String(form.joinType || 'free'),
-      join_price: form.joinType === 'paid' ? Number(form.price || 0) : 0,
-      rules_text: String(form.rules || '').trim() || null,
-      need_post_review: Boolean(form.needPostReview)
+      join_type: 'paid',
+      join_price: Number(form.price || 0),
+      rules_text: String(form.rules || '').trim() || null
     }
 
     const created = await createCircle(payload)
@@ -312,7 +305,7 @@ const onSubmit = async () => {
 }
 
 .content-wrap {
-  padding: 16rpx 0 calc(120rpx + env(safe-area-inset-bottom));
+  padding: 16rpx 0 calc(16rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 16rpx;

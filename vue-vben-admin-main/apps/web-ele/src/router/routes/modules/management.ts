@@ -8,7 +8,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       icon: 'lucide:users',
       order: 1,
-      title: '用户管理',
+      title: '人员管理',
     },
   },
   {
@@ -91,13 +91,13 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    name: 'RechargeManagement',
-    path: '/recharges',
-    component: () => import('#/views/admin/recharges/index.vue'),
+    name: 'ProductSafetyManagement',
+    path: '/product-safety',
+    component: () => import('#/views/admin/product-safety/index.vue'),
     meta: {
-      icon: 'lucide:wallet-cards',
+      icon: 'lucide:shield-alert',
       order: 5,
-      title: '充值订单',
+      title: '产品安全',
     },
   },
   {
@@ -109,6 +109,53 @@ const routes: RouteRecordRaw[] = [
       order: 6,
       title: '系统配置',
     },
+  },
+  {
+    meta: {
+      icon: 'lucide:landmark',
+      order: 7,
+      title: '分账结算',
+    },
+    name: 'SettlementManagement',
+    path: '/settlement',
+    children: [
+      {
+        name: 'SplitConfigManagement',
+        path: '/settlement/config',
+        component: () => import('#/views/admin/settlement/config.vue'),
+        meta: {
+          icon: 'lucide:settings',
+          title: '分账配置',
+        },
+      },
+      {
+        name: 'SplitTransactionManagement',
+        path: '/settlement/transactions',
+        component: () => import('#/views/admin/settlement/transactions.vue'),
+        meta: {
+          icon: 'lucide:receipt-text',
+          title: '分账订单',
+        },
+      },
+      {
+        name: 'SettlementAccountManagement',
+        path: '/settlement/accounts',
+        component: () => import('#/views/admin/settlement/accounts.vue'),
+        meta: {
+          icon: 'lucide:wallet',
+          title: '结算账户',
+        },
+      },
+      {
+        name: 'WithdrawalManagement',
+        path: '/settlement/withdrawals',
+        component: () => import('#/views/admin/settlement/withdrawals.vue'),
+        meta: {
+          icon: 'lucide:hand-coins',
+          title: '提现审核',
+        },
+      },
+    ],
   },
 ];
 

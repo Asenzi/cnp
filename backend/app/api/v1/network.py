@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import db_session, get_current_user_id, get_optional_current_user_id
 from app.core.config import settings
 from app.core.exceptions import BusinessException
+from app.core.profile_display import public_avatar_url, public_intro, public_nickname
 from app.core.response import success_response
 from app.crud import get_user_by_id
 from app.models.user import User
 from app.models.user_interest import UserInterest
+from app.models.notification import Notification
 from app.models.resource_post import ResourcePost
 from app.network import (
     list_network_filter_options,
@@ -36,6 +38,8 @@ def _require_current_user(db: Session, current_user_pk: int):
 
 def _public_avatar_url(avatar_url: str | None, request: Request) -> str:
     normalized = str(avatar_url or settings.DEFAULT_AVATAR_URL or "/static/logo.png").strip()
+    if not normalized or normalized == "/static/logo.png" or normalized.endswith("/static/logo.png"):
+        return settings.DEFAULT_AVATAR_URL
     if normalized.startswith(("http://", "https://")):
         return normalized
     if not normalized.startswith("/"):
@@ -54,19 +58,41 @@ def _parse_offset_cursor(cursor: str | None) -> int:
         return 0
 
 
+def _city_name_candidates(city_name: str | None) -> list[str]:
+    normalized = str(city_name or "").strip()
+    if not normalized:
+        return []
+
+    candidates = [normalized]
+    if normalized.endswith("市") and len(normalized) > 1:
+        candidates.append(normalized[:-1])
+    else:
+        candidates.append(f"{normalized}市")
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in candidates:
+        value = str(item or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
 def _encode_public_cursor(offset: int) -> str:
     return str(max(int(offset or 0), 0))
 
 
 def _serialize_public_network_user(user: User, request: Request, db: Session, viewer_user_pk: int | None = None) -> dict:
     business_user_id = str(user.user_id or "").strip()
-    name = str(user.nickname or "").strip() or "未命名用户"
+    name = public_nickname(user)
     industry_label = str(user.industry_label or "").strip()
     city_name = str(user.city_name or "").strip()
     company_name = str(user.company_name or "").strip()
     job_title = str(user.job_title or "").strip()
-    detail_line = _join_non_empty(industry_label, company_name, job_title) or city_name or "商务人士"
-    avatar = _public_avatar_url(user.avatar_url, request)
+    detail_line = _join_non_empty(industry_label, company_name, job_title) or "暂未填写行业/职位"
+    avatar = _public_avatar_url(public_avatar_url(user), request)
     circle_tags = [item for item in (industry_label, city_name) if item][:2]
     member_snapshot = resolve_member_snapshot(db=db, user_pk=int(user.id))
 
@@ -100,7 +126,7 @@ def _serialize_public_network_user(user: User, request: Request, db: Session, vi
         "name": name,
         "avatar": avatar,
         "avatar_url": avatar,
-        "intro": str(user.intro or "").strip(),
+        "intro": public_intro(user) or "",
         "industry_label": industry_label,
         "city_name": city_name,
         "company_name": company_name,
@@ -151,26 +177,35 @@ def _list_public_network_recommendations(
     safe_city = str(city_name or "").strip()
     safe_industry = str(industry_label or "").strip()
     conditions = [User.is_active.is_(True)]
+    base_conditions = list(conditions)
     if safe_city and safe_city != "全国":
-        conditions.append(User.city_name == safe_city)
+        conditions.append(User.city_name.in_(_city_name_candidates(safe_city)))
     if safe_industry:
         conditions.append(User.industry_label == safe_industry)
+        base_conditions.append(User.industry_label == safe_industry)
     if safe_keyword:
         like_keyword = f"%{safe_keyword}%"
-        conditions.append(
+        keyword_condition = (
             (User.nickname.like(like_keyword))
             | (User.company_name.like(like_keyword))
             | (User.job_title.like(like_keyword))
             | (User.industry_label.like(like_keyword))
             | (User.city_name.like(like_keyword))
         )
-    rows = db.execute(
-        select(User)
-        .where(*conditions)
-        .order_by(User.is_verified.desc(), User.updated_at.desc(), User.created_at.desc(), User.id.desc())
-        .offset(offset)
-        .limit(safe_limit + 1)
-    ).scalars().all()
+        conditions.append(keyword_condition)
+        base_conditions.append(keyword_condition)
+    def _fetch_rows(active_conditions: list) -> list[User]:
+        return db.execute(
+            select(User)
+            .where(*active_conditions)
+            .order_by(User.is_verified.desc(), User.updated_at.desc(), User.created_at.desc(), User.id.desc())
+            .offset(offset)
+            .limit(safe_limit + 1)
+        ).scalars().all()
+
+    rows = _fetch_rows(conditions)
+    if not rows and safe_city and safe_city != "全国":
+        rows = _fetch_rows(base_conditions)
     page_rows = rows[:safe_limit]
     has_more = len(rows) > safe_limit
     return {
@@ -183,14 +218,14 @@ def _list_public_network_recommendations(
 
 def _serialize_interested_user(user: User, interest: UserInterest, request: Request) -> dict:
     business_user_id = str(user.user_id or "").strip()
-    name = str(user.nickname or "").strip() or "未命名用户"
-    intro = str(user.intro or "").strip()
+    name = public_nickname(user)
+    intro = public_intro(user) or ""
     industry_label = str(user.industry_label or "").strip()
     company_name = str(user.company_name or "").strip()
     job_title = str(user.job_title or "").strip()
     city_name = str(user.city_name or "").strip()
-    detail_line = _join_non_empty(industry_label, company_name, job_title) or city_name or "暂未完善行业"
-    avatar = _public_avatar_url(user.avatar_url, request)
+    detail_line = _join_non_empty(industry_label, company_name, job_title) or "暂未填写行业/职位"
+    avatar = _public_avatar_url(public_avatar_url(user), request)
     circle_tags = [intro] if intro else [item for item in (industry_label, city_name) if item][:2]
 
     return {
@@ -388,6 +423,13 @@ def toggle_interest(
     if target_pk == viewer.id:
         raise BusinessException(message="Cannot mark yourself as interested", code=4003, status_code=400)
     
+    existing_interest = db.scalar(
+        select(UserInterest.id).where(
+            UserInterest.user_pk == int(viewer.id),
+            UserInterest.target_user_pk == int(target_pk),
+        )
+    )
+
     # 切换感兴趣状态
     is_interested = toggle_user_interest(
         db=db,
@@ -395,10 +437,25 @@ def toggle_interest(
         target_user_pk=target_pk,
         desired_state=desired,
     )
+
+    if is_interested and existing_interest is None:
+        db.add(
+            Notification(
+                user_pk=int(target_pk),
+                actor_user_pk=int(viewer.id),
+                type="collection",
+                title="新的人脉收藏",
+                content=f"{public_nickname(viewer)}收藏了你",
+                link_type="user",
+                link_id=str(viewer.user_id or "").strip(),
+                is_read=False,
+            )
+        )
+        db.commit()
     
     return success_response(
-        data={"is_interested": is_interested},
-        message="已标记为感兴趣" if is_interested else "已取消感兴趣",
+        data={"is_interested": is_interested, "is_collected": is_interested},
+        message="已收藏" if is_interested else "已取消收藏",
     )
 
 
@@ -411,6 +468,7 @@ def toggle_follow(
 ):
     """切换对目标用户的关注状态"""
     from app.crud.network import map_business_user_ids_to_pks, toggle_user_follow
+    from app.models.user_follow import UserFollow
 
     viewer = _require_current_user(db=db, current_user_pk=user_id)
 
@@ -424,6 +482,13 @@ def toggle_follow(
     if target_pk == viewer.id:
         raise BusinessException(message="Cannot follow yourself", code=4003, status_code=400)
 
+    existing_follow = db.scalar(
+        select(UserFollow.id).where(
+            UserFollow.follower_user_pk == int(viewer.id),
+            UserFollow.following_user_pk == int(target_pk),
+        )
+    )
+
     # 切换关注状态
     is_followed = toggle_user_follow(
         db=db,
@@ -431,6 +496,21 @@ def toggle_follow(
         following_user_pk=target_pk,
         desired_state=desired,
     )
+
+    if is_followed and existing_follow is None:
+        db.add(
+            Notification(
+                user_pk=int(target_pk),
+                actor_user_pk=int(viewer.id),
+                type="network",
+                title="新的人脉关注",
+                content=f"{public_nickname(viewer)}关注了你",
+                link_type="user",
+                link_id=str(viewer.user_id or "").strip(),
+                is_read=False,
+            )
+        )
+        db.commit()
 
     return success_response(
         data={"is_followed": is_followed},

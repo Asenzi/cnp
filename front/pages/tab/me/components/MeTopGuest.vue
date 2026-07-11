@@ -44,10 +44,6 @@
         <text class="guest-stat-label">积分</text>
       </view>
       -->
-      <view class="guest-stat-card">
-        <text class="guest-stat-value">--</text>
-        <text class="guest-stat-label">余额</text>
-      </view>
     </view>
   </view>
 </template>

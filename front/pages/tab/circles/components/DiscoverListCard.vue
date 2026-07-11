@@ -1,26 +1,21 @@
 <template>
   <view class="circle-card" hover-class="circle-card-active" @tap="openCircle">
     <view class="card-header">
-      <image
-        v-if="displayCoverImage"
-        class="circle-cover"
-        mode="aspectFill"
-        :src="displayCoverImage"
-        @error="onCoverError"
-      />
+      <image v-if="displayCoverImage" class="circle-cover" mode="aspectFill" :src="displayCoverImage"
+        @error="onCoverError" />
       <view v-else class="circle-cover circle-cover-placeholder"></view>
 
       <view class="header-content">
         <view class="title-row">
           <text class="circle-title">{{ circle.title }}</text>
-          <view
+          <!-- <view
             class="interest-action"
             :class="{ 'interest-active': isInterested }"
             hover-class="interest-hover"
             @tap.stop="$emit('interest', circle)"
           >
             <text class="interest-icon">{{ isInterested ? '♥' : '♡' }}</text>
-          </view>
+          </view> -->
         </view>
 
         <text v-if="circle.industryLabel" class="industry-tag">{{ circle.industryLabel }}</text>
@@ -81,6 +76,9 @@ watch(
 
 const isInterested = computed(() => {
   return Boolean(
+    props.circle?.collected ||
+    props.circle?.isCollected ||
+    props.circle?.is_collected ||
     props.circle?.interested ||
     props.circle?.isInterested ||
     props.circle?.is_interested ||
@@ -115,10 +113,11 @@ const openCircle = () => {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
+  margin-bottom: 10rpx;
 }
 
 .circle-card-active {
-  background: #fafbfc;
+  background: #f8f8f8;
 }
 
 .card-header {

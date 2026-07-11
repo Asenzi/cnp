@@ -31,7 +31,7 @@
         @refresherabort="onRefresherRestore"
       >
         <view class="list-container">
-          <template v-if="loading && !hasAny">
+          <template v-if="showSkeleton">
             <view v-for="i in 4" :key="`skeleton-${i}`" class="skeleton-card">
               <view class="skeleton-header">
                 <view class="skeleton-avatar"></view>
@@ -133,6 +133,7 @@ const RECOMMENDATION_CACHE_TTL_MS = 60 * 1000
 const RECOMMENDATION_CACHE_MAX_ENTRIES = 12
 const FILTER_OPTIONS_CACHE_STORAGE_KEY = 'discover_filter_options_cache_v1'
 const FILTER_OPTIONS_CACHE_TTL_MS = 10 * 60 * 1000
+const DEFAULT_AVATAR_URL = 'https://cpn-1422327087.cos.ap-guangzhou.myqcloud.com/static/logo.png'
 let hasShownOnce = false
 const initialLocationCache = loadLocationFilterCache()
 const hasInitialLocationCache = Boolean(
@@ -155,7 +156,7 @@ const uiText = {
   sameCityTag: '\u540c\u57ce',
   unnamedUser: '\u672a\u547d\u540d\u7528\u6237',
   verifyLv1: 'LV1 \u5df2\u8ba4\u8bc1',
-  defaultRole: '\u5546\u52a1\u4eba\u8109',
+  defaultRole: '暂未填写行业/职位',
   activeFallback: '\u6700\u8fd1\u6d3b\u8dc3',
   recommendationLoadError: '\u4eba\u8109\u63a8\u8350\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
   missingTarget: '\u76ee\u6807\u7528\u6237\u4fe1\u606f\u7f3a\u5931',
@@ -170,6 +171,16 @@ const uiText = {
 
 const MEMBER_ACTIVE_STATUS = new Set(['active', 'opened', 'member', 'vip', 'paid', 'enabled', 'on'])
 
+const isTruthyValue = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return ['1', 'true', 'yes', 'active', 'opened', 'enabled', 'on'].includes(normalized)
+  }
+  return false
+}
+
 const resolveMemberEnabled = (profile = {}) => {
   const candidateFlags = [
     profile?.is_member,
@@ -179,12 +190,25 @@ const resolveMemberEnabled = (profile = {}) => {
     profile?.vip_member
   ]
 
-  if (candidateFlags.some(Boolean)) {
+  if (candidateFlags.some((flag) => isTruthyValue(flag))) {
     return true
   }
 
   const statusText = String(profile?.member_status || profile?.vip_status || '').trim().toLowerCase()
   return MEMBER_ACTIVE_STATUS.has(statusText)
+}
+
+const resolveIdentityVerified = (profile = {}) => {
+  return isTruthyValue(profile?.is_verified)
+    || isTruthyValue(profile?.real_name_verified)
+    || Boolean(String(profile?.verified_real_name || '').trim())
+}
+
+const resolveCircleOwnerEnabled = (profile = {}) => {
+  return isTruthyValue(profile?.is_circle_owner)
+    || isTruthyValue(profile?.circle_owner)
+    || isTruthyValue(profile?.owner_certified)
+    || isTruthyValue(profile?.circle_owner_status)
 }
 
 const topTabs = [
@@ -197,6 +221,7 @@ const members = ref([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const loaded = ref(false)
+const bootstrapping = ref(true)
 const loadError = ref('')
 const hasMore = ref(true)
 const nextCursor = ref('')
@@ -204,8 +229,8 @@ const requestId = ref('')
 const hasPromptedLogin = ref(false)
 const firstPageHistoryByContext = ref({})
 const refreshing = ref(false)
-const isNationalScope = ref(initialLocationCache.mode === 'national')
 const initialSelectedCity = String(initialLocationCache.selectedCity || '').trim()
+const isNationalScope = ref(initialLocationCache.mode === 'national')
 
 const filterVisible = ref(false)
 const filters = ref({
@@ -255,6 +280,9 @@ const locating = ref(false)
 const activeCityQuery = ref('')
 
 const hasAny = computed(() => members.value.length > 0)
+const showSkeleton = computed(() => {
+  return !hasAny.value && (bootstrapping.value || loading.value || locating.value)
+})
 const showEmpty = computed(() => loaded.value && !loading.value && !hasAny.value && !loadError.value)
 const normalizedKeyword = computed(() => String(keyword.value || '').trim())
 const displayCityName = computed(() => {
@@ -583,8 +611,12 @@ const ensureLoggedIn = () => {
 
 const resolveAvatarUrl = (url) => {
   const normalized = String(url || '').trim()
-  if (!normalized) {
-    return 'https://cos.cnptec.site/static/logo.png'
+  const lower = normalized.toLowerCase()
+  if (!normalized || ['null', 'undefined', 'none'].includes(lower)) {
+    return DEFAULT_AVATAR_URL
+  }
+  if (lower.includes('/static/logo.png')) {
+    return DEFAULT_AVATAR_URL
   }
   if (/^https?:\/\//.test(normalized)) {
     return normalized
@@ -741,6 +773,20 @@ const getFreshRecommendationCacheEntry = (cacheKey) => {
   return entry
 }
 
+const shouldBypassSparseRecommendationCache = (entry) => {
+  const cachedMembers = Array.isArray(entry?.members) ? entry.members : []
+  if (!cachedMembers.length) {
+    return false
+  }
+  return (
+    !isNationalScope.value
+    && !normalizedKeyword.value
+    && !filters.value.city_name
+    && !filters.value.industry_label
+    && cachedMembers.length <= SPARSE_FIRST_PAGE_THRESHOLD
+  )
+}
+
 const applyRecommendationCacheEntry = (entry) => {
   const cachedMembers = Array.isArray(entry?.members) ? entry.members : []
   members.value = cachedMembers
@@ -877,15 +923,16 @@ const mapMemberCard = (item = {}) => {
     id: businessUserId || `${String(item.nickname || 'guest').trim()}-${cityName || 'city'}`,
     businessUserId,
     name: String(item.nickname || '').trim() || uiText.unnamedUser,
-    verifyType: Boolean(item.is_verified) ? 'lv1' : '',
-    verifyText: Boolean(item.is_verified) ? uiText.verifyLv1 : '',
-    detailLine: joinNonEmpty(industryLabel, jobTitle) || industryLabel || cityName || uiText.defaultRole,
+    verifyType: resolveIdentityVerified(item) ? 'lv1' : '',
+    verifyText: resolveIdentityVerified(item) ? uiText.verifyLv1 : '',
+    detailLine: joinNonEmpty(industryLabel, jobTitle) || uiText.defaultRole,
     distanceText: String(item.distance_text || '').trim(),
     memberEnabled: resolveMemberEnabled(item),
+    circleOwner: resolveCircleOwnerEnabled(item),
     circleTags: visibleCircleTags,
     reasonTags,
     activeText: String(item.active_text || '').trim() || uiText.activeFallback,
-    avatar: resolveAvatarUrl(item.avatar_url),
+    avatar: resolveAvatarUrl(item.avatar_url || item.avatarUrl || item.avatar || item.headimgurl || item.wx_avatar_url),
     postCount: Number(item.post_count || item.postCount || 0),
     followed: Boolean(
       item.is_followed
@@ -1108,7 +1155,7 @@ const fetchRecommendations = async (reset = false, options = {}) => {
 
   if (reset && !forceRefresh) {
     const cachedEntry = getFreshRecommendationCacheEntry(recommendationCacheKey)
-    if (cachedEntry) {
+    if (cachedEntry && !shouldBypassSparseRecommendationCache(cachedEntry)) {
       pendingRecommendationReset.value = false
       applyRecommendationCacheEntry(cachedEntry)
       return
@@ -1132,7 +1179,7 @@ const fetchRecommendations = async (reset = false, options = {}) => {
       cityName: effectiveCityName.value,
       industryLabel: filters.value.industry_label || ''
     })
-    const historyIds = reset && Array.isArray(firstPageHistoryByContext.value[recoContextKey])
+    const historyIds = !forceRefresh && reset && loaded.value && Array.isArray(firstPageHistoryByContext.value[recoContextKey])
       ? firstPageHistoryByContext.value[recoContextKey].slice(0, FIRST_PAGE_HISTORY_LIMIT)
       : []
     const cityCandidates = reset
@@ -1147,6 +1194,10 @@ const fetchRecommendations = async (reset = false, options = {}) => {
     let incoming = []
     let selectedQueryCity = ''
     let shouldRetryWithoutHistory = false
+    const canUseFallbackRecovery = reset
+      && !normalizedKeyword.value
+      && !filters.value.city_name
+      && !filters.value.industry_label
 
     for (let index = 0; index < fallbackCandidates.length; index += 1) {
       const candidateCityName = fallbackCandidates[index]
@@ -1166,11 +1217,8 @@ const fetchRecommendations = async (reset = false, options = {}) => {
       data = await getNetworkRecommendations(params)
       incoming = Array.isArray(data?.items) ? data.items : []
       selectedQueryCity = candidateCityName
-      shouldRetryWithoutHistory = reset
+      shouldRetryWithoutHistory = canUseFallbackRecovery
         && historyIds.length > 0
-        && !normalizedKeyword.value
-        && !filters.value.city_name
-        && !filters.value.industry_label
         && incoming.length <= SPARSE_FIRST_PAGE_THRESHOLD
 
       if (!reset || incoming.length > 0 || index === fallbackCandidates.length - 1) {
@@ -1225,13 +1273,15 @@ const fetchRecommendations = async (reset = false, options = {}) => {
       if (mapped.length) {
         appendFirstPageHistory(recoContextKey, currentFirstPageIds)
       }
-      persistRecommendationCacheEntry(recommendationCacheKey, {
-        members: mapped,
-        request_id: data?.request_id,
-        next_cursor: data?.next_cursor,
-        has_more: data?.has_more,
-        active_city_query: selectedQueryCity
-      })
+      if (!shouldBypassSparseRecommendationCache({ members: mapped })) {
+        persistRecommendationCacheEntry(recommendationCacheKey, {
+          members: mapped,
+          request_id: data?.request_id,
+          next_cursor: data?.next_cursor,
+          has_more: data?.has_more,
+          active_city_query: selectedQueryCity
+        })
+      }
     }
 
     if (mapped.length) {
@@ -1482,11 +1532,15 @@ onMounted(async () => {
   firstPageHistoryByContext.value = loadStoredFirstPageHistory()
   locationHistoryCities.value = loadLocationHistory()
   recommendationCacheByContext.value = loadStoredRecommendationCache()
-  await fetchFilterOptions()
-  if (!hasInitialLocationCache) {
-    await refreshLocation({ silent: true, notifySuccess: false })
+  try {
+    await fetchFilterOptions()
+    if (!hasInitialLocationCache) {
+      await refreshLocation({ silent: true, notifySuccess: false })
+    }
+    await fetchRecommendations(true)
+  } finally {
+    bootstrapping.value = false
   }
-  await fetchRecommendations(true)
 })
 
 onPullDownRefresh(async () => {
@@ -1499,6 +1553,9 @@ onShow(() => {
     return
   }
 
+  const hasPendingFollow = Boolean(String(uni.getStorageSync('pendingFollowUserId') || '').trim())
+  const hasPendingLocationResult = Boolean(uni.getStorageSync(LOCATION_PAGE_RESULT_STORAGE_KEY))
+
   // 检查是否有待关注的用户
   const pendingFollowUserId = uni.getStorageSync('pendingFollowUserId')
   if (pendingFollowUserId) {
@@ -1507,8 +1564,8 @@ onShow(() => {
   }
 
   consumePendingLocationResult()
-  // 页面重新显示时，如果有数据则刷新以获取最新的关注状态
-  if (members.value.length > 0) {
+  // 仅在确有状态变化时刷新，避免从名片详情返回就整页强制重刷
+  if ((hasPendingFollow || hasPendingLocationResult) && members.value.length > 0) {
     fetchRecommendations(true, { forceRefresh: true })
   }
 })

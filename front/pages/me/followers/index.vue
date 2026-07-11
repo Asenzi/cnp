@@ -10,15 +10,8 @@
       </view>
       <view class="search-bar">
         <view class="search-input-wrap">
-          <input
-            class="search-input"
-            type="text"
-            placeholder="搜索姓名、公司或职位"
-            :value="searchKeyword"
-            @input="onSearchInput"
-            confirm-type="search"
-            @confirm="onSearchConfirm"
-          />
+          <input class="search-input" type="text" placeholder="搜索姓名、公司或职位" :value="searchKeyword" @input="onSearchInput"
+            confirm-type="search" @confirm="onSearchConfirm" />
           <view v-if="searchKeyword" class="search-clear" @tap="onClearSearch">
             <text class="clear-icon">×</text>
           </view>
@@ -26,18 +19,9 @@
       </view>
     </view>
 
-    <scroll-view
-      class="content-scroll"
-      scroll-y
-      :show-scrollbar="false"
-      :refresher-enabled="true"
-      :refresher-triggered="refreshing"
-      :lower-threshold="120"
-      refresher-background="#f8f9fa"
-      @refresherrefresh="onRefresh"
-      @refresherrestore="onRefreshRestore"
-      @scrolltolower="onLoadMore"
-    >
+    <scroll-view class="content-scroll" scroll-y :show-scrollbar="false" :refresher-enabled="true"
+      :refresher-triggered="refreshing" :lower-threshold="120" refresher-background="#f8f9fa"
+      @refresherrefresh="onRefresh" @refresherrestore="onRefreshRestore" @scrolltolower="onLoadMore">
       <view class="followers-list">
         <!-- Loading skeleton -->
         <view v-if="loading && !hasAny" class="skeleton-list">
@@ -69,44 +53,26 @@
 
         <!-- Followers list -->
         <template v-else>
-          <view
-            v-for="item in followersList"
-            :key="item.id"
-            class="follower-card"
-            hover-class="follower-card-active"
-            @tap="onViewProfile(item)"
-          >
+          <view v-for="item in followersList" :key="item.id" class="follower-card" hover-class="follower-card-active"
+            @tap="onViewProfile(item)">
             <view class="card-main">
               <image class="user-avatar" mode="aspectFill" :src="item.avatar" />
               <view class="user-info">
                 <view class="name-row">
                   <text class="user-name">{{ item.name }}</text>
-                  <image
-                    v-if="item.isVerified"
-                    class="verified-badge"
-                    src="https://cos.cnptec.site/static/icon/certification.png"
-                    mode="aspectFit"
-                  />
+                  <image v-if="item.isVerified" class="verified-badge"
+                    src="https://cos.cnptec.site/static/icon/certification.png" mode="aspectFit" />
                 </view>
                 <text v-if="item.detail" class="user-detail">{{ item.detail }}</text>
                 <text v-if="item.bio" class="user-bio">{{ item.bio }}</text>
               </view>
             </view>
-            <view
-              v-if="item.isFollowedBack"
-              class="follow-status follow-status-mutual"
-              @tap.stop
-            >
+            <view v-if="item.isFollowedBack" class="follow-status follow-status-mutual" @tap.stop>
               <text class="follow-status-icon">✓</text>
               <text class="follow-status-text">互相关注</text>
             </view>
-            <view
-              v-else
-              class="follow-btn"
-              :class="{ 'follow-btn-pending': isFollowPending(item.id) }"
-              hover-class="follow-btn-hover"
-              @tap.stop="onFollowBack(item)"
-            >
+            <view v-else class="follow-btn" :class="{ 'follow-btn-pending': isFollowPending(item.id) }"
+              hover-class="follow-btn-hover" @tap.stop="onFollowBack(item)">
               <text class="follow-btn-text">关注</text>
             </view>
           </view>
@@ -498,6 +464,7 @@ onShow(() => {
   0% {
     background-position: 200% 0;
   }
+
   100% {
     background-position: -200% 0;
   }
@@ -673,7 +640,7 @@ onShow(() => {
   top: 28rpx;
   right: 28rpx;
   flex-shrink: 0;
-  height: 56rpx;
+  height: 40rpx;
   padding: 0 20rpx;
   background: rgba(26, 87, 219, 0.08);
   border: 1rpx solid rgba(26, 87, 219, 0.2);

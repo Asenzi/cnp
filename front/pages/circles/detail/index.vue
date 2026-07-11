@@ -48,10 +48,10 @@
       </view>
     </view>
 
-    <!-- 未登录时显示固定的感兴趣按钮 -->
+    <!-- 未登录时显示固定的收藏按钮 -->
     <view v-if="!isLoggedIn()" class="login-action-bar">
       <button class="login-interest-btn" hover-class="login-interest-btn-active" @tap="onInterestBeforeLogin">
-        感兴趣
+        去收藏
       </button>
     </view>
 
@@ -77,7 +77,7 @@ import {
   getCircleMembers,
   getCirclePosts,
   submitCircleJoinRequest,
-  toggleCircleInterest
+  toggleCircleCollection
 } from '../../../api/circle'
 import CircleBottomBar from './components/CircleBottomBar.vue'
 import CircleContentTabs from './components/CircleContentTabs.vue'
@@ -246,7 +246,13 @@ const applyServerDetail = (serverDetail) => {
       current: priceNumber > 0 ? priceNumber.toFixed(2) : '0.00',
       original: detail.value?.price?.original || '299'
     },
-    isInterested: Boolean(serverDetail.is_interested),
+    isInterested: Boolean(
+      serverDetail.is_collected
+      ?? serverDetail.collected
+      ?? serverDetail.is_interested
+      ?? serverDetail.interested
+    ),
+    collectCount: Number(serverDetail.collect_count ?? serverDetail.favorite_count ?? 0),
     isJoined: Boolean(serverDetail.is_joined),
     joinRequestStatus: String(serverDetail.join_request_status || ''),
     joinPaymentStatus: String(serverDetail.join_payment_status || ''),
@@ -297,12 +303,12 @@ onLoad((options = {}) => {
 onShow(() => {
   currentUserId.value = resolveCurrentUserId()
 
-  // 检查是否有待标记感兴趣的圈子
-  const pendingCircleCode = uni.getStorageSync('pendingInterestCircleCode')
+  // 登录后完成进入登录页前发起的收藏操作。
+  const pendingCircleCode = uni.getStorageSync('pendingCircleCollectCode')
+    || uni.getStorageSync('pendingInterestCircleCode')
   const currentCircleCode = String(circleCode.value || '').trim()
 
   if (isLoggedIn() && pendingCircleCode && pendingCircleCode === currentCircleCode) {
-    // 登录成功且需要标记感兴趣
     performPendingInterest()
   }
 
@@ -319,24 +325,26 @@ const performPendingInterest = async () => {
   try {
     const code = String(circleCode.value || '').trim()
     if (!code) {
+      uni.removeStorageSync('pendingCircleCollectCode')
       uni.removeStorageSync('pendingInterestCircleCode')
       return
     }
 
-    const result = await toggleCircleInterest(code, true)
-    const nextInterested = Boolean(result?.is_interested ?? result?.interested)
+    const result = await toggleCircleCollection(code, true)
+    const nextInterested = Boolean(result?.is_collected ?? result?.collected ?? result?.is_interested ?? result?.interested)
     detail.value = {
       ...detail.value,
-      isInterested: nextInterested
+      isInterested: nextInterested,
+      collectCount: Number(result?.collect_count ?? result?.favorite_count ?? detail.value?.collectCount ?? 0)
     }
     publishCircleInterestChange(code, nextInterested)
-    showToast('已标记感兴趣')
-    // 清除标记
+    showToast('已收藏')
+    uni.removeStorageSync('pendingCircleCollectCode')
     uni.removeStorageSync('pendingInterestCircleCode')
   } catch (error) {
-    console.error('Pending interest failed:', error)
-    showToast('标记失败，请稍后重试')
-    // 即使失败也清除标记，避免重复尝试
+    console.error('Pending circle collection failed:', error)
+    showToast('收藏失败，请稍后重试')
+    uni.removeStorageSync('pendingCircleCollectCode')
     uni.removeStorageSync('pendingInterestCircleCode')
   }
 }
@@ -417,14 +425,15 @@ const onToggleInterest = async () => {
   const desired = !isInterested.value
   interestSubmitting.value = true
   try {
-    const result = await toggleCircleInterest(code, desired)
-    const nextInterested = Boolean(result?.is_interested ?? result?.interested)
+    const result = await toggleCircleCollection(code, desired)
+    const nextInterested = Boolean(result?.is_collected ?? result?.collected ?? result?.is_interested ?? result?.interested)
     detail.value = {
       ...detail.value,
-      isInterested: nextInterested
+      isInterested: nextInterested,
+      collectCount: Number(result?.collect_count ?? result?.favorite_count ?? detail.value?.collectCount ?? 0)
     }
     publishCircleInterestChange(code, nextInterested)
-    showToast(detail.value.isInterested ? '已标记感兴趣' : '已取消感兴趣')
+    showToast(detail.value.isInterested ? '已收藏' : '已取消收藏')
   } catch (err) {
     showToast(err?.message || '操作失败')
   } finally {
@@ -433,15 +442,13 @@ const onToggleInterest = async () => {
 }
 
 const onInterestBeforeLogin = () => {
-  // 保存当前圈子编码，表示登录后需要标记感兴趣
   const code = String(circleCode.value || '').trim()
   if (!code) {
     showToast('圈子信息缺失')
     return
   }
 
-  // 保存标记
-  uni.setStorageSync('pendingInterestCircleCode', code)
+  uni.setStorageSync('pendingCircleCollectCode', code)
 
   // 跳转到登录页
   uni.navigateTo({
@@ -451,17 +458,16 @@ const onInterestBeforeLogin = () => {
 
 const invokeJoinPayment = async (result) => {
   const orderNo = String(result?.order_no || '').trim()
-  const wxpay = result?.wxpay || {}
-  if (!orderNo || !wxpay.timeStamp || !wxpay.nonceStr || !wxpay.package || !wxpay.signType || !wxpay.paySign) {
-    throw new Error('支付参数异常')
+  const virtualPayment = result?.virtual_payment || {}
+  if (!orderNo || !virtualPayment?.signData || !virtualPayment?.paySig || !virtualPayment?.signature || !virtualPayment?.mode) {
+    throw new Error('小程序虚拟支付参数异常')
   }
   const payResult = await new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: String(wxpay.timeStamp),
-      nonceStr: String(wxpay.nonceStr),
-      package: String(wxpay.package),
-      signType: String(wxpay.signType),
-      paySign: String(wxpay.paySign),
+    uni.requestVirtualPayment({
+      signData: String(virtualPayment.signDataJson || JSON.stringify(virtualPayment.signData)),
+      mode: String(virtualPayment.mode),
+      paySig: String(virtualPayment.paySig),
+      signature: String(virtualPayment.signature),
       success: (res) => resolve(res || {}),
       fail: (err) => reject({ ...(err || {}), order_no: orderNo })
     })
@@ -499,7 +505,7 @@ const onApplyJoin = async () => {
     const result = await submitCircleJoinRequest(circleCode.value, {
       pay_channel: amount > 0 ? 'wxpay' : undefined
     })
-    if (String(result?.action || '') === 'wxpay_required') {
+    if (String(result?.action || '') === 'virtualpay_required') {
       await invokeJoinPayment(result)
     }
     await loadCircleDetail(circleCode.value)

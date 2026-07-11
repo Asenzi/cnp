@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from secrets import token_hex
 from typing import Literal
@@ -142,7 +142,7 @@ async def upload_real_name_id_card_file(
         suffix = CONTENT_TYPE_EXTENSION_MAP.get(content_type, '.jpg')
 
     ID_CARD_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{side}_{token_hex(4)}{suffix}"
+    file_name = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{side}_{token_hex(4)}{suffix}"
     save_path = ID_CARD_STORAGE_DIR / file_name
     save_path.write_bytes(file_bytes)
 

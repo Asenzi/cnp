@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -9,7 +9,7 @@ from app.models.base import Base
 class UserRealNameProfile(Base):
     __tablename__ = "user_real_name_profiles"
     __table_args__ = (
-        UniqueConstraint("id_number_hash", name="uq_user_real_name_profiles_id_number_hash"),
+        Index("ix_user_real_name_profiles_id_number_hash", "id_number_hash"),
         Index("ix_user_real_name_profiles_verified_at", "verified_at"),
     )
 

@@ -42,12 +42,6 @@
         <text class="stat-value" :class="{ 'stat-value-muted': displayFollowFavoriteCount === '--' }">{{ displayFollowFavoriteCount }}</text>
         <text class="stat-label">感兴趣</text>
       </view>
-      <view class="stat-card stat-card-click" hover-class="stat-card-active" @tap="$emit('open-wallet')">
-        <text class="stat-value stat-value-primary" :class="{ 'stat-value-muted': displayBalance === '--' }">
-          {{ displayBalance }}
-        </text>
-        <text class="stat-label">余额</text>
-      </view>
     </view>
   </view>
 </template>
@@ -66,7 +60,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['edit', 'open-circles', 'open-wallet', 'open-interests'])
+defineEmits(['edit', 'open-circles', 'open-interests'])
 
 const DEFAULT_AVATAR = 'https://cos.cnptec.site/static/logo.png'
 
@@ -173,23 +167,6 @@ const displayFollowFavoriteCount = computed(() => {
   return formatCount(sourceValue)
 })
 
-const displayBalance = computed(() => {
-  const value = props.userInfo?.balance
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return `¥${value.toFixed(2)}`
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim()
-    if (!normalized) {
-      return '--'
-    }
-    const parsed = Number(normalized.replace(/^¥/, ''))
-    if (Number.isFinite(parsed)) {
-      return `¥${parsed.toFixed(2)}`
-    }
-  }
-  return '--'
-})
 </script>
 
 <style scoped>

@@ -46,6 +46,7 @@ async def login(
         phone=payload.phone,
         code=payload.code,
         invite_code=payload.invite_code,
+        city_name=payload.city_name,
         db=db,
         client_ip=client_ip,
     )
@@ -84,6 +85,7 @@ async def wechat_miniapp_login(
         avatar_url=payload.avatar_url,
         device_id=payload.device_id,
         invite_code=payload.invite_code,
+        city_name=payload.city_name,
     )
     return success_response(data=result.model_dump())
 

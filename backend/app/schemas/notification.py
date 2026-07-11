@@ -29,6 +29,9 @@ class NotificationResponse(NotificationBase):
     read_at: Optional[datetime] = Field(None, description="阅读时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    actor_user_pk: Optional[int] = Field(None, description="触发通知的用户主键")
+    avatar_url: Optional[str] = Field(None, description="关联用户头像")
+    related_user_id: Optional[str] = Field(None, description="关联用户ID")
 
     model_config = ConfigDict(from_attributes=True)
 

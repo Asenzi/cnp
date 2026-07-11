@@ -100,15 +100,15 @@
           </button>
         </view>
 
-        <view class="card sync-card">
+        <view v-if="form.mode === 'venue'" class="card sync-card">
           <view class="card-head">
-            <text class="card-head-title">同步到圈子</text>
+            <text class="card-head-title">活动所属圈子</text>
           </view>
 
           <button class="industry-trigger" hover-class="industry-trigger-hover" @tap="openCirclePopup">
             <view class="industry-trigger-content sync-trigger-content">
               <text v-if="selectedCircleNamesText" class="sync-selected-text">{{ selectedCircleNamesText }}</text>
-              <text v-else class="industry-trigger-placeholder">点击选择要同步的圈子</text>
+              <text v-else class="industry-trigger-placeholder">请选择活动所属圈子</text>
             </view>
             <text class="industry-trigger-arrow">›</text>
           </button>
@@ -212,12 +212,12 @@
     <view v-if="circlePopupVisible" class="filter-mask" @tap="closeCirclePopup">
       <view class="filter-panel" @tap.stop>
         <view class="panel-head">
-          <text class="panel-title">选择同步圈子</text>
+          <text class="panel-title">选择活动所属圈子</text>
           <text class="panel-subtitle">{{ syncMetaText }}</text>
         </view>
 
         <view class="section">
-          <view class="section-label">我的圈子</view>
+          <view class="section-label">我创建的圈子</view>
           <view v-if="myCircles.length" class="circle-option-list">
             <view
               v-for="circle in myCircles"
@@ -255,7 +255,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getMyCircles } from '../../../api/circle'
+import { getOwnedCircles } from '../../../api/circle'
 import { getCurrentUserProfile } from '../../../api/user'
 import {
   createResourcePost,
@@ -264,12 +264,6 @@ import {
   uploadResourceImage
 } from '../../../api/post'
 import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
-
-const modeOptions = [
-  { key: 'cooperate', title: '需求', disabled: false },
-  { key: 'resource', title: '供应', disabled: false },
-  { key: 'venue', title: '活动', disabled: true }
-]
 
 const validityOptions = [ 
   { value: '3d', label: '3天' },
@@ -319,6 +313,21 @@ const draftSelectedCircleCodes = ref([])
 const myCircles = ref([])
 const currentUserState = ref({})
 
+const isTruthyValue = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  return ['1', 'true', 'yes', 'active'].includes(String(value || '').trim().toLowerCase())
+}
+
+const isCircleOwner = computed(() => isTruthyValue(currentUserState.value?.is_circle_owner))
+const modeOptions = computed(() => {
+  const options = [{ key: 'cooperate', title: '需求', disabled: false }]
+  if (isCircleOwner.value) {
+    options.push({ key: 'venue', title: '活动', disabled: false })
+  }
+  return options
+})
+
 const editingPostCode = ref('')
 const uploading = ref(false)
 const submitting = ref(false)
@@ -329,6 +338,7 @@ const uploadProgress = ref({
 })
 
 let openerEventChannel = null
+const CROPPER_RESULT_EVENT = 'resource-publish-image-cropped'
 
 const isEditMode = computed(() => Boolean(editingPostCode.value))
 const imageList = computed(() => (Array.isArray(form.value.images) ? form.value.images : []))
@@ -336,27 +346,8 @@ const selectedCircleCodes = computed(() => (Array.isArray(form.value.sync_circle
 const normalizedTitle = computed(() => String(form.value.title || '').trim())
 const normalizedIndustry = computed(() => String(form.value.industry_label || '').trim())
 const normalizedDescription = computed(() => String(form.value.description || '').trim())
-const storedUserInfo = computed(() => {
-  const payload = uni.getStorageSync('userInfo')
-  return payload && typeof payload === 'object' ? payload : {}
-})
 const syncLimit = computed(() => {
-  const info = Object.keys(currentUserState.value || {}).length ? currentUserState.value : storedUserInfo.value || {}
-  const candidateFlags = [
-    info?.is_member,
-    info?.member_opened,
-    info?.is_vip,
-    info?.vip_opened,
-    info?.pro_member
-  ]
-  if (candidateFlags.some(Boolean)) {
-    return 5
-  }
-  const memberStatus = String(info?.member_status || info?.vip_status || '').trim().toLowerCase()
-  if (['active', 'opened', 'member', 'vip', 'paid', 'enabled', 'on'].includes(memberStatus)) {
-    return 5
-  }
-  return info?.is_verified ? 1 : 0
+  return isCircleOwner.value ? 1 : 0
 })
 const selectedCircleNamesText = computed(() => {
   const codeSet = new Set(selectedCircleCodes.value.map((item) => String(item || '').trim().toUpperCase()))
@@ -367,19 +358,10 @@ const selectedCircleNamesText = computed(() => {
   return names.join('、')
 })
 const syncMetaText = computed(() => {
-  if (syncLimit.value <= 0) {
-    return '完成实名认证后可同步到圈子'
-  }
-  if (syncLimit.value === 1) {
-    return `实名用户最多同步 1 个圈子，当前已选 ${selectedCircleCodes.value.length}/1`
-  }
-  return `会员用户最多同步 5 个圈子，当前已选 ${selectedCircleCodes.value.length}/5`
+  return `活动需选择 1 个自己创建的圈子，当前已选 ${selectedCircleCodes.value.length}/1`
 })
 const circleEmptyText = computed(() => {
-  if (syncLimit.value <= 0) {
-    return '完成实名认证后可选择圈子同步'
-  }
-  return '暂无可同步的圈子'
+  return '暂无自己创建的圈子'
 })
 
 const descriptionPlaceholder = computed(() => {
@@ -472,7 +454,14 @@ const ensureLocationPermission = async () => {
 
 const setMode = (mode) => {
   const nextMode = String(mode || '').trim()
+  if (nextMode === 'venue' && !isCircleOwner.value) {
+    showToast('只有圈主可以发布活动')
+    return
+  }
   form.value.mode = ['cooperate', 'resource', 'venue'].includes(nextMode) ? nextMode : 'cooperate'
+  if (form.value.mode !== 'venue') {
+    form.value.sync_circle_codes = []
+  }
 }
 
 const onInputTitle = (event) => {
@@ -489,8 +478,8 @@ const openIndustryPopup = () => {
 }
 
 const openCirclePopup = () => {
-  if (syncLimit.value <= 0) {
-    showToast('完成实名认证后才可同步到圈子')
+  if (!isCircleOwner.value) {
+    showToast('只有圈主可以发布活动')
     return
   }
   draftSelectedCircleCodes.value = [...selectedCircleCodes.value]
@@ -613,27 +602,38 @@ const onChooseImages = async () => {
     return
   }
 
-  let selected = null
   try {
-    selected = await new Promise((resolve, reject) => {
+    // 选择图片
+    const res = await new Promise((resolve, reject) => {
       uni.chooseImage({
-        count: remain,
-        sizeType: ['compressed'],
+        count: 1,
+        sizeType: ['original', 'compressed'],
         sourceType: ['album', 'camera'],
         success: resolve,
         fail: reject
       })
     })
-  } catch {
-    return
-  }
 
-  const tempFilePaths = Array.isArray(selected?.tempFilePaths) ? selected.tempFilePaths : []
-  if (!tempFilePaths.length) {
-    return
+    if (res.tempFilePaths && res.tempFilePaths[0]) {
+      uni.$once(CROPPER_RESULT_EVENT, onCropperConfirm)
+      uni.navigateTo({
+        url: `/pages/cropper/index?src=${encodeURIComponent(res.tempFilePaths[0])}&event=${encodeURIComponent(CROPPER_RESULT_EVENT)}`,
+        fail: () => {
+          uni.$off(CROPPER_RESULT_EVENT, onCropperConfirm)
+          showToast('打开图片裁切失败')
+        }
+      })
+    }
+  } catch (err) {
+    console.log('用户取消选择图片', err)
   }
+}
 
-  form.value.images = [...imageList.value, ...tempFilePaths].slice(0, 9)
+// 裁切页面回调
+const onCropperConfirm = (croppedPath) => {
+  if (croppedPath) {
+    form.value.images = [...imageList.value, croppedPath].slice(0, 9)
+  }
 }
 
 const uploadPendingImages = async () => {
@@ -684,12 +684,12 @@ const uploadPendingImages = async () => {
 }
 
 const loadMyCircles = async () => {
-  if (syncLimit.value <= 0) {
+  if (!isCircleOwner.value) {
     myCircles.value = []
     return
   }
   try {
-    const payload = await getMyCircles({ offset: 0, limit: 100 })
+    const payload = await getOwnedCircles({ offset: 0, limit: 50 })
     myCircles.value = Array.isArray(payload?.items) ? payload.items : []
   } catch {
     myCircles.value = []
@@ -846,6 +846,11 @@ const onSubmit = async () => {
     return
   }
 
+  if (form.value.mode === 'venue' && selectedCircleCodes.value.length !== 1) {
+    showToast('请选择活动所属圈子')
+    return
+  }
+
   if (submitting.value || loadingDetail.value) {
     return
   }
@@ -859,7 +864,7 @@ const onSubmit = async () => {
       industry_label: normalizedIndustry.value,
       description,
       images: finalImages,
-      sync_circle_codes: selectedCircleCodes.value
+      sync_circle_codes: form.value.mode === 'venue' ? selectedCircleCodes.value : []
     }
 
     const result = isEditMode.value

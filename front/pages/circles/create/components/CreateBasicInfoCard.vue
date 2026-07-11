@@ -1,18 +1,9 @@
 <template>
   <view class="card">
-    <text class="card-title">基本信息</text>
-
     <view class="field-block">
       <text class="field-label">圈子名称</text>
-      <input
-        :value="name"
-        class="field-input"
-        type="text"
-        maxlength="40"
-        placeholder="请输入圈子名称（例如：华南创业者协会）"
-        placeholder-class="field-placeholder"
-        @input="emit('update:name', $event?.detail?.value || '')"
-      />
+      <input :value="name" class="field-input" type="text" maxlength="40" placeholder="请输入圈子名称（例如：华南创业者协会）"
+        placeholder-class="field-placeholder" @input="emit('update:name', $event?.detail?.value || '')" />
     </view>
 
     <view class="field-block">
@@ -21,20 +12,15 @@
         <text class="picker-text" :class="{ 'picker-text-placeholder': !industry }">
           {{ industry || '请选择行业' }}
         </text>
-        <image class="picker-arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
+        <image class="picker-arrow" mode="aspectFit"
+          src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
       </view>
     </view>
 
     <view class="field-block">
       <text class="field-label">圈子简介</text>
-      <textarea
-        :value="description"
-        class="field-textarea"
-        maxlength="500"
-        placeholder="请简要介绍圈子的背景、目的以及能提供的资源..."
-        placeholder-class="field-placeholder"
-        @input="emit('update:description', $event?.detail?.value || '')"
-      />
+      <textarea :value="description" class="field-textarea" maxlength="500" placeholder="请简要介绍圈子的背景、目的以及能提供的资源..."
+        placeholder-class="field-placeholder" @input="emit('update:description', $event?.detail?.value || '')" />
     </view>
   </view>
 </template>
@@ -65,16 +51,7 @@ const emit = defineEmits(['update:name', 'update:industry', 'update:description'
   padding: 24rpx 32rpx;
 }
 
-.card-title {
-  display: block;
-  color: #0f172a;
-  font-size: 28rpx;
-  line-height: 1.3;
-  font-weight: 600;
-  margin-bottom: 20rpx;
-}
-
-.field-block + .field-block {
+.field-block+.field-block {
   margin-top: 20rpx;
 }
 
@@ -93,7 +70,7 @@ const emit = defineEmits(['update:name', 'update:industry', 'update:description'
   width: 100%;
   box-sizing: border-box;
   border-radius: 12rpx;
-  border: 1rpx solid rgba(15, 23, 42, 0.08);
+  /* border: 1rpx solid rgba(15, 23, 42, 0.08); */
   background: #f8fafc;
   color: #0f172a;
 }
@@ -141,10 +118,6 @@ const emit = defineEmits(['update:name', 'update:industry', 'update:description'
 @media (prefers-color-scheme: dark) {
   .card {
     background: #0f172a;
-  }
-
-  .card-title {
-    color: #f1f5f9;
   }
 
   .field-label {

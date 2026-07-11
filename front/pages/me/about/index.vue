@@ -43,7 +43,7 @@
             <text class="mission-title">我们的愿景</text>
           </view>
           <text class="mission-copy">
-            全脉链（QuanMaiLian）是致力于连接高端商务网络与战略资源管理的顶尖专业生态平台。我们为现代精英阶层打造无缝对接的交互界面，助力用户通过经认证的渠道实现同步协作与影响力的规模化增长。
+            圈脉链（QuanMaiLian）是致力于连接高端商务网络与战略资源管理的顶尖专业生态平台。我们为现代精英阶层打造无缝对接的交互界面，助力用户通过经认证的渠道实现同步协作与影响力的规模化增长。
           </text>
         </view>
 
@@ -63,24 +63,6 @@
               <text class="info-value">{{ item.value }}</text>
             </view>
             <image class="chevron" src="https://cos.cnptec.site/static/me-icons/chevron-light.png" mode="aspectFit" />
-          </view>
-        </view>
-
-        <view class="future-banner">
-          <view class="banner-shine"></view>
-          <view class="banner-right-strip"></view>
-          <view class="banner-copy">
-            <text class="banner-title">连接无限未来</text>
-            <text class="banner-subtitle">行业智慧</text>
-          </view>
-        </view>
-
-        <view class="footer">
-          <text class="copyright">© 2024 QUANMAILIAN 版权所有</text>
-          <view class="policy-row">
-            <text class="policy-link" @tap="openPolicy('用户协议')">用户协议</text>
-            <view class="policy-dot"></view>
-            <text class="policy-link" @tap="openPolicy('隐私政策')">隐私政策</text>
           </view>
         </view>
       </view>
@@ -106,7 +88,7 @@ const infoItems = [
   {
     key: 'wechat',
     label: '官方微信',
-    value: 'QuanMaiLian_Official',
+    value: 'e1032405044',
     toast: '微信号已复制',
     iconPath: 'https://cos.cnptec.site/static/icon/chat.png',
     iconClass: 'info-icon-green'
@@ -114,7 +96,7 @@ const infoItems = [
   {
     key: 'business',
     label: '商务合作',
-    value: 'bd@quanmailian.com',
+    value: '19879931021@163.com',
     toast: '邮箱已复制',
     iconPath: 'https://cos.cnptec.site/static/me-icons/event-orange.png',
     iconClass: 'info-icon-orange'
@@ -145,12 +127,6 @@ const goBack = () => {
   })
 }
 
-const openPolicy = (name) => {
-  uni.showToast({
-    title: name,
-    icon: 'none'
-  })
-}
 </script>
 
 <style scoped>
@@ -525,94 +501,6 @@ const openPolicy = (name) => {
   flex-shrink: 0;
 }
 
-.future-banner {
-  position: relative;
-  height: 248rpx;
-  overflow: hidden;
-  border-radius: 32rpx;
-  background: linear-gradient(120deg, #1a57db 0%, #2f6df0 45%, #426d70 100%);
-  box-shadow: 0 22rpx 48rpx rgba(26, 87, 219, 0.16);
-}
-
-.banner-shine {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.28), transparent 30%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent 60%);
-}
-
-.banner-right-strip {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 50rpx;
-  height: 100%;
-  background: rgba(15, 23, 42, 0.22);
-  box-shadow: -12rpx 0 20rpx rgba(15, 23, 42, 0.1);
-}
-
-.banner-copy {
-  position: absolute;
-  left: 58rpx;
-  bottom: 54rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.banner-title {
-  color: #ffffff;
-  font-size: 36rpx;
-  font-weight: 900;
-  line-height: 1.1;
-}
-
-.banner-subtitle {
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 22rpx;
-  font-weight: 800;
-  letter-spacing: 2rpx;
-}
-
-.footer {
-  padding-top: 28rpx;
-  border-top: 1rpx solid rgba(203, 213, 225, 0.5);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 36rpx;
-}
-
-.copyright {
-  color: #94a3b8;
-  font-size: 20rpx;
-  font-weight: 900;
-  letter-spacing: 8rpx;
-}
-
-.policy-row {
-  display: flex;
-  align-items: center;
-  gap: 34rpx;
-}
-
-.policy-link {
-  color: #64748b;
-  font-size: 22rpx;
-  font-weight: 800;
-}
-
-.policy-dot {
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 999rpx;
-  background: #cbd5e1;
-}
-
 @media (prefers-color-scheme: dark) {
   .about-page {
     background:
@@ -656,13 +544,8 @@ const openPolicy = (name) => {
     box-shadow: none;
   }
 
-  .info-label,
-  .copyright {
+  .info-label {
     color: #94a3b8;
-  }
-
-  .footer {
-    border-top-color: rgba(51, 65, 85, 0.8);
   }
 }
 </style>

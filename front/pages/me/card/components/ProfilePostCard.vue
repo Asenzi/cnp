@@ -6,37 +6,24 @@
         <text class="time-text">{{ item.timeText }}</text>
       </view>
 
-      <view
-        v-if="showInterest"
-        class="interest-action"
-        :class="{ 'interest-active': isInterested }"
-        hover-class="interest-hover"
-        @tap.stop="$emit('interest', item)"
-      >
+      <!-- <view v-if="showInterest" class="interest-action" :class="{ 'interest-active': isInterested }"
+        hover-class="interest-hover" @tap.stop="$emit('interest', item)">
         <text class="interest-icon">{{ isInterested ? '♥' : '♡' }}</text>
-      </view>
+      </view> -->
     </view>
 
     <text class="resource-title">{{ item.title }}</text>
     <text v-if="item.content" class="resource-desc">{{ item.content }}</text>
 
     <view v-if="item.images?.length" class="image-grid" :class="`grid-${Math.min(item.images.length, 3)}`">
-      <image
-        v-for="(img, idx) in item.images.slice(0, 3)"
-        :key="`${item.id}-${idx}`"
-        class="grid-image"
-        :src="img"
-        mode="aspectFill"
-      />
+      <image v-for="(img, idx) in item.images.slice(0, 3)" :key="`${item.id}-${idx}`" class="grid-image" :src="img"
+        mode="aspectFill" />
     </view>
 
     <view class="card-footer">
       <view v-if="item.industryLabels?.length" class="tags-row">
-        <text
-          v-for="(label, idx) in item.industryLabels.slice(0, 2)"
-          :key="`${item.id}-tag-${idx}`"
-          class="industry-tag"
-        >
+        <text v-for="(label, idx) in item.industryLabels.slice(0, 2)" :key="`${item.id}-tag-${idx}`"
+          class="industry-tag">
           {{ label }}
         </text>
       </view>
@@ -69,6 +56,8 @@ const isInterested = computed(() => {
     props.item?.interested ||
     props.item?.isInterested ||
     props.item?.is_interested ||
+    props.item?.collected ||
+    props.item?.is_collected ||
     props.item?.liked ||
     props.item?.followed ||
     props.item?.isFollowed ||
@@ -85,11 +74,11 @@ const isInterested = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
-  border: 1rpx solid rgba(15, 23, 42, 0.06);
+  /* border: 1rpx solid rgba(15, 23, 42, 0.06); */
 }
 
 .resource-card-active {
-  background: #fafbfc;
+  background: #f8f8f8;
 }
 
 .card-header {
@@ -198,7 +187,7 @@ const isInterested = computed(() => {
 }
 
 .grid-1 {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .grid-2 {
@@ -211,13 +200,10 @@ const isInterested = computed(() => {
 
 .grid-image {
   width: 100%;
-  height: 180rpx;
-  border-radius: 12rpx;
+  height: 100%;
+  border-radius: 0;
   background: #f1f5f9;
-}
-
-.grid-1 .grid-image {
-  height: 240rpx;
+  aspect-ratio: 1 / 1;
 }
 
 .card-footer {

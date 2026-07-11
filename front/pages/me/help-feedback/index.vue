@@ -123,6 +123,19 @@
             </view>
             <text class="support-arrow">→</text>
           </view>
+
+          <view class="support-card" hover-class="support-card-active" @tap="copySupportWechat">
+            <view class="support-left">
+              <view class="support-icon">
+                <image class="support-icon-img" src="https://cos.cnptec.site/static/icon/chat.png" mode="aspectFit" />
+              </view>
+              <view class="support-copy">
+                <text class="support-title">复制微信号</text>
+                <text class="support-desc">{{ supportWechat }}</text>
+              </view>
+            </view>
+            <text class="support-arrow">→</text>
+          </view>
         </view>
       </view>
     </scroll-view>
@@ -135,7 +148,8 @@ import { submitHelpFeedback, uploadHelpFeedbackImage } from '../../../api/feedba
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
-const supportEmail = 'support@quanmailian.com'
+const supportEmail = '19879931021@163.com'
+const supportWechat = 'e1032405044'
 const maxImages = 3
 const sourcePage = 'pages/me/help-feedback/index'
 
@@ -226,6 +240,18 @@ const copySupportEmail = () => {
     success: () => {
       uni.showToast({
         title: '邮箱已复制',
+        icon: 'none'
+      })
+    }
+  })
+}
+
+const copySupportWechat = () => {
+  uni.setClipboardData({
+    data: supportWechat,
+    success: () => {
+      uni.showToast({
+        title: '微信号已复制',
         icon: 'none'
       })
     }

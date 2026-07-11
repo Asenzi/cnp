@@ -5,10 +5,6 @@
     hover-class="plan-hover"
     @tap="$emit('select', plan)"
   >
-    <view v-if="plan.recommended && plan.badgeText" class="recommend-tag">
-      {{ plan.badgeText }}
-    </view>
-
     <view class="card-body">
       <view class="plan-header">
         <text class="plan-name">{{ plan.name }}</text>
@@ -81,20 +77,6 @@ const formatAmount = (value) => {
 .is-selected {
   border: 0;
   background: linear-gradient(to bottom, #ffffff 0%, #f4f8ff 100%);
-  box-shadow: none;
-}
-
-.recommend-tag {
-  position: absolute;
-  left: 32rpx;
-  top: -14rpx;
-  padding: 6rpx 20rpx;
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  border-radius: 8rpx;
-  color: #78350f;
-  font-size: 22rpx;
-  line-height: 28rpx;
-  font-weight: 600;
   box-shadow: none;
 }
 

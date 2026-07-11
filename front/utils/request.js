@@ -1,10 +1,14 @@
 const LOCAL_DEV_BASE_URL = 'http://127.0.0.1:8001'
-const LAN_DEV_BASE_URL = 'http://172.20.10.3:8001'
+const LAN_DEV_BASE_URL = LOCAL_DEV_BASE_URL
 const DEFAULT_PROD_BASE_URL = 'https://www.cnptec.site'
 const API_BASE_URL_STORAGE_KEY = '__API_BASE_URL__'
 const API_DEBUG_RECORD_STORAGE_KEY = '__LAST_API_DEBUG__'
 const API_BASE_URL_ENV_KEYS = ['VUE_APP_API_BASE_URL', 'UNI_APP_API_BASE_URL', 'API_BASE_URL']
 const STALE_DEV_BASE_URLS = new Set([
+  'http://172.20.10.3',
+  'http://172.20.10.3:8000',
+  'http://172.20.10.3:8001',
+  'http://172.20.10.3:8002',
   'http://192.168.12.131:8001'
 ])
 
@@ -68,8 +72,16 @@ function isWechatDevelopRuntime() {
   return getMiniProgramEnvVersion() === 'develop'
 }
 
+function isDevtoolsDevelopRuntime() {
+  return getRuntimePlatform() === 'devtools' && isWechatDevelopRuntime()
+}
+
 function isWechatPublishedRuntime() {
   return ['trial', 'release'].includes(getMiniProgramEnvVersion())
+}
+
+function isWechatMiniProgramRuntime() {
+  return typeof wx !== 'undefined' || getMiniProgramEnvVersion() !== ''
 }
 
 function getDefaultDevBaseUrl() {
@@ -108,13 +120,13 @@ function resolveApiBaseUrlFromEnv(options = {}) {
 
 export function getSuggestedApiBaseUrl() {
   const envBaseUrl = resolveApiBaseUrlFromEnv({
-    allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+    allowHttp: isDevtoolsDevelopRuntime()
   })
   if (envBaseUrl) {
     return envBaseUrl
   }
 
-  if (isDevelopmentEnv()) {
+  if (isDevelopmentEnv() && isDevtoolsDevelopRuntime()) {
     const customBaseUrl = normalizeUnsafeLoopback(uni.getStorageSync(API_BASE_URL_STORAGE_KEY))
     if (customBaseUrl) {
       return customBaseUrl
@@ -140,7 +152,11 @@ function getBaseUrl() {
     return DEFAULT_PROD_BASE_URL
   }
 
-  if (isDevelopmentEnv() || isWechatDevelopRuntime()) {
+  if (isWechatMiniProgramRuntime() && !isWechatDevelopRuntime()) {
+    return DEFAULT_PROD_BASE_URL
+  }
+
+  if (isDevelopmentEnv() && isDevtoolsDevelopRuntime()) {
     const customBaseUrl = normalizeUnsafeLoopback(uni.getStorageSync(API_BASE_URL_STORAGE_KEY))
     if (customBaseUrl) {
       return customBaseUrl
@@ -148,13 +164,13 @@ function getBaseUrl() {
   }
 
   const envBaseUrl = resolveApiBaseUrlFromEnv({
-    allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+    allowHttp: isDevtoolsDevelopRuntime()
   })
   if (envBaseUrl) {
     return envBaseUrl
   }
 
-  if (isDevelopmentEnv() || isWechatDevelopRuntime()) {
+  if (isDevelopmentEnv() && isDevtoolsDevelopRuntime()) {
     return getDefaultDevBaseUrl()
   }
 
@@ -165,7 +181,7 @@ function getBaseUrl() {
   // Uploaded trial builds can have an empty NODE_ENV, so unknown runtime must
   // prefer production HTTPS instead of leaking a local LAN address.
   const platform = getRuntimePlatform()
-  if (platform === 'devtools') {
+  if (isDevtoolsDevelopRuntime()) {
     return getDefaultDevBaseUrl()
   }
   return DEFAULT_PROD_BASE_URL
@@ -181,9 +197,9 @@ export function getApiEnvInfo() {
     envVersion: getMiniProgramEnvVersion(),
     baseUrl: getBaseUrl(),
     envBaseUrl: resolveApiBaseUrlFromEnv({
-      allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+      allowHttp: isDevtoolsDevelopRuntime()
     }),
-    runtimeOverride: (isDevelopmentEnv() || isWechatDevelopRuntime())
+    runtimeOverride: (isDevelopmentEnv() && isDevtoolsDevelopRuntime())
       ? normalizeUnsafeLoopback(uni.getStorageSync(API_BASE_URL_STORAGE_KEY))
       : '',
     isDevelopment: isDevelopmentEnv(),
@@ -199,7 +215,7 @@ function writeApiDebugRecord(stage, payload = {}) {
     envVersion: getMiniProgramEnvVersion(),
     baseUrl: getBaseUrl(),
     envBaseUrl: resolveApiBaseUrlFromEnv({
-      allowHttp: isDevelopmentEnv() || isWechatDevelopRuntime()
+      allowHttp: isDevtoolsDevelopRuntime()
     }),
     runtimeOverride: normalizeUnsafeLoopback(uni.getStorageSync(API_BASE_URL_STORAGE_KEY)),
     ...payload

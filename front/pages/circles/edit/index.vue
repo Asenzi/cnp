@@ -2,12 +2,6 @@
   <view class="edit-circle-page">
     <scroll-view class="main-scroll" scroll-y :show-scrollbar="false">
       <view class="content-wrap">
-        <view class="notice-card">
-          <text class="notice-title">圈子信息变更说明</text>
-          <text class="notice-text">系统检测正常会直接生效；命中风险内容会进入人工审核。</text>
-          <text class="notice-text">每月前 2 次变更免费，第 3 次起进入审核并收取 ¥9.99 审核费。</text>
-        </view>
-
         <CreateCoverUploader v-model="form.coverUrl" />
         <CreateAvatarUploader v-model="form.avatarUrl" />
 
@@ -22,18 +16,13 @@
         />
 
         <CreateJoinMechanismCard
-          :join-type="form.joinType"
           :price="form.price"
-          :join-type-options="joinTypeOptions"
-          @update:joinType="form.joinType = $event"
           @update:price="form.price = normalizePrice($event)"
         />
 
         <CreateRulesCard
           :rules="form.rules"
-          :need-post-review="form.needPostReview"
           @update:rules="form.rules = $event"
-          @update:needPostReview="form.needPostReview = $event"
         />
       </view>
     </scroll-view>
@@ -61,8 +50,7 @@ import CreateRulesCard from '../create/components/CreateRulesCard.vue'
 import {
   defaultCircleAvatar,
   defaultCoverImage,
-  industryOptions,
-  joinTypeOptions
+  industryOptions
 } from '../create/modules/create-circle-form'
 import { getApiBaseUrl } from '../../../utils/request'
 
@@ -76,22 +64,17 @@ const form = reactive({
   name: '',
   industry: '',
   description: '',
-  joinType: 'free',
-  price: '',
-  rules: '',
-  needPostReview: false
+  joinType: 'paid',
+  price: '98',
+  rules: ''
 })
+const joinPriceTiers = [98, 198, 398, 598, 980, 1980, 3980, 5980, 9980]
 
 const showToast = (title) => {
   uni.showToast({
     title,
     icon: 'none'
   })
-}
-
-const formatAmount = (value) => {
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
 }
 
 const normalizePrice = (value) => {
@@ -145,28 +128,24 @@ const validateForm = () => {
     showToast('请输入圈子简介')
     return false
   }
-  if (form.joinType === 'paid') {
-    const value = Number(form.price)
-    if (!form.price || Number.isNaN(value) || value <= 0) {
-      showToast('请输入有效的付费金额')
-      return false
-    }
+  const value = Number(form.price)
+  if (!joinPriceTiers.includes(value)) {
+    showToast('请输入有效的付费金额')
+    return false
   }
   return true
 }
 
 const applyCircleDetail = (detail = {}) => {
-  const joinType = String(detail?.join_type || 'free').trim() || 'free'
   const joinPrice = Number(detail?.join_price || 0)
   form.coverUrl = String(detail?.cover_url || '').trim() || defaultCoverImage
   form.avatarUrl = String(detail?.avatar_url || '').trim() || form.coverUrl || defaultCircleAvatar
   form.name = String(detail?.name || '').trim()
   form.industry = String(detail?.industry_label || '').trim()
   form.description = String(detail?.description || '').trim()
-  form.joinType = joinType
-  form.price = joinType === 'paid' && joinPrice > 0 ? normalizePrice(joinPrice.toFixed(2)) : ''
+  form.joinType = 'paid'
+  form.price = joinPriceTiers.includes(joinPrice) ? normalizePrice(joinPrice.toFixed(2)) : '98'
   form.rules = String(detail?.rules_text || '').trim()
-  form.needPostReview = Boolean(detail?.need_post_review)
 }
 
 const loadCircleDetail = async () => {
@@ -232,10 +211,9 @@ const onSubmit = async () => {
       description: String(form.description || '').trim(),
       cover_url: finalCoverUrl,
       avatar_url: finalAvatarUrl,
-      join_type: String(form.joinType || 'free'),
-      join_price: form.joinType === 'paid' ? Number(form.price || 0) : 0,
-      rules_text: String(form.rules || '').trim() || null,
-      need_post_review: Boolean(form.needPostReview)
+      join_type: 'paid',
+      join_price: Number(form.price || 0),
+      rules_text: String(form.rules || '').trim() || null
     }
 
     const result = await updateCircle(circleCode.value, payload)
@@ -244,10 +222,7 @@ const onSubmit = async () => {
       : null
 
     if (review?.review_required) {
-      const feeMessage = review?.fee_paid
-        ? `，已扣除审核费¥${formatAmount(review?.fee_amount)}`
-        : ''
-      showToast(`圈子资料已提交审核${feeMessage}`)
+      showToast('圈子资料已提交审核')
       setTimeout(() => {
         uni.navigateBack()
       }, 260)
@@ -267,13 +242,6 @@ const onSubmit = async () => {
           url: '/pages/auth/login/index'
         })
       }, 200)
-      return
-    }
-    if (Number(err?.code) === 5701) {
-      const detail = err?.payload?.data || {}
-      showToast(
-        `本月圈子资料修改次数已超限，需支付审核费¥${formatAmount(detail?.required_amount)}，当前余额¥${formatAmount(detail?.wallet_balance)}`
-      )
       return
     }
     showToast(err?.message || '圈子资料更新失败，请稍后重试')

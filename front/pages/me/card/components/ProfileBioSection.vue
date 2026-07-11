@@ -2,7 +2,7 @@
   <view class="bio-wrap">
     <view class="bio-card">
       <text class="bio-text">
-        <text class="bio-title">个人简介：</text>{{ bio }}
+        {{ bio }}
       </text>
     </view>
   </view>
@@ -27,18 +27,13 @@ defineProps({
   background: #f9fafb;
   border-radius: 16rpx;
   padding: 24rpx;
-  border: 1rpx solid rgba(0, 0, 0, 0.04);
+  /* border: 1rpx solid rgba(0, 0, 0, 0.04); */
 }
 
 .bio-text {
   color: #6b7280;
   font-size: 26rpx;
   line-height: 40rpx;
-}
-
-.bio-title {
-  color: #111827;
-  font-weight: 600;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -54,8 +49,5 @@ defineProps({
     color: #cbd5e1;
   }
 
-  .bio-title {
-    color: #f8fafc;
-  }
 }
 </style>

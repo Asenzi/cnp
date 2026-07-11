@@ -56,10 +56,9 @@
 
         <template v-else>
           <!-- 活动卡片 -->
-          <template v-for="(post, index) in feedCards">
+          <template v-for="(post, index) in feedCards" :key="post.id || post.postCode">
             <VenueEventCard
               v-if="post.type === 'venue'"
-              :key="post.id"
               :item="post"
               :show-interest="true"
               :style="{ animationDelay: `${index * 50}ms` }"
@@ -69,7 +68,6 @@
             />
             <ProfilePostCard
               v-else
-              :key="post.id"
               :item="post"
               :show-interest="true"
               :style="{ animationDelay: `${index * 50}ms` }"
@@ -111,7 +109,7 @@
       </view>
     </scroll-view>
 
-    <ResourcePublishFab @tap="onTapPublish" />
+    <ResourcePublishFab @publish="onTapPublish" />
 
     <NetworkFilterPanel
       :visible="filterVisible"
@@ -132,7 +130,7 @@ import {
   getResourceFilters,
   reportResourceFeedback,
   reportResourceImpressions,
-  toggleResourceInterest
+  toggleResourceCollection
 } from '../../../api/post'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import ProfilePostCard from '../../me/card/components/ProfilePostCard.vue'
@@ -182,6 +180,7 @@ const isPageAlive = ref(true) // 页面生命周期标记
 const loginRedirectTimer = ref(null) // 登录跳转定时器
 const currentRequestId = ref(0) // 请求ID，用于取消过期请求
 const reportedImpressionKeys = ref(new Set())
+const publishNavigating = ref(false)
 const interestSubmittingCodes = new Set()
 // 暂时隐藏城市定位筛选入口，但保留相关状态和逻辑，便于后续恢复
 const showLocationFilter = false
@@ -225,7 +224,6 @@ const sortLabel = computed(() => (sortKey.value === 'latest' ? '最新' : '热�
 
 const resourceLeftTabs = computed(() => [
   { key: 'cooperate', label: '需求' },
-  { key: 'resource', label: '供应' },
   { key: 'venue', label: '活动' }
 ])
 
@@ -589,10 +587,15 @@ const onTapDetail = (post) => {
 }
 
 const onTapPublish = () => {
+  if (publishNavigating.value) {
+    return
+  }
+
   if (!ensureLoggedIn()) {
     return
   }
 
+  publishNavigating.value = true
   uni.navigateTo({
     url: '/pages/resources/publish/index',
     events: {
@@ -600,6 +603,11 @@ const onTapPublish = () => {
         fetchFilterOptions()
         fetchFeed(true)
       }
+    },
+    complete: () => {
+      setTimeout(() => {
+        publishNavigating.value = false
+      }, 800)
     }
   })
 }
@@ -619,9 +627,13 @@ const onToggleInterest = async (post) => {
     post?.interested ||
     post?.isInterested ||
     post?.is_interested ||
+    post?.collected ||
+    post?.is_collected ||
     post?.rawPost?.interested ||
     post?.rawPost?.isInterested ||
     post?.rawPost?.is_interested ||
+    post?.rawPost?.collected ||
+    post?.rawPost?.is_collected ||
     post?.liked ||
     post?.rawPost?.liked ||
     post?.followed ||
@@ -638,26 +650,30 @@ const onToggleInterest = async (post) => {
       interested: !wasInterested,
       isInterested: !wasInterested,
       is_interested: !wasInterested,
+      collected: !wasInterested,
+      is_collected: !wasInterested,
       liked: !wasInterested
     }
   }
 
   try {
-    const result = await toggleResourceInterest(postCode, !wasInterested)
-    const nextInterested = Boolean(result?.is_interested ?? result?.interested ?? result?.liked)
+    const result = await toggleResourceCollection(postCode, !wasInterested)
+    const nextInterested = Boolean(result?.is_collected ?? result?.collected ?? result?.is_interested ?? result?.interested ?? result?.liked)
     if (targetIndex >= 0) {
       posts.value[targetIndex] = {
         ...posts.value[targetIndex],
         interested: nextInterested,
         isInterested: nextInterested,
         is_interested: nextInterested,
+        collected: nextInterested,
+        is_collected: nextInterested,
         liked: nextInterested
       }
     }
     reportFeedFeedback(postCode, nextInterested ? 'interest' : 'cancel_interest', { source: 'resource_feed' })
 
     uni.showToast({
-      title: nextInterested ? '已标记感兴趣' : '已取消感兴趣',
+      title: nextInterested ? '已收藏' : '已取消收藏',
       icon: 'none'
     })
   } catch (err) {
@@ -668,6 +684,8 @@ const onToggleInterest = async (post) => {
         interested: wasInterested,
         isInterested: wasInterested,
         is_interested: wasInterested,
+        collected: wasInterested,
+        is_collected: wasInterested,
         liked: wasInterested
       }
     }

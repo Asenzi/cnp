@@ -14,19 +14,9 @@
     <text class="title">{{ post.title || '\u672a\u547d\u540d\u8d44\u6e90' }}</text>
     <text class="desc">{{ post.description || '' }}</text>
 
-    <view
-      v-if="imageList.length"
-      class="image-wrap"
-      :class="imageList.length > 1 ? 'image-grid' : 'image-single'"
-    >
-      <image
-        v-for="(image, index) in imageList"
-        :key="`${post.post_code || post.id}-${index}`"
-        class="cover-image"
-        mode="aspectFill"
-        :src="image"
-        @tap.stop="onPreviewImage(index)"
-      />
+    <view v-if="imageList.length" class="image-wrap" :class="imageList.length > 1 ? 'image-grid' : 'image-single'">
+      <image v-for="(image, index) in imageList" :key="`${post.post_code || post.id}-${index}`" class="cover-image"
+        mode="aspectFill" :src="image" @tap.stop="onPreviewImage(index)" />
     </view>
   </view>
 </template>
@@ -187,9 +177,10 @@ const onPreviewImage = (index) => {
 
 .cover-image {
   width: 100%;
-  border-radius: 12rpx;
+  height: 100%;
+  border-radius: 0;
   background: #e2e8f0;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 1 / 1;
 }
 
 @media (prefers-color-scheme: dark) {

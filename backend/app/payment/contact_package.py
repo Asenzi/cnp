@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from secrets import token_hex
 
@@ -42,7 +42,7 @@ DEFAULT_CONTACT_PACKAGE_PLANS = [
 
 
 def _utc_now_naive() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _normalize_text(value: object) -> str:

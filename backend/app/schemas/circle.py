@@ -11,10 +11,9 @@ class CircleCreateRequest(BaseModel):
     description: str = Field(..., min_length=2, max_length=500)
     cover_url: str = Field(..., min_length=1, max_length=255)
     avatar_url: str = Field(..., min_length=1, max_length=255)
-    join_type: Literal["free", "paid", "review"] = "free"
+    join_type: Literal["paid"] = "paid"
     join_price: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     rules_text: str | None = Field(default=None, max_length=2000)
-    need_post_review: bool = False
 
 
 class CircleUpdateRequest(BaseModel):
@@ -23,10 +22,9 @@ class CircleUpdateRequest(BaseModel):
     description: str | None = Field(default=None, min_length=2, max_length=500)
     cover_url: str | None = Field(default=None, min_length=1, max_length=255)
     avatar_url: str | None = Field(default=None, min_length=1, max_length=255)
-    join_type: Literal["free", "paid", "review"] | None = None
+    join_type: Literal["paid"] | None = None
     join_price: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     rules_text: str | None = Field(default=None, max_length=2000)
-    need_post_review: bool | None = None
 
 
 class CircleOwnerData(BaseModel):
@@ -46,11 +44,15 @@ class CircleData(BaseModel):
     join_type: str
     join_price: float
     rules_text: str | None = None
-    need_post_review: bool
     member_count: int
     post_count: int
     owner: CircleOwnerData
     is_interested: bool = False
+    interested: bool = False
+    is_collected: bool = False
+    collected: bool = False
+    collect_count: int = 0
+    favorite_count: int = 0
     is_joined: bool = False
     join_request_status: str = ""
     join_payment_status: str = ""
@@ -107,6 +109,12 @@ class CircleDiscoverItem(BaseModel):
     owner_city_name: str | None = None
     owner_is_verified: bool = False
     is_joined: bool = False
+    is_interested: bool = False
+    interested: bool = False
+    is_collected: bool = False
+    collected: bool = False
+    collect_count: int = 0
+    favorite_count: int = 0
     reason_tags: list[str] = Field(default_factory=list)
     score: float = 0
     last_active_at: datetime | None = None
@@ -122,8 +130,3 @@ class CircleDiscoverListData(BaseModel):
     tab: str = "recommend"
     city_name: str | None = None
     request_id: str | None = None
-
-
-class CirclePostSyncReviewRequest(BaseModel):
-    action: Literal["approve", "reject"]
-    reject_reason: str | None = Field(default=None, max_length=120)

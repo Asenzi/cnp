@@ -1,7 +1,5 @@
 <template>
   <view class="section-wrap">
-    <text class="section-title">圈子头像</text>
-
     <view class="avatar-card" @tap="chooseAvatar">
       <image class="avatar-image" mode="aspectFill" :src="modelValue || defaultCircleAvatar" />
       <view class="avatar-content">
@@ -24,6 +22,7 @@ defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const CROP_RESULT_EVENT = 'circle-avatar-image-cropped'
 
 const chooseAvatar = () => {
   uni.chooseImage({
@@ -33,32 +32,36 @@ const chooseAvatar = () => {
     success: (res) => {
       const tempPath = res?.tempFilePaths?.[0]
       if (tempPath) {
-        emit('update:modelValue', tempPath)
+        uni.$once(CROP_RESULT_EVENT, onCropConfirm)
+        uni.navigateTo({
+          url: `/pages/cropper/index?src=${encodeURIComponent(tempPath)}&event=${encodeURIComponent(CROP_RESULT_EVENT)}&ratioWidth=1&ratioHeight=1`,
+          fail: () => {
+            uni.$off(CROP_RESULT_EVENT, onCropConfirm)
+            uni.showToast({ title: '打开图片裁切失败', icon: 'none' })
+          }
+        })
       }
     }
   })
+}
+
+const onCropConfirm = (croppedPath) => {
+  if (croppedPath) {
+    emit('update:modelValue', croppedPath)
+  }
 }
 </script>
 
 <style scoped>
 .section-wrap {
-  padding: 24rpx 32rpx;
+  padding: 10rpx 32rpx;
   background: #ffffff;
-}
-
-.section-title {
-  display: block;
-  color: #0f172a;
-  font-size: 28rpx;
-  line-height: 1.3;
-  font-weight: 600;
-  margin-bottom: 16rpx;
 }
 
 .avatar-card {
   border-radius: 12rpx;
-  background: #f8fafc;
-  border: 1rpx solid rgba(15, 23, 42, 0.08);
+  /* background: #f8fafc; */
+  /* border: 1rpx solid rgba(15, 23, 42, 0.08); */
   padding: 16rpx;
   display: flex;
   align-items: center;
@@ -69,7 +72,7 @@ const chooseAvatar = () => {
   width: 88rpx;
   height: 88rpx;
   border-radius: 50%;
-  border: 2rpx solid #dbe2ea;
+  /* border: 2rpx solid #dbe2ea; */
   background: #f1f5f9;
   flex-shrink: 0;
 }
@@ -99,7 +102,7 @@ const chooseAvatar = () => {
   flex-shrink: 0;
   min-width: 92rpx;
   height: 52rpx;
-  border-radius: 999rpx;
+  border-radius: 20rpx;
   padding: 0 18rpx;
   background: rgba(37, 99, 235, 0.08);
   color: #2563eb;
@@ -112,10 +115,6 @@ const chooseAvatar = () => {
 @media (prefers-color-scheme: dark) {
   .section-wrap {
     background: #0f172a;
-  }
-
-  .section-title {
-    color: #f1f5f9;
   }
 
   .avatar-card {

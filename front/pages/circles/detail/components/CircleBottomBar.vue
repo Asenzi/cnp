@@ -14,7 +14,7 @@
         hover-class="button-pressed"
         @tap="emit('interest')"
       >
-        {{ interested ? '已感兴趣' : '感兴趣' }}
+        {{ interested ? '已收藏' : '去收藏' }}
       </button>
       <button
         class="apply-btn"
@@ -112,6 +112,7 @@ const emit = defineEmits(['interest', 'apply'])
 
 .interest-btn,
 .apply-btn {
+  flex: 1;
   height: 76rpx;
   margin: 0;
   border: 0;
@@ -122,6 +123,7 @@ const emit = defineEmits(['interest', 'apply'])
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
 }
 
 .interest-btn::after,
@@ -130,13 +132,11 @@ const emit = defineEmits(['interest', 'apply'])
 }
 
 .interest-btn {
-  min-width: 150rpx;
   background: #f1f5f9;
   color: #475569;
 }
 
 .apply-btn {
-  flex: 1;
   background: #2563eb;
   color: #ffffff;
 }

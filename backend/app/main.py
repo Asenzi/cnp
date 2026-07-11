@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.admin.service import ensure_default_admin_user
 from app.api.router import api_router
+from app.common.feed_visibility import ensure_default_feed_visibility_configs
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logger import logger, setup_logging
@@ -47,6 +48,7 @@ async def on_startup() -> None:
     ensure_default_admin_user()
     ensure_default_points_configs()
     ensure_default_payment_configs()
+    ensure_default_feed_visibility_configs()
     await init_redis()
     logger.info("service started")
 

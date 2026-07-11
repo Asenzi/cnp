@@ -16,6 +16,12 @@
 	      "navigationBarTitleText": "Debug"
 	    }
 	  },
+	  {
+	    "path": "pages/debug/location-test",
+	    "style": {
+	      "navigationBarTitleText": "位置同步测试"
+	    }
+	  },
 
     {
       "path": "pages/tab/discover/city/index",
@@ -78,7 +84,7 @@
     {
       "path": "pages/me/following/index",
       "style": {
-        "navigationBarTitleText": "我的关注",
+        "navigationBarTitleText": "我的收藏",
         "navigationStyle": "custom",
         "navigationBarBackgroundColor": "#ffffff",
         "backgroundColor": "#f8f9fa"
@@ -96,7 +102,7 @@
     {
       "path": "pages/me/interests/index",
       "style": {
-        "navigationBarTitleText": "感兴趣",
+        "navigationBarTitleText": "我的收藏",
         "navigationBarBackgroundColor": "#f6f6f8",
         "backgroundColor": "#f6f6f8",
         "enablePullDownRefresh": true
@@ -107,6 +113,15 @@
       "style": {
         "navigationBarTitleText": "消息",
         "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#f6f6f8",
+        "backgroundColor": "#f6f6f8",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/me/income/index",
+      "style": {
+        "navigationBarTitleText": "我的收益",
         "navigationBarBackgroundColor": "#f6f6f8",
         "backgroundColor": "#f6f6f8",
         "enablePullDownRefresh": true
@@ -140,23 +155,6 @@
       "path": "pages/me/circle-owner/apply/index",
       "style": {
         "navigationBarTitleText": "成为圈主",
-        "navigationBarBackgroundColor": "#f6f6f8",
-        "backgroundColor": "#f6f6f8"
-      }
-    },
-    {
-      "path": "pages/me/wallet/index",
-      "style": {
-        "navigationBarTitleText": "我的钱包",
-        "navigationBarBackgroundColor": "#f6f6f8",
-        "backgroundColor": "#f6f6f8",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
-      "path": "pages/me/wallet/recharge/index",
-      "style": {
-        "navigationBarTitleText": "充值",
         "navigationBarBackgroundColor": "#f6f6f8",
         "backgroundColor": "#f6f6f8"
       }
@@ -332,6 +330,14 @@
       }
     },
     {
+      "path": "pages/cropper/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#000000",
+        "backgroundColor": "#000000"
+      }
+    },
+    {
       "path": "pages/resources/publish/index",
       "style": {
         "navigationBarTitleText": "发布资源",
@@ -384,6 +390,15 @@
         "navigationBarTitleText": "编辑圈子",
         "navigationBarBackgroundColor": "#f6f6f8",
         "backgroundColor": "#f6f6f8"
+      }
+    },
+    {
+      "path": "pages/circles/manage/index",
+      "style": {
+        "navigationBarTitleText": "圈子管理",
+        "navigationBarBackgroundColor": "#f6f7fb",
+        "backgroundColor": "#f6f7fb",
+        "enablePullDownRefresh": true
       }
     },
     {

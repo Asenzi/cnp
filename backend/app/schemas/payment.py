@@ -14,13 +14,3 @@ class MemberOrderConfirmRequest(BaseModel):
 
 class CircleOwnerPurchaseRequest(BaseModel):
     pay_channel: str | None = Field(default=None, max_length=16)
-
-
-class WalletRechargeRequest(BaseModel):
-    amount: float = Field(..., gt=0, le=200000)
-    pay_channel: str | None = Field(default=None, max_length=16)
-
-
-class WalletRechargeConfirmRequest(BaseModel):
-    transaction_id: str | None = Field(default=None, max_length=64)
-    ext: dict | None = None

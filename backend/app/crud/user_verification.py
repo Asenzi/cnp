@@ -1,5 +1,5 @@
-﻿import json
-from datetime import UTC, datetime
+import json
+from datetime import datetime, timezone
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -61,7 +61,7 @@ def upsert_user_verification_submit(
 ) -> UserVerification:
     record = get_user_verification(db=db, user_pk=user_pk, verify_type=verify_type)
     payload_json = json.dumps(payload, ensure_ascii=False)
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if record is None:
         record = UserVerification(
@@ -105,9 +105,9 @@ def set_user_verification_status(
 
     record.status = status.value
     record.reject_reason = reject_reason
-    record.reviewed_at = datetime.now(UTC).replace(tzinfo=None)
+    record.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     if record.submitted_at is None:
-        record.submitted_at = datetime.now(UTC).replace(tzinfo=None)
+        record.submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(record)
     db.commit()
     db.refresh(record)

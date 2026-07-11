@@ -15,7 +15,6 @@ from app.core.logger import logger
 from app.crud import (
     get_user_by_id,
     get_user_real_name_profile,
-    get_user_real_name_profile_by_hash,
     get_user_verification,
     get_user_verification_by_id,
     list_user_verifications,
@@ -270,19 +269,9 @@ def _assert_real_name_id_number_available(
     user_pk: int,
     id_number_hash: str,
 ) -> None:
-    existing_profile = get_user_real_name_profile_by_hash(db=db, id_number_hash=id_number_hash)
-    if existing_profile is None or int(existing_profile.user_pk) == int(user_pk):
-        return
-
-    existing_record = get_user_verification(
-        db=db,
-        user_pk=int(existing_profile.user_pk),
-        verify_type=VerificationType.REAL_NAME.value,
-    )
-    if existing_record and existing_record.status == VerificationStatus.APPROVED.value:
-        raise BusinessException(message="该身份证件已完成实名认证", code=4307, status_code=400)
-    if existing_record and existing_record.status == VerificationStatus.PENDING.value:
-        raise BusinessException(message="该身份证件已被其他账号提交认证", code=4308, status_code=400)
+    # Product rule: the same ID card can be verified by multiple accounts.
+    # Keep this hook so call sites stay explicit about the policy.
+    return
 
 
 def _upsert_legacy_real_name_profile(
@@ -314,6 +303,25 @@ def _upsert_legacy_real_name_profile(
         id_front_url=id_front_url,
         id_back_url=id_back_url,
     )
+
+
+def _resolve_real_name_id_number_hash_for_review(
+    *,
+    profile: UserRealNameProfile | None,
+    payload: dict | None,
+) -> str | None:
+    if profile is not None:
+        normalized_hash = str(profile.id_number_hash or "").strip().lower()
+        if normalized_hash:
+            return normalized_hash
+
+    if not payload:
+        return None
+
+    raw_id_number = _normalize_text(payload.get("id_number"), 18)
+    if not raw_id_number:
+        return None
+    return _hash_id_number(raw_id_number)
 
 
 def get_user_verification_overview(db: Session, user: User) -> VerificationOverviewData:
@@ -525,6 +533,23 @@ def review_verification_submission(
         raise BusinessException(message="驳回时必须填写驳回原因", code=4406, status_code=400)
 
     target_status = VerificationStatus.APPROVED if action == "approve" else VerificationStatus.REJECTED
+    payload = _parse_submit_payload(record.submit_payload_json)
+    profile = None
+
+    if target_status == VerificationStatus.APPROVED and record.verify_type == VerificationType.REAL_NAME.value:
+        profile = get_user_real_name_profile(db=db, user_pk=int(record.user_pk))
+        id_number_hash = _resolve_real_name_id_number_hash_for_review(profile=profile, payload=payload)
+        if not id_number_hash:
+            raise BusinessException(
+                message="实名认证资料缺少有效身份证信息，请用户重新提交",
+                code=4407,
+                status_code=400,
+            )
+        _assert_real_name_id_number_available(
+            db=db,
+            user_pk=int(record.user_pk),
+            id_number_hash=id_number_hash,
+        )
 
     try:
         updated_record = set_user_verification_status(
@@ -536,12 +561,11 @@ def review_verification_submission(
         )
 
         if record.verify_type == VerificationType.REAL_NAME.value:
-            profile = get_user_real_name_profile(db=db, user_pk=int(record.user_pk))
             if profile is None:
                 _upsert_legacy_real_name_profile(
                     db=db,
                     user_pk=int(record.user_pk),
-                    payload=_parse_submit_payload(record.submit_payload_json),
+                    payload=payload,
                 )
             set_user_real_name_profile_verified_at(
                 db=db,

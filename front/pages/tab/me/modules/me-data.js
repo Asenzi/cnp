@@ -6,41 +6,48 @@ export const serviceList = [
     colorClass: 'service-blue',
     url: '/pages/me/auth/realname/index'
   },
-  {
-    key: 'create_circle',
-    iconPath: 'https://cos.cnptec.site/static/icon/create.png',
-    label: '创建圈子',
-    colorClass: 'service-blue',
-    url: '/pages/circles/create/index'
-  },
-  {
-    key: 'member_center',
-    iconPath: 'https://cos.cnptec.site/static/icon/huiyuan.png',
-    label: '会员中心',
-    colorClass: 'service-blue',
-    url: '/pages/me/member-center/index'
-  },
-  {
-    key: 'messages',
-    iconPath: 'https://cos.cnptec.site/static/icon/chat.png',
-    label: '消息通知',
-    colorClass: 'service-blue',
-    url: '/pages/me/messages/index'
-  },
-  {
-    key: 'interests',
-    iconPath: 'https://cos.cnptec.site/static/icon/interested.png',
-    label: '感兴趣',
-    colorClass: 'service-blue',
-    url: '/pages/me/interests/index'
-  },
-  {
-    key: 'card',
-    iconPath: 'https://cos.cnptec.site/static/icon/card.png',
-    label: '我的名片',
-    colorClass: 'service-purple',
-    url: '/pages/me/card/index'
-  }
+  // {
+  //   key: 'create_circle',
+  //   iconPath: 'https://cos.cnptec.site/static/icon/create.png',
+  //   label: '创建圈子',
+  //   colorClass: 'service-blue',
+  //   url: '/pages/circles/create/index'
+  // },
+  // {
+  //   key: 'member_center',
+  //   iconPath: 'https://cos.cnptec.site/static/icon/huiyuan.png',
+  //   label: '会员中心',
+  //   colorClass: 'service-blue',
+  //   url: '/pages/me/member-center/index'
+  // },
+  // {
+  //   key: 'income',
+  //   iconPath: 'https://cos.cnptec.site/static/icon/Profit.png',
+  //   label: '我的收益',
+  //   colorClass: 'service-blue',
+  //   url: '/pages/me/income/index'
+  // }
+  // {
+  //   key: 'messages',
+  //   iconPath: 'https://cos.cnptec.site/static/icon/chat.png',
+  //   label: '消息通知',
+  //   colorClass: 'service-blue',
+  //   url: '/pages/me/messages/index'
+  // },
+  // {
+  //   key: 'interests',
+  //   iconPath: 'https://cos.cnptec.site/static/icon/interested.png',
+  //   label: '感兴趣',
+  //   colorClass: 'service-blue',
+  //   url: '/pages/me/interests/index'
+  // },
+  // {
+  //   key: 'card',
+  //   iconPath: 'https://cos.cnptec.site/static/icon/card.png',
+  //   label: '我的名片',
+  //   colorClass: 'service-purple',
+  //   url: '/pages/me/card/index'
+  // }
 ]
 
 export const settingList = [

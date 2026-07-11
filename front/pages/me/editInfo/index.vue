@@ -17,7 +17,11 @@
             <image class="camera-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/camera-white.png" />
           </view>
         </view>
-        <text class="avatar-tip">{{ uploadingAvatar ? '上传中...' : '点击更换头像' }}</text>
+        <text class="avatar-tip">{{ uploadingAvatar ? '上传中...' : avatarTipText }}</text>
+      </view>
+
+      <view v-if="reviewNoticeText" class="review-notice">
+        <text class="review-notice-text">{{ reviewNoticeText }}</text>
       </view>
 
       <!-- 表单区域 -->
@@ -120,7 +124,8 @@
             </view>
           </view>
 
-          <view class="field">
+          <!-- 位置坐标字段已移除 - 现在由系统自动获取 -->
+          <!-- <view class="field">
             <text class="label">位置坐标</text>
             <view class="location-field">
               <view class="location-content">
@@ -137,7 +142,7 @@
                 {{ locating ? '定位中' : '获取定位' }}
               </button>
             </view>
-          </view>
+          </view> -->
         </view>
 
         <!-- 联系方式 -->
@@ -214,6 +219,7 @@ const saving = ref(false)
 const uploadingAvatar = ref(false)
 const locating = ref(false)
 const hasSelectedNewAvatar = ref(false) // 标记是否选择了新头像
+const profileReview = ref({})
 
 const avatarUrl = ref(DEFAULT_AVATAR)
 const nickname = ref('')
@@ -300,16 +306,29 @@ const coordinateDisplayText = computed(() => {
   return `纬度 ${Number(latitude.value).toFixed(7)}\n经度 ${Number(longitude.value).toFixed(7)}`
 })
 
+const reviewNoticeText = computed(() => {
+  const statuses = profileReview.value || {}
+  if (statuses.avatar_status === 'pending') return '头像审核中，通过后将自动展示'
+  if (statuses.avatar_status === 'rejected') return '头像不符合平台规范，请重新上传'
+  if (statuses.avatar_status === 'review_failed') return '头像审核暂时失败，请稍后重试'
+  if (statuses.nickname_status === 'pending' || statuses.intro_status === 'pending') return '资料审核中，通过后将自动展示'
+  if (statuses.nickname_status === 'rejected' || statuses.intro_status === 'rejected') return '资料包含不合规内容，请修改后重试'
+  return ''
+})
+
+const avatarTipText = computed(() => {
+  const status = String(profileReview.value?.avatar_status || '').trim()
+  if (status === 'pending') return '头像审核中'
+  if (status === 'rejected') return '点击重新上传头像'
+  if (status === 'review_failed') return '点击重新上传头像'
+  return '点击更换头像'
+})
+
 const showToast = (title) => {
   uni.showToast({
     title,
     icon: 'none'
   })
-}
-
-const formatAmount = (value) => {
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
 }
 
 const goBack = () => {
@@ -348,59 +367,60 @@ const onCityColumnChange = (event) => {
   }
 }
 
-const onGetLocation = async () => {
-  if (locating.value) {
-    return
-  }
+// 定位功能已移除 - 现在由系统自动获取
+// const onGetLocation = async () => {
+//   if (locating.value) {
+//     return
+//   }
 
-  locating.value = true
-  try {
-    const location = await new Promise((resolve, reject) => {
-      uni.getLocation({
-        type: 'gcj02',
-        isHighAccuracy: true,
-        highAccuracyExpireTime: 5000,
-        success: resolve,
-        fail: reject
-      })
-    })
-    const nextLatitude = Number(location?.latitude)
-    const nextLongitude = Number(location?.longitude)
-    if (
-      !Number.isFinite(nextLatitude)
-      || !Number.isFinite(nextLongitude)
-      || nextLatitude < -90
-      || nextLatitude > 90
-      || nextLongitude < -180
-      || nextLongitude > 180
-    ) {
-      throw new Error('定位结果无效')
-    }
+//   locating.value = true
+//   try {
+//     const location = await new Promise((resolve, reject) => {
+//       uni.getLocation({
+//         type: 'gcj02',
+//         isHighAccuracy: true,
+//         highAccuracyExpireTime: 5000,
+//         success: resolve,
+//         fail: reject
+//       })
+//     })
+//     const nextLatitude = Number(location?.latitude)
+//     const nextLongitude = Number(location?.longitude)
+//     if (
+//       !Number.isFinite(nextLatitude)
+//       || !Number.isFinite(nextLongitude)
+//       || nextLatitude < -90
+//       || nextLatitude > 90
+//       || nextLongitude < -180
+//       || nextLongitude > 180
+//     ) {
+//       throw new Error('定位结果无效')
+//     }
 
-    latitude.value = Number(nextLatitude.toFixed(7))
-    longitude.value = Number(nextLongitude.toFixed(7))
-    showToast('定位成功，请点击保存修改')
-  } catch (error) {
-    const message = String(error?.errMsg || error?.message || '').toLowerCase()
-    const denied = message.includes('auth deny') || message.includes('permission')
-    if (denied) {
-      uni.showModal({
-        title: '需要定位权限',
-        content: '请在小程序设置中允许使用位置信息后重试',
-        confirmText: '去设置',
-        success: (result) => {
-          if (result.confirm) {
-            uni.openSetting()
-          }
-        }
-      })
-    } else {
-      showToast(error?.message || '定位失败，请稍后重试')
-    }
-  } finally {
-    locating.value = false
-  }
-}
+//     latitude.value = Number(nextLatitude.toFixed(7))
+//     longitude.value = Number(nextLongitude.toFixed(7))
+//     showToast('定位成功，请点击保存修改')
+//   } catch (error) {
+//     const message = String(error?.errMsg || error?.message || '').toLowerCase()
+//     const denied = message.includes('auth deny') || message.includes('permission')
+//     if (denied) {
+//       uni.showModal({
+//         title: '需要定位权限',
+//         content: '请在小程序设置中允许使用位置信息后重试',
+//         confirmText: '去设置',
+//         success: (result) => {
+//           if (result.confirm) {
+//             uni.openSetting()
+//           }
+//         }
+//       })
+//       return
+//     }
+//     showToast(error?.message || '定位失败，请稍后重试')
+//   } finally {
+//     locating.value = false
+//   }
+// }
 
 const syncCityIndex = (nextCityIndex = 0) => {
   const cities = currentProvince.value?.cities || []
@@ -441,6 +461,9 @@ const findCitySelection = (cityCode = '', cityName = '') => {
 }
 
 const applyProfile = (profile = {}) => {
+  profileReview.value = profile?.profile_review && typeof profile.profile_review === 'object'
+    ? profile.profile_review
+    : {}
   // 只在没有选择新头像时才更新头像
   if (!hasSelectedNewAvatar.value) {
     avatarUrl.value = typeof profile?.avatar_url === 'string' && profile.avatar_url.trim() ? profile.avatar_url : DEFAULT_AVATAR
@@ -610,6 +633,10 @@ const onSave = async () => {
           // 更新本地存储的用户信息
           const userInfo = uni.getStorageSync('userInfo') || {}
           userInfo.avatar_url = avatarForSave
+          if (data?.profile_review && typeof data.profile_review === 'object') {
+            userInfo.profile_review = data.profile_review
+            profileReview.value = data.profile_review
+          }
           uni.setStorageSync('userInfo', userInfo)
 
           // 更新本地显示
@@ -652,8 +679,9 @@ const onSave = async () => {
         normalizedDisplayPhone !== (currentProfile.display_phone || '') ||
         normalizedDisplayWechat !== (currentProfile.display_wechat || '') ||
         normalizedEmail !== (currentProfile.email || '') ||
-        normalizeCoordinate(latitude.value) !== normalizeCoordinate(currentProfile.latitude) ||
-        normalizeCoordinate(longitude.value) !== normalizeCoordinate(currentProfile.longitude) ||
+        // 经纬度由系统自动更新，不再检查
+        // normalizeCoordinate(latitude.value) !== normalizeCoordinate(currentProfile.latitude) ||
+        // normalizeCoordinate(longitude.value) !== normalizeCoordinate(currentProfile.longitude) ||
         (selectedIndustry.value && selectedIndustry.value !== (currentProfile.industry_code || '')) ||
         (selectedCity?.value && selectedCity.value !== (currentProfile.city_code || ''))
 
@@ -662,7 +690,7 @@ const onSave = async () => {
         hasSelectedNewAvatar.value = false
         showToast('头像更新成功')
         setTimeout(() => {
-          goBack()
+          uni.redirectTo({ url: '/pages/me/card/index' })
         }, 250)
         saving.value = false
         return
@@ -681,9 +709,10 @@ const onSave = async () => {
       display_wechat: normalizedDisplayWechat || null,
       email: normalizedEmail || null,
       city_code: selectedCity?.value || null,
-      city_name: selectedCity?.label || null,
-      latitude: hasCoordinates.value ? Number(latitude.value) : null,
-      longitude: hasCoordinates.value ? Number(longitude.value) : null
+      city_name: selectedCity?.label || null
+      // 经纬度由系统自动更新，不再手动提交
+      // latitude: hasCoordinates.value ? Number(latitude.value) : null,
+      // longitude: hasCoordinates.value ? Number(longitude.value) : null
     }
 
     console.log('提交的数据:', JSON.stringify(payload, null, 2))
@@ -701,10 +730,7 @@ const onSave = async () => {
     }
 
     if (review?.review_required) {
-      const feeMessage = review?.fee_paid
-        ? `，已扣除审核费¥${formatAmount(review?.fee_amount)}`
-        : ''
-      showToast(`资料已提交审核${feeMessage}`)
+      showToast('资料已提交审核')
       setTimeout(() => {
         goBack()
       }, 250)
@@ -719,7 +745,7 @@ const onSave = async () => {
 
     showToast('保存成功')
     setTimeout(() => {
-      goBack()
+      uni.redirectTo({ url: '/pages/me/card/index' })
     }, 250)
   } catch (err) {
     console.error('保存失败，完整错误:', err)
@@ -727,13 +753,6 @@ const onSave = async () => {
     console.error('错误信息:', err?.message)
     console.error('错误payload:', err?.payload)
 
-    if (Number(err?.code) === 5701) {
-      const detail = err?.payload?.data || {}
-      showToast(
-        `本月修改次数已超限，需支付审核费¥${formatAmount(detail?.required_amount)}，当前余额¥${formatAmount(detail?.wallet_balance)}`
-      )
-      return
-    }
     showToast(err?.message || '保存失败，请稍后重试')
   } finally {
     saving.value = false
@@ -833,6 +852,20 @@ onShow(() => {
 .avatar-tip {
   font-size: 24rpx;
   color: #66758a;
+}
+
+.review-notice {
+  margin: -20rpx 0 24rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 12rpx;
+  background: #fff7ed;
+  border: 1rpx solid #fed7aa;
+}
+
+.review-notice-text {
+  color: #9a3412;
+  font-size: 24rpx;
+  line-height: 34rpx;
 }
 
 /* 表单 */

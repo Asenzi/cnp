@@ -1,5 +1,5 @@
-﻿import json
-from datetime import UTC, datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from random import randint
 from uuid import uuid4
@@ -144,18 +144,32 @@ def _resolve_user_stats(db: Session, user) -> dict:
 
 def _build_login_data(user, is_new_user: bool, db: Session) -> LoginData:
     stats = _resolve_user_stats(db=db, user=user)
+    avatar_status = str(getattr(user, "avatar_review_status", "approved") or "approved")
+    nickname_status = str(getattr(user, "nickname_review_status", "approved") or "approved")
+    intro_status = str(getattr(user, "intro_review_status", "approved") or "approved")
+    display_nickname = (
+        str(user.nickname or "").strip()
+        if nickname_status == "approved"
+        else f"用户{str(user.user_id or '')[-4:] or '0000'}"
+    )
+    display_avatar = (
+        str(user.avatar_url or "").strip()
+        if avatar_status == "approved"
+        else settings.DEFAULT_AVATAR_URL
+    )
 
     user_info = UserBrief(
         userId=user.user_id,
         user_id=user.user_id,
         phone=user.phone,
-        nickname=user.nickname,
-        avatar_url=user.avatar_url or settings.DEFAULT_AVATAR_URL,
+        nickname=display_nickname,
+        avatar_url=display_avatar or settings.DEFAULT_AVATAR_URL,
         wechat_bound=bool(user.wechat_openid),
         is_verified=bool(user.is_verified),
-        intro=user.intro,
+        intro=user.intro if intro_status == "approved" else None,
         industry_code=user.industry_code,
         industry_label=user.industry_label,
+        city_name=user.city_name,
         company_name=user.company_name,
         job_title=user.job_title,
         card_files=_parse_card_files(user.card_files_json),
@@ -223,7 +237,7 @@ def _resolve_wechat_openid(
     code: str,
     device_id: str | None = None,
     client_ip: str | None = None,
-) -> tuple[str, str | None]:
+) -> tuple[str, str | None, str | None]:
     if _wechat_api_enabled():
         query = urlencode(
             {
@@ -291,8 +305,10 @@ def _resolve_wechat_openid(
 
         unionid = payload.get("unionid")
         normalized_unionid = str(unionid) if unionid else None
+        session_key = payload.get("session_key")
+        normalized_session_key = str(session_key) if session_key else None
 
-        return str(openid), normalized_unionid
+        return str(openid), normalized_unionid, normalized_session_key
 
     if not _is_dev_mode():
         raise BusinessException(
@@ -310,7 +326,7 @@ def _resolve_wechat_openid(
         or code
     )
     openid = f"debug_{sha256(fallback_seed.encode('utf-8')).hexdigest()[:24]}"
-    return openid, None
+    return openid, None, None
 
 
 async def send_login_sms_code(phone: str) -> SendCodeData:
@@ -325,7 +341,7 @@ async def send_login_sms_code(phone: str) -> SendCodeData:
         stored_in_redis = False
 
     if not stored_in_redis:
-        expire_at = datetime.now(UTC) + timedelta(seconds=_SMS_CODE_EXPIRE_SECONDS)
+        expire_at = datetime.now(timezone.utc) + timedelta(seconds=_SMS_CODE_EXPIRE_SECONDS)
         _local_code_store[phone] = (code, expire_at)
 
     return SendCodeData(
@@ -369,7 +385,7 @@ async def send_phone_bind_sms_code(
         stored_in_redis = False
 
     if not stored_in_redis:
-        expire_at = datetime.now(UTC) + timedelta(seconds=_PHONE_BIND_CODE_EXPIRE_SECONDS)
+        expire_at = datetime.now(timezone.utc) + timedelta(seconds=_PHONE_BIND_CODE_EXPIRE_SECONDS)
         _local_phone_bind_code_store[current_user_pk] = (code, expire_at)
 
     return SendCodeData(
@@ -385,6 +401,7 @@ async def login_with_sms_code(
     db: Session,
     client_ip: str | None = None,
     invite_code: str | None = None,
+    city_name: str | None = None,
 ) -> LoginData:
     cached_code: str | None = None
     loaded_from_redis = False
@@ -400,7 +417,7 @@ async def login_with_sms_code(
         local_data = _local_code_store.get(phone)
         if local_data:
             local_code, expire_at = local_data
-            if expire_at > datetime.now(UTC):
+            if expire_at > datetime.now(timezone.utc):
                 cached_code = local_code
             else:
                 _local_code_store.pop(phone, None)
@@ -421,6 +438,7 @@ async def login_with_sms_code(
     _local_code_store.pop(phone, None)
 
     is_new_user = False
+    normalized_city_name = _normalize_optional_text(city_name, 32)
     try:
         user = get_user_by_phone(db, phone)
     except SQLAlchemyError as exc:
@@ -436,6 +454,7 @@ async def login_with_sms_code(
                 phone=phone,
                 nickname=_default_nickname(phone),
                 avatar_url=_default_avatar_url(phone),
+                city_name=normalized_city_name,
                 inviter_user_pk=inviter_user_pk,
             )
         except IntegrityError:
@@ -457,6 +476,8 @@ async def login_with_sms_code(
     elif not _normalize_optional_text(user.avatar_url, 255):
         # Backfill historical data that may have null/empty avatar.
         user.avatar_url = _default_avatar_url(phone)
+    if user is not None and normalized_city_name and not _normalize_optional_text(user.city_name, 32):
+        user.city_name = normalized_city_name
 
     try:
         user = update_user_login_meta(db=db, user=user, client_ip=client_ip)
@@ -522,7 +543,7 @@ async def bind_phone_for_user(
         local_data = _local_phone_bind_code_store.get(current_user_pk)
         if local_data:
             local_code, expire_at = local_data
-            if expire_at > datetime.now(UTC):
+            if expire_at > datetime.now(timezone.utc):
                 cached_code = local_code
             else:
                 _local_phone_bind_code_store.pop(current_user_pk, None)
@@ -603,7 +624,7 @@ async def send_password_change_sms_code(
         stored_in_redis = False
 
     if not stored_in_redis:
-        expire_at = datetime.now(UTC) + timedelta(seconds=_PASSWORD_CHANGE_CODE_EXPIRE_SECONDS)
+        expire_at = datetime.now(timezone.utc) + timedelta(seconds=_PASSWORD_CHANGE_CODE_EXPIRE_SECONDS)
         _local_password_change_code_store[current_user_pk] = (code, expire_at)
 
     return SendCodeData(
@@ -634,7 +655,7 @@ async def change_password_with_sms_code(
         local_data = _local_password_change_code_store.get(current_user_pk)
         if local_data:
             local_code, expire_at = local_data
-            if expire_at > datetime.now(UTC):
+            if expire_at > datetime.now(timezone.utc):
                 cached_code = local_code
             else:
                 _local_password_change_code_store.pop(current_user_pk, None)
@@ -686,16 +707,16 @@ async def login_with_wechat_code(
     avatar_url: str | None = None,
     device_id: str | None = None,
     invite_code: str | None = None,
+    city_name: str | None = None,
 ) -> LoginData:
-    openid, unionid = _resolve_wechat_openid(
+    openid, unionid, session_key = _resolve_wechat_openid(
         code=code,
         device_id=device_id,
         client_ip=client_ip,
     )
     identity_phone = _wechat_virtual_phone(openid)
 
-    normalized_nickname = _normalize_optional_text(nickname, 64)
-    normalized_avatar_url = _normalize_avatar_input(avatar_url)
+    normalized_city_name = _normalize_optional_text(city_name, 32)
 
     is_new_user = False
 
@@ -708,18 +729,19 @@ async def login_with_wechat_code(
                     raise BusinessException(message="微信登录状态异常，请联系管理员", code=4105, status_code=409)
                 user = bind_wechat_identity(
                     db=db,
-                    user=legacy_user,
-                    wechat_openid=openid,
-                    wechat_unionid=unionid,
-                )
+                user=legacy_user,
+                wechat_openid=openid,
+                wechat_unionid=unionid,
+                wechat_session_key=session_key,
+            )
     except SQLAlchemyError as exc:
         logger.exception(f"Failed to query WeChat user by openid={openid}: {exc}")
         raise BusinessException(message="数据库连接异常，请稍后重试", code=5002, status_code=500)
 
     if user is None:
         is_new_user = True
-        initial_nickname = normalized_nickname or _default_wechat_nickname(openid)
-        initial_avatar_url = normalized_avatar_url or _default_avatar_url(openid)
+        initial_nickname = _default_wechat_nickname(openid)
+        initial_avatar_url = _default_avatar_url(openid)
         inviter_user_pk = resolve_inviter_user_pk(db=db, invite_code=invite_code)
 
         try:
@@ -730,7 +752,9 @@ async def login_with_wechat_code(
                 avatar_url=initial_avatar_url,
                 wechat_openid=openid,
                 wechat_unionid=unionid,
-                wechat_bound_at=datetime.now(UTC).replace(tzinfo=None),
+                wechat_session_key=session_key,
+                wechat_bound_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                city_name=normalized_city_name,
                 inviter_user_pk=inviter_user_pk,
             )
         except IntegrityError:
@@ -753,13 +777,13 @@ async def login_with_wechat_code(
                 logger.warning(f"Failed to grant invite points for new WeChat user user_pk={user.id}: {exc}")
     else:
         # Optional profile sync for existing users.
-        if normalized_nickname and normalized_nickname != user.nickname:
-            user.nickname = normalized_nickname
-        if normalized_avatar_url and normalized_avatar_url != user.avatar_url:
-            user.avatar_url = normalized_avatar_url
-        elif not _normalize_optional_text(user.avatar_url, 255):
+        if not _normalize_optional_text(user.avatar_url, 255):
             # Backfill historical data that may have null/empty avatar.
             user.avatar_url = _default_avatar_url(openid)
+        if normalized_city_name and not _normalize_optional_text(user.city_name, 32):
+            user.city_name = normalized_city_name
+        if session_key:
+            user.wechat_session_key = session_key
 
     try:
         user = update_user_login_meta(db=db, user=user, client_ip=client_ip)
@@ -799,14 +823,11 @@ async def bind_wechat_for_user(
     if user is None:
         raise BusinessException(message="用户不存在", code=4041, status_code=404)
 
-    openid, unionid = _resolve_wechat_openid(
+    openid, unionid, session_key = _resolve_wechat_openid(
         code=code,
         device_id=device_id,
         client_ip=client_ip,
     )
-
-    normalized_nickname = _normalize_optional_text(nickname, 64)
-    normalized_avatar_url = _normalize_avatar_input(avatar_url)
 
     try:
         existing_bound_user = get_user_by_wechat_openid(db=db, wechat_openid=openid)
@@ -852,6 +873,7 @@ async def bind_wechat_for_user(
                 user=user,
                 wechat_openid=openid,
                 wechat_unionid=unionid,
+                wechat_session_key=session_key,
             )
         except IntegrityError:
             db.rollback()
@@ -861,10 +883,8 @@ async def bind_wechat_for_user(
             logger.exception(f"Failed to bind WeChat for user_pk={user.id}: {exc}")
             raise BusinessException(message="微信绑定失败，请稍后重试", code=5006, status_code=500)
 
-    if normalized_nickname:
-        user.nickname = normalized_nickname
-    if normalized_avatar_url:
-        user.avatar_url = normalized_avatar_url
+    if session_key:
+        user.wechat_session_key = session_key
 
     try:
         user = update_user_login_meta(db=db, user=user, client_ip=client_ip)

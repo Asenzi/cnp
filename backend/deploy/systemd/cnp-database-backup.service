@@ -1,0 +1,20 @@
+[Unit]
+Description=CNP encrypted MySQL backup to private COS storage
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/home/ubuntu/cnp/backend
+ExecStart=/home/ubuntu/cnp/backend/.venv/bin/python /home/ubuntu/cnp/backend/scripts/database_backup.py
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

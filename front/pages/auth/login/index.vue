@@ -37,6 +37,10 @@
             <view class="btn-shine"></view>
           </button>
 
+          <button class="skip-login-btn" :disabled="isLoading" hover-class="skip-login-hover" @tap="handleSkipLogin">
+            <text class="skip-login-text">暂不登录，返回首页</text>
+          </button>
+
           <view class="agreement-section">
             <view class="checkbox-wrapper" @tap="toggleAgreement">
               <view class="checkbox" :class="{ 'checkbox-checked': agreed }">
@@ -69,6 +73,13 @@ import { onLoad } from '@dcloudio/uni-app'
 import { loginByWechatMiniapp } from '../../../api/auth'
 import { connectRealtimeSocket } from '../../../utils/realtime'
 import { getMiniappLoginCode, getWechatDeviceId } from '../../../utils/wechat-auth'
+import { syncUserLocation } from '../../../utils/location-sync'
+import {
+  loadLocationFilterCache,
+  resolveCurrentCityByGps,
+  saveCurrentCity,
+  saveLocationFilterCache
+} from '../../tab/discover/modules/location'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
@@ -77,6 +88,7 @@ const isLoading = ref(false)
 const inviteCode = ref('')
 
 const INVITE_CODE_STORAGE_KEY = '__INVITE_CODE__'
+const DEFAULT_CITY_NAME = '深圳'
 
 const showToast = (title) => {
   uni.showToast({
@@ -98,6 +110,51 @@ const openAgreement = (type) => {
   uni.navigateTo({ url })
 }
 
+const handleSkipLogin = () => {
+  if (isLoading.value) return
+  const pages = getCurrentPages()
+  if (pages.length > 1) {
+    uni.navigateBack()
+    return
+  }
+  uni.switchTab({
+    url: '/pages/tab/discover/index'
+  })
+}
+
+const getCachedLoginCityName = () => {
+  const locationCache = loadLocationFilterCache()
+  const candidates = [
+    locationCache.currentCity,
+    uni.getStorageSync('currentCity'),
+    uni.getStorageSync('locationCity')
+  ]
+  return String(candidates.find((item) => String(item || '').trim()) || '').trim()
+}
+
+const resolveLoginCityName = async () => {
+  const cachedCity = getCachedLoginCityName()
+  try {
+    const city = await Promise.race([
+      resolveCurrentCityByGps(),
+      new Promise((resolve) => setTimeout(() => resolve(''), 5000))
+    ])
+    const normalizedCity = String(city || '').trim()
+    if (normalizedCity) {
+      saveCurrentCity(normalizedCity)
+      saveLocationFilterCache({
+        mode: 'city',
+        currentCity: normalizedCity,
+        selectedCity: normalizedCity
+      })
+      return normalizedCity
+    }
+  } catch (err) {
+    console.warn('登录前定位城市失败:', err)
+  }
+  return cachedCity || DEFAULT_CITY_NAME
+}
+
 const handleWechatLogin = async () => {
   if (isLoading.value) return
 
@@ -116,11 +173,13 @@ const handleWechatLogin = async () => {
     // #ifndef MP-WEIXIN
     code = `dev_wechat_${Date.now()}`
     // #endif
+    const cityName = await resolveLoginCityName()
 
     const result = await loginByWechatMiniapp({
       code,
       device_id: getWechatDeviceId(),
-      invite_code: inviteCode.value
+      invite_code: inviteCode.value,
+      city_name: cityName || undefined
     })
 
     uni.setStorageSync('token', result?.access_token || '')
@@ -128,6 +187,11 @@ const handleWechatLogin = async () => {
     uni.setStorageSync('userInfo', result?.user_info || {})
     uni.removeStorageSync(INVITE_CODE_STORAGE_KEY)
     connectRealtimeSocket()
+
+    // 登录成功后立即同步用户位置
+    syncUserLocation(true).catch(err => {
+      console.error('登录后位置同步失败:', err)
+    })
 
     showToast('登录成功')
 
@@ -391,7 +455,7 @@ page {
   position: relative;
   width: 100%;
   height: 112rpx;
-  border-radius: 56rpx;
+  border-radius: 44rpx;
   background: linear-gradient(135deg, #07c160 0%, #06ae56 100%);
   border: none;
   padding: 0;
@@ -483,6 +547,35 @@ page {
   box-shadow:
     0 12rpx 32rpx rgba(7, 193, 96, 0.45),
     0 0 0 1rpx rgba(212, 165, 116, 0.25) inset;
+}
+
+.skip-login-btn {
+  width: 100%;
+  height: 112rpx;
+  margin-top: 24rpx;
+  padding: 0;
+  border: 2rpx solid rgba(37, 99, 235, 0.18);
+  border-radius: 44rpx;
+  background: rgba(255, 255, 255, 0.76);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6rpx 20rpx rgba(15, 23, 42, 0.04);
+}
+
+.skip-login-btn::after {
+  border: none;
+}
+
+.skip-login-hover {
+  opacity: 0.82;
+  transform: translateY(1rpx);
+}
+
+.skip-login-text {
+  color: #2563eb;
+  font-size: 28rpx;
+  font-weight: 700;
 }
 
 /* ===== 协议区域 ===== */

@@ -94,7 +94,7 @@ const uiText = {
   clearKeyButton: '\u6e05\u9664\u5730\u56fe Key \u7f13\u5b58',
   clearCityButton: '\u6e05\u9664\u57ce\u5e02\u548c\u5b9a\u4f4d\u7f13\u5b58',
   apiSection: '\u63a5\u53e3\u5730\u5740',
-  apiInputPlaceholder: '\u8bf7\u8f93\u5165 API \u57fa\u5730\u5740\uff0c\u4f8b\u5982\uff1ahttp://172.20.10.3:8001',
+  apiInputPlaceholder: '\u8bf7\u8f93\u5165 API \u57fa\u5730\u5740\uff0c\u4f8b\u5982\uff1ahttps://www.cnptec.site',
   applyApiButton: '\u5e94\u7528\u5730\u5740',
   useSuggestedApiButton: '\u4f7f\u7528\u5efa\u8bae\u5730\u5740',
   clearApiButton: '\u6e05\u9664\u8986\u76d6',

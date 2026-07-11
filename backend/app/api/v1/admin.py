@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import FileResponse
@@ -29,6 +29,7 @@ from app.core.response import success_response
 from app.crud import get_user_real_name_profile, get_user_verification_by_id
 from app.models.admin_user import AdminUser
 from app.models.circle_owner_application import CircleOwnerApplication
+from app.models.product_safety import ContentReport, ProductSafetyPunishment, ProductSafetyRetryTask, ProductSafetyReviewLog
 from app.models.user import User
 from app.review import list_admin_content_reviews, review_content_submission
 from app.schemas.admin import (
@@ -39,9 +40,20 @@ from app.schemas.admin import (
     AdminLoginRequest,
     AdminResourcePostPinPayload,
     AdminResourcePostStatusPayload,
+    AdminSplitConfigPayload,
     AdminUserStatusPayload,
+    AdminWithdrawalReviewPayload,
 )
 from app.schemas.review import AdminContentReviewActionRequest
+from app.settlement import (
+    get_admin_split_config,
+    list_admin_settlement_accounts,
+    list_admin_split_transactions,
+    list_admin_withdrawals,
+    review_admin_withdrawal,
+    retry_admin_split_transaction,
+    update_admin_split_config,
+)
 from app.schemas.verification import AdminVerificationReviewRequest
 from app.verification.constants import VerificationStatus, VerificationType
 from app.verification.files import guess_media_type, resolve_id_card_file_path
@@ -81,6 +93,45 @@ def admin_dashboard_overview(
     db: Session = Depends(db_session),
 ):
     return success_response(data=get_admin_dashboard_overview(db=db))
+
+
+@router.get("/product-safety/overview", summary="Get product safety overview")
+def admin_product_safety_overview(
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    risk_rows = db.execute(
+        select(User.risk_level, func.count(User.id)).group_by(User.risk_level)
+    ).all()
+    review_rejected = db.scalar(
+        select(func.count(ProductSafetyReviewLog.id)).where(
+            ProductSafetyReviewLog.created_at >= since,
+            ProductSafetyReviewLog.final_result == "rejected",
+        )
+    ) or 0
+    review_failed = db.scalar(
+        select(func.count(ProductSafetyReviewLog.id)).where(
+            ProductSafetyReviewLog.created_at >= since,
+            ProductSafetyReviewLog.final_result == "review_failed",
+        )
+    ) or 0
+    return success_response(
+        data={
+            "window_hours": 24,
+            "new_users": int(db.scalar(select(func.count(User.id)).where(User.created_at >= since)) or 0),
+            "reports": int(db.scalar(select(func.count(ContentReport.id)).where(ContentReport.created_at >= since)) or 0),
+            "punishments": int(db.scalar(select(func.count(ProductSafetyPunishment.id)).where(ProductSafetyPunishment.created_at >= since)) or 0),
+            "review_rejected": int(review_rejected),
+            "review_failed": int(review_failed),
+            "retry_pending": int(db.scalar(select(func.count(ProductSafetyRetryTask.id)).where(ProductSafetyRetryTask.status == "pending")) or 0),
+            "risk_levels": {str(level or "L0"): int(count or 0) for level, count in risk_rows},
+            "alerts": {
+                "review_failure_spike": int(review_failed) >= 10,
+                "review_rejection_spike": int(review_rejected) >= 20,
+            },
+        }
+    )
 
 
 @router.get("/users", summary="List users for admin")
@@ -440,6 +491,120 @@ def admin_save_contact_package_config(
             plans=[item.model_dump(mode="python") for item in payload.plans],
         ),
         message="\u4eba\u7fa4\u5305\u914d\u7f6e\u5df2\u4fdd\u5b58",
+    )
+
+
+@router.get("/split/config", summary="Get split config for admin")
+def admin_get_split_config(
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(data=get_admin_split_config(db=db))
+
+
+@router.put("/split/config", summary="Save split config for admin")
+def admin_save_split_config(
+    payload: AdminSplitConfigPayload,
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=update_admin_split_config(
+            db=db,
+            service_fee_rate=payload.service_fee_rate,
+            auto_settle_enabled=payload.auto_settle_enabled,
+            wechat_profit_sharing_enabled=payload.wechat_profit_sharing_enabled,
+        ),
+        message="分账配置已保存",
+    )
+
+
+@router.get("/split/transactions", summary="List split transactions for admin")
+def admin_list_split_transactions(
+    keyword: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=list_admin_split_transactions(
+            db=db,
+            keyword=keyword,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@router.get("/split/settlements", summary="List settlement accounts for admin")
+def admin_list_settlement_accounts(
+    keyword: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=list_admin_settlement_accounts(
+            db=db,
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@router.post("/split/transactions/{split_id}/retry", summary="Retry split transaction")
+def admin_retry_split_transaction(
+    split_id: int,
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=retry_admin_split_transaction(db=db, split_id=split_id),
+        message="分账重试已发起",
+    )
+
+
+@router.get("/split/withdrawals", summary="List withdrawals for admin")
+def admin_list_withdrawals(
+    keyword: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=list_admin_withdrawals(
+            db=db,
+            keyword=keyword,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@router.post("/split/withdrawals/{withdrawal_id}/review", summary="Review withdrawal")
+def admin_review_withdrawal(
+    withdrawal_id: int,
+    payload: AdminWithdrawalReviewPayload,
+    _: AdminUser = Depends(get_current_admin_user),
+    db: Session = Depends(db_session),
+):
+    return success_response(
+        data=review_admin_withdrawal(
+            db=db,
+            withdrawal_id=withdrawal_id,
+            action=payload.action,
+            transaction_id=payload.transaction_id,
+            remark=payload.remark,
+        ),
+        message="提现审核已处理",
     )
 
 

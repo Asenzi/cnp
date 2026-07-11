@@ -33,10 +33,7 @@ export interface DashboardSummary {
   active_user_total: number;
   circle_total: number;
   notice_total: number;
-  paid_recharge_total: number;
-  pending_recharge_total: number;
   pending_verification_total: number;
-  recharge_amount_total: number;
   resource_total: number;
   user_total: number;
   verified_user_total: number;
@@ -93,9 +90,24 @@ export interface DashboardRechargeItem {
 export interface DashboardOverview {
   recent_circles: DashboardCircleItem[];
   recent_posts: DashboardPostItem[];
-  recent_recharges: DashboardRechargeItem[];
+  recent_recharges?: DashboardRechargeItem[];
   recent_users: DashboardUserItem[];
   summary: DashboardSummary;
+}
+
+export interface ProductSafetyOverview {
+  alerts: {
+    review_failure_spike: boolean;
+    review_rejection_spike: boolean;
+  };
+  new_users: number;
+  punishments: number;
+  reports: number;
+  retry_pending: number;
+  review_failed: number;
+  review_rejected: number;
+  risk_levels: Record<string, number>;
+  window_hours: number;
 }
 
 export interface AdminUserItem {
@@ -237,6 +249,71 @@ export interface AdminContactPackageConfig {
   plans: AdminContactPackagePlanItem[];
 }
 
+export interface AdminSplitConfig {
+  auto_settle_enabled: boolean;
+  biz_type: string;
+  receiver_rate: number;
+  service_fee_rate: number;
+  updated_at: null | string;
+  wechat_profit_sharing_enabled: boolean;
+}
+
+export interface AdminSplitTransactionItem {
+  biz_type: string;
+  circle_code: string;
+  circle_name: string;
+  created_at: null | string;
+  executed_at: null | string;
+  external_error: string;
+  external_order_no: string;
+  external_status: string;
+  external_transaction_id: string;
+  id: number;
+  order_no: string;
+  payer_nickname: string;
+  payer_user_id: string;
+  platform_fee: number;
+  receiver_nickname: string;
+  receiver_user_id: string;
+  remark: string;
+  split_amount: number;
+  split_status: string;
+  total_amount: number;
+}
+
+export interface AdminSettlementAccountItem {
+  available_balance: number;
+  frozen_balance: number;
+  id: number;
+  nickname: string;
+  phone: string;
+  total_income: number;
+  total_withdrawn: number;
+  updated_at: null | string;
+  user_id: string;
+  user_pk: number;
+}
+
+export interface AdminWithdrawalItem {
+  actual_amount: number;
+  amount: number;
+  created_at: null | string;
+  fee: number;
+  id: number;
+  nickname: string;
+  order_no: string;
+  phone: string;
+  processed_at: null | string;
+  remark: string;
+  status: string;
+  transaction_id: string;
+  updated_at: null | string;
+  user_id: string;
+  user_pk: number;
+  withdraw_account: string;
+  withdraw_type: string;
+}
+
 export interface AdminUserInfo extends UserInfo {
   displayName: string;
   isActive: boolean;
@@ -290,6 +367,10 @@ export async function getAdminProfileApi() {
 
 export async function getAdminDashboardOverviewApi() {
   return requestClient.get<DashboardOverview>('/dashboard/overview');
+}
+
+export async function getAdminProductSafetyOverviewApi() {
+  return requestClient.get<ProductSafetyOverview>('/product-safety/overview');
 }
 
 export async function listAdminUsersApi(params: {
@@ -464,6 +545,71 @@ export async function saveAdminContactPackageConfigApi(
 ) {
   return requestClient.put<AdminContactPackageConfig>(
     '/contact-package-config',
+    payload,
+  );
+}
+
+export async function getAdminSplitConfigApi() {
+  return requestClient.get<AdminSplitConfig>('/split/config');
+}
+
+export async function saveAdminSplitConfigApi(payload: {
+  auto_settle_enabled: boolean;
+  service_fee_rate: number;
+  wechat_profit_sharing_enabled: boolean;
+}) {
+  return requestClient.put<AdminSplitConfig>('/split/config', payload);
+}
+
+export async function listAdminSplitTransactionsApi(params: {
+  keyword?: string;
+  page: number;
+  page_size: number;
+  status?: string;
+}) {
+  return requestClient.get<PageResult<AdminSplitTransactionItem>>(
+    '/split/transactions',
+    { params },
+  );
+}
+
+export async function retryAdminSplitTransactionApi(splitId: number) {
+  return requestClient.post(`/split/transactions/${splitId}/retry`);
+}
+
+export async function listAdminSettlementAccountsApi(params: {
+  keyword?: string;
+  page: number;
+  page_size: number;
+}) {
+  return requestClient.get<PageResult<AdminSettlementAccountItem>>(
+    '/split/settlements',
+    { params },
+  );
+}
+
+export async function listAdminWithdrawalsApi(params: {
+  keyword?: string;
+  page: number;
+  page_size: number;
+  status?: string;
+}) {
+  return requestClient.get<PageResult<AdminWithdrawalItem>>(
+    '/split/withdrawals',
+    { params },
+  );
+}
+
+export async function reviewAdminWithdrawalApi(
+  withdrawalId: number,
+  payload: {
+    action: 'approve' | 'reject';
+    remark?: string;
+    transaction_id?: string;
+  },
+) {
+  return requestClient.post(
+    `/split/withdrawals/${withdrawalId}/review`,
     payload,
   );
 }

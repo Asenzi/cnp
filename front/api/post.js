@@ -273,6 +273,15 @@ export function toggleResourceInterest(postCode, desired) {
   })
 }
 
+export function toggleResourceCollection(postCode, desired) {
+  const safeCode = encodeURIComponent(String(postCode || '').trim())
+  const query = typeof desired === 'boolean' ? `?desired=${desired}` : ''
+  return request({
+    url: `/api/v1/post/${safeCode}/collect/toggle${query}`,
+    method: 'POST'
+  })
+}
+
 export function getInterestedResources(params = {}) {
   const query = buildQuery({
     cursor: String(params.cursor || '').trim(),
@@ -280,6 +289,17 @@ export function getInterestedResources(params = {}) {
   })
   return request({
     url: `/api/v1/post/interests${query ? `?${query}` : ''}`,
+    method: 'GET'
+  })
+}
+
+export function getCollectedResources(params = {}) {
+  const query = buildQuery({
+    cursor: String(params.cursor || '').trim(),
+    limit: Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  })
+  return request({
+    url: `/api/v1/post/collections${query ? `?${query}` : ''}`,
     method: 'GET'
   })
 }

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Product Safety"
+  short_description: "High-safety review for mini program UGC"
+  default_prompt: "Use $product-safety to design or implement high-safety content review for the Friends mini program."
+policy:
+  allow_implicit_invocation: true

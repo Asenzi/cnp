@@ -15,6 +15,7 @@ class LoginRequest(BaseModel):
     phone: str = Field(..., pattern=r"^1\d{10}$", description="11-digit Mainland China phone number")
     code: str = Field(..., min_length=4, max_length=8, description="SMS verification code")
     invite_code: str | None = Field(default=None, min_length=1, max_length=32)
+    city_name: str | None = Field(default=None, max_length=32)
 
 
 class PasswordLoginRequest(BaseModel):
@@ -29,6 +30,7 @@ class WechatMiniLoginRequest(BaseModel):
     avatar_url: str | None = Field(default=None, max_length=255)
     device_id: str | None = Field(default=None, max_length=128)
     invite_code: str | None = Field(default=None, min_length=1, max_length=32)
+    city_name: str | None = Field(default=None, max_length=32)
 
 
 class WechatBindRequest(BaseModel):
@@ -85,6 +87,7 @@ class UserBrief(BaseModel):
     intro: str | None = None
     industry_code: str | None = None
     industry_label: str | None = None
+    city_name: str | None = None
     company_name: str | None = None
     job_title: str | None = None
     card_files: list[dict] | None = None

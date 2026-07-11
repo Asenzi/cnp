@@ -18,12 +18,7 @@
         </view> -->
 
         <view class="section">
-          <text class="section-title">会员专属权益</text>
-          <MemberBenefitGrid :items="benefits" />
-        </view>
-
-        <view class="section">
-          <text class="section-title section-title-plan">选择订阅方案</text>
+          <text class="section-title section-title-plan">订阅方案</text>
 
           <!-- 积分功能暂时隐藏 -->
           <!-- <view v-if="selectedPlanOffer" class="points-offer-card">
@@ -62,6 +57,11 @@
           </view>
         </view>
 
+        <view class="section">
+          <text class="section-title">会员专属权益</text>
+          <MemberBenefitGrid :items="benefits" />
+        </view>
+
         <view v-if="false && showContactPackageSection" class="section">
           <view class="section-head">
             <text class="section-title section-title-plan">人群包订阅</text>
@@ -76,11 +76,6 @@
               @select="onSelectPlan"
             />
           </view>
-        </view>
-
-        <view class="notice-wrap">
-          <text class="notice-text">订阅即表示您同意《会员服务协议》和《隐私政策》。</text>
-          <!-- 积分功能暂时隐藏：规则提示 -->
         </view>
       </view>
     </scroll-view>
@@ -127,7 +122,7 @@ const contactPackageState = ref({
   purchasedViews: 0
 })
 const selectedPlanId = ref('')
-const paymentChannel = ref('wallet')
+const paymentChannel = ref('wxpay')
 const pointsOverview = ref({
   balance: 0,
   available_balance: 0,
@@ -464,7 +459,7 @@ const loadMemberCenterOverview = async () => {
       usedViews: Number(overview?.contact_package?.used_views || 0),
       purchasedViews: Number(overview?.contact_package?.purchased_views || 0)
     }
-    paymentChannel.value = String(overview?.payment?.default_channel || 'wallet').trim() || 'wallet'
+    paymentChannel.value = String(overview?.payment?.default_channel || 'wxpay').trim() || 'wxpay'
     syncSelectedPlan()
     syncPointsToggle()
   } catch (err) {
@@ -503,24 +498,38 @@ const goPointsCenter = () => {
 
 const invokeWxpayAndConfirm = async (subscribeResult) => {
   const orderNo = String(subscribeResult?.order_no || '').trim()
-  const wxpay = subscribeResult?.wxpay || {}
-  if (!orderNo || !wxpay?.timeStamp || !wxpay?.nonceStr || !wxpay?.package || !wxpay?.signType || !wxpay?.paySign) {
-    throw new Error('微信支付参数异常')
+  const virtualPayment = subscribeResult?.virtual_payment || {}
+  const rawSignData = virtualPayment?.signData
+  let signData = rawSignData && typeof rawSignData === 'object' ? rawSignData : null
+  if (!signData && typeof virtualPayment?.signDataJson === 'string') {
+    try {
+      signData = JSON.parse(virtualPayment.signDataJson)
+    } catch (error) {
+      signData = null
+    }
+  }
+  if (!orderNo || !signData || !virtualPayment?.paySig || !virtualPayment?.signature || !virtualPayment?.mode) {
+    throw new Error('小程序虚拟支付参数异常')
   }
 
   const payRes = await new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: String(wxpay.timeStamp),
-      nonceStr: String(wxpay.nonceStr),
-      package: String(wxpay.package),
-      signType: String(wxpay.signType),
-      paySign: String(wxpay.paySign),
+    uni.requestVirtualPayment({
+      signData: String(virtualPayment.signDataJson || JSON.stringify(signData)),
+      mode: String(virtualPayment.mode),
+      paySig: String(virtualPayment.paySig),
+      signature: String(virtualPayment.signature),
       success: (res) => resolve(res || {}),
-      fail: (err) =>
+      fail: (err) => {
+        console.error('requestVirtualPayment failed', err, {
+          order_no: orderNo,
+          mode: virtualPayment.mode,
+          signData
+        })
         reject({
           ...(err || {}),
           order_no: orderNo
         })
+      }
     })
   })
 
@@ -591,7 +600,7 @@ const onTapOpenMember = async () => {
       use_points_discount: false
     })
 
-    if (String(result?.action || '').trim() === 'wxpay_required') {
+    if (String(result?.action || '').trim() === 'virtualpay_required') {
       await invokeWxpayAndConfirm(result)
     }
 
@@ -645,27 +654,6 @@ const onTapOpenSelectedPlan = async () => {
     return
   }
 
-  // 检查是否已实名认证
-  const userInfo = uni.getStorageSync('userInfo') || {}
-  const isVerified = Boolean(userInfo?.is_verified || userInfo?.real_name_verified)
-
-  if (!isVerified) {
-    uni.showModal({
-      title: '需要实名认证',
-      content: '购买会员或人群包需要先完成实名认证，是否前往认证？',
-      confirmText: '去认证',
-      cancelText: '取消',
-      success: (res) => {
-        if (res?.confirm) {
-          uni.navigateTo({
-            url: '/pages/me/auth/realname/index'
-          })
-        }
-      }
-    })
-    return
-  }
-
   const selected = selectedPlan.value
   const isContactPackage = selectedProductType.value === 'contact_package'
   const wasOpened = Boolean(memberStatus.value?.opened)
@@ -705,7 +693,7 @@ const onTapOpenSelectedPlan = async () => {
       use_points_discount: false
     })
 
-    if (String(result?.action || '').trim() === 'wxpay_required') {
+    if (String(result?.action || '').trim() === 'virtualpay_required') {
       await invokeWxpayAndConfirm(result)
     }
 

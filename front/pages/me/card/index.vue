@@ -2,7 +2,7 @@
   <view class="profile-home-page">
     <view class="page-shell">
       <view v-if="loading && !hasProfileData" class="status-wrap">
-          <text class="status-text">加载中...</text>
+        <text class="status-text">加载中...</text>
       </view>
 
       <view v-else-if="loadError && !hasProfileData" class="status-wrap">
@@ -11,9 +11,10 @@
       </view>
 
       <view v-else>
-        <ProfileHeroSection :profile="pageData.profile" :show-action="true" action-type="share" />
+        <ProfileHeroSection :profile="pageData.profile" :show-action="true" action-type="share" :is-self="isSelfProfile"
+          @share="onOpenShareMenu" />
         <ProfileBioSection :bio="pageData.profile.bio" />
-        <ProfileContactSection :contact="contactSectionData" />
+        <ProfileContactSection :contact="contactSectionData" @unlock-contact="onOpenMemberCenter" />
         <!-- <ProfileStatsSection :stats="pageData.stats" /> -->
 
         <view class="tab-divider"></view>
@@ -21,10 +22,10 @@
           <ProfileTabsBar :tabs="pageData.tabs" :active-key="activeTab" @change="onSwitchTab" />
         </view>
 
-        <view class="content-list-wrap">
+        <view class="content-list-wrap" :class="{ 'content-list-wrap-with-bottom': showBottomActionBar }">
           <template v-if="activeTab === 'feed'">
             <view v-if="feedLoading && !hasFeedAny" class="section-status-wrap">
-            <text class="section-status-text">加载中...</text>
+              <text class="section-status-text">加载中...</text>
             </view>
             <view v-else-if="feedError && !hasFeedAny" class="section-status-wrap">
               <text class="section-status-text">{{ feedError }}</text>
@@ -33,11 +34,12 @@
             <template v-else>
               <ProfilePostCard v-for="item in feedPosts" :key="item.id" :item="item" @detail="onTapPostDetail" />
               <view v-if="feedLoaded && !hasFeedAny" class="section-status-wrap section-empty-wrap">
-                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png"
+                  mode="aspectFit" />
                 <text class="section-status-text section-empty-text">暂无动态资源</text>
               </view>
               <view v-if="feedLoadingMore" class="load-more-wrap">
-            <text class="load-more-text">加载中...</text>
+                <text class="load-more-text">加载中...</text>
               </view>
               <view v-else-if="feedHasMore && hasFeedAny" class="load-more-wrap">
                 <text class="load-more-text">上拉加载更多</text>
@@ -47,7 +49,7 @@
 
           <template v-else>
             <view v-if="circlesLoading && !hasCircleAny" class="section-status-wrap">
-            <text class="section-status-text">加载中...</text>
+              <text class="section-status-text">加载中...</text>
             </view>
             <view v-else-if="circlesError && !hasCircleAny" class="section-status-wrap">
               <text class="section-status-text">{{ circlesError }}</text>
@@ -56,11 +58,12 @@
             <template v-else>
               <ProfileCircleCard v-for="item in joinedCircles" :key="item.id" :item="item" @enter="onEnterCircle" />
               <view v-if="circlesLoaded && !hasCircleAny" class="section-status-wrap section-empty-wrap">
-                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png"
+                  mode="aspectFit" />
                 <text class="section-status-text section-empty-text">暂无加入的圈子</text>
               </view>
               <view v-if="circlesLoadingMore" class="load-more-wrap">
-            <text class="load-more-text">加载中...</text>
+                <text class="load-more-text">加载中...</text>
               </view>
               <view v-else-if="circlesHasMore && hasCircleAny" class="load-more-wrap">
                 <text class="load-more-text">上拉加载更多</text>
@@ -72,15 +75,48 @@
       </view>
     </view>
 
-    <!-- 未登录时固定在底部的关注按钮 -->
-    <view v-if="!isLoggedIn && !isSelfProfile" class="follow-action-fixed">
-      <button class="follow-btn" hover-class="follow-btn-active" @tap="onFollowBeforeLogin">
-        关注
+    <view v-if="showBottomActionBar" class="bottom-action-bar">
+      <button v-if="!isLoggedIn" class="action-btn action-btn-primary" hover-class="action-btn-active"
+        @tap="onLoginToCreateCard">
+        创建名片
       </button>
+      <template v-else>
+        <button class="action-btn action-btn-danger" hover-class="action-btn-active" @tap="onReportProfile">
+          举报
+        </button>
+        <button class="action-btn action-btn-secondary" hover-class="action-btn-active" open-type="share">
+          分享名片
+        </button>
+        <button class="action-btn action-btn-primary" :class="{ 'action-btn-followed': isNetworkCollected }"
+          :disabled="collectingNetwork" hover-class="action-btn-active" @tap="onToggleNetworkCollect">
+          {{ collectingNetwork ? '处理中...' : (isNetworkCollected ? '已收藏' : '收藏人脉') }}
+        </button>
+      </template>
     </view>
 
     <!-- 隐藏的Canvas用于生成分享图 -->
-    <canvas canvas-id="shareCanvas" style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 900px; border: none;"></canvas>
+    <canvas canvas-id="shareCanvas"
+      style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 900px; border: none;"></canvas>
+
+    <!-- 分享菜单弹窗 -->
+    <view v-if="shareMenuVisible" class="share-menu-mask" @tap="onCloseShareMenu">
+      <view class="share-menu-panel" @tap.stop="">
+        <view class="share-menu-list">
+          <button class="share-menu-item" hover-class="share-menu-item-hover" open-type="share">
+            <text class="share-menu-text">分享</text>
+          </button>
+          <button class="share-menu-item" hover-class="share-menu-item-hover" @tap="onCreateCard">
+            <text class="share-menu-text">创建名片</text>
+          </button>
+          <button class="share-menu-item" hover-class="share-menu-item-hover" @tap="onTapFollowFromMenu">
+            <text class="share-menu-text">{{ isFollowing ? '取消关注' : '关注' }}</text>
+          </button>
+          <button v-if="!isSelfProfile" class="share-menu-item share-menu-danger" hover-class="share-menu-item-hover" @tap="onReportProfile">
+            <text class="share-menu-text share-menu-danger-text">举报资料</text>
+          </button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -88,9 +124,9 @@
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom, onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { getMyCircles, getUserCircles } from '../../../api/circle'
-import { toggleUserFollow } from '../../../api/network'
+import { toggleUserFollow, toggleUserInterest } from '../../../api/network'
 import { getMyResourceFeed, getUserResourceFeed } from '../../../api/post'
-import { getCurrentUserProfile, getUserProfileById } from '../../../api/user'
+import { createContentReport, getCurrentUserProfile, getUserProfileById } from '../../../api/user'
 import { generateProfileShareImage } from '../../../utils/profile-share-image'
 import ProfileBioSection from './components/ProfileBioSection.vue'
 import ProfileCircleCard from './components/ProfileCircleCard.vue'
@@ -114,6 +150,8 @@ const activeTab = ref('feed')
 const targetUserId = ref('')
 const rawProfile = ref({})
 const shareImageUrl = ref('') // 缓存分享图片
+const shareMenuVisible = ref(false) // 分享菜单显示状态
+const collectingNetwork = ref(false)
 
 const feedPosts = ref([])
 const feedTotal = ref(0)
@@ -177,32 +215,132 @@ const isLoggedIn = computed(() => {
   return Boolean(token)
 })
 
+const toFiniteNumber = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const toRadians = (degree) => degree * Math.PI / 180
+
+const calculateDistanceKm = (fromLat, fromLng, toLat, toLng) => {
+  const lat1 = toFiniteNumber(fromLat)
+  const lng1 = toFiniteNumber(fromLng)
+  const lat2 = toFiniteNumber(toLat)
+  const lng2 = toFiniteNumber(toLng)
+  if ([lat1, lng1, lat2, lng2].some((item) => item === null)) {
+    return null
+  }
+
+  const earthRadiusKm = 6371
+  const dLat = toRadians(lat2 - lat1)
+  const dLng = toRadians(lng2 - lng1)
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+const formatDistanceText = (distanceKm) => {
+  const distance = toFiniteNumber(distanceKm)
+  if (distance === null) {
+    return ''
+  }
+  if (distance < 1) {
+    return `距你${Math.max(1, Math.round(distance * 1000))}m`
+  }
+  if (distance < 10) {
+    return `距你${distance.toFixed(1)}km`
+  }
+  return `距你${Math.round(distance)}km`
+}
+
+const getProfileLatitude = (profile = {}) => profile?.latitude ?? profile?.lat
+const getProfileLongitude = (profile = {}) => profile?.longitude ?? profile?.lng
+
+const buildProfileLocationLine = (profile = {}) => {
+  const province = String(profile?.province_name || profile?.province || '').trim()
+  const city = String(profile?.city_name || profile?.city || '').trim()
+  const locationText = province && city && !city.includes(province)
+    ? `${province}${city}`
+    : (city || province)
+
+  const currentUser = uni.getStorageSync('userInfo') || {}
+  const distanceText = isSelfProfile.value
+    ? ''
+    : formatDistanceText(calculateDistanceKm(
+      getProfileLatitude(currentUser),
+      getProfileLongitude(currentUser),
+      getProfileLatitude(profile),
+      getProfileLongitude(profile)
+    ))
+
+  return [locationText, distanceText].filter(Boolean).join(' · ')
+}
+
+const updateNavigationTitle = () => {
+  uni.setNavigationBarTitle({
+    title: isSelfProfile.value ? '我的名片' : '人脉详情'
+  })
+}
+
 const hasProfileData = computed(() => Boolean(String(rawProfile.value?.user_id || '').trim()))
 const hasFeedAny = computed(() => feedPosts.value.length > 0)
 const hasCircleAny = computed(() => joinedCircles.value.length > 0)
+const isFollowing = computed(() => Boolean(rawProfile.value?.is_following || rawProfile.value?.followed))
+const isNetworkCollected = computed(() => Boolean(rawProfile.value?.is_interested || rawProfile.value?.interested))
+const showBottomActionBar = computed(() => Boolean(!isSelfProfile.value && String(targetUserId.value || '').trim()))
+const isActiveMemberValue = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value > 0
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return ['1', 'true', 'yes', 'active', 'opened', 'member', 'vip', 'paid', 'enabled', 'on', '已开通', '会员'].includes(normalized)
+}
+const getCurrentUserIsMember = () => {
+  const userInfo = uni.getStorageSync('userInfo') || {}
+  if ([
+    userInfo.is_member,
+    userInfo.member_opened,
+    userInfo.pro_member,
+    userInfo.vip_opened,
+    userInfo.vip_member
+  ].some((item) => isActiveMemberValue(item))) {
+    return true
+  }
+  const statusText = String(userInfo.member_status || userInfo.vip_status || '').trim()
+  if (isActiveMemberValue(statusText)) {
+    return true
+  }
+  const expireAtRaw = userInfo.member_expire_at || userInfo.vip_expire_at
+  if (expireAtRaw) {
+    const expireTs = new Date(String(expireAtRaw).replace(' ', 'T')).getTime()
+    if (Number.isFinite(expireTs) && expireTs > Date.now()) return true
+  }
+  return false
+}
+const shouldMaskProfileSensitiveInfo = () => Boolean(!isSelfProfile.value && !getCurrentUserIsMember())
+const MASK_TEXT = '********'
 const contactSectionData = computed(() => {
   const displayPhone = String(rawProfile.value?.display_phone || '').trim()
   const displayWechat = String(rawProfile.value?.display_wechat || '').trim()
   const displayEmail = String(rawProfile.value?.display_email || rawProfile.value?.email || '').trim()
+  const verifiedRealName = String(rawProfile.value?.verified_real_name || '').trim()
   const isSelf = Boolean(isSelfProfile.value)
-  const selfHasContact = Boolean(displayPhone || displayWechat)
+  const selfHasContact = Boolean(displayPhone || displayWechat || displayEmail)
+  const maskSensitive = shouldMaskProfileSensitiveInfo()
 
   return {
-    name: String(rawProfile.value?.nickname || '').trim(),
-    industryLabel: String(rawProfile.value?.industry_label || '').trim(),
+    name: maskSensitive ? MASK_TEXT : (verifiedRealName || String(rawProfile.value?.nickname || '').trim()),
+    companyName: maskSensitive ? MASK_TEXT : String(rawProfile.value?.company_name || rawProfile.value?.company || '').trim(),
+    jobTitle: maskSensitive ? MASK_TEXT : String(rawProfile.value?.job_title || rawProfile.value?.card_title || rawProfile.value?.position || '').trim(),
+    cityName: buildProfileLocationLine(rawProfile.value || {}),
     avatarUrl: String(rawProfile.value?.avatar_url || '').trim(),
     miniappCodeUrl: String(rawProfile.value?.miniapp_code_url || '').trim(),
     displayPhone,
     displayWechat,
     displayEmail,
-    contactVisible: isSelf ? selfHasContact : Boolean(rawProfile.value?.contact_visible),
+    contactVisible: isSelf ? selfHasContact : (maskSensitive ? false : Boolean(rawProfile.value?.contact_visible)),
     contactLockedReason: isSelf
-      ? (selfHasContact ? '' : '你还未完善展示手机号或微信号')
-      : String(rawProfile.value?.contact_locked_reason || '').trim(),
-    targetHasContact: isSelf ? selfHasContact : Boolean(rawProfile.value?.target_has_contact),
-    targetContactEnabled: isSelf ? rawProfile.value?.show_contact !== false : Boolean(rawProfile.value?.target_contact_enabled),
-    viewerContactPackageRemainingViews: isSelf ? 0 : Number(rawProfile.value?.viewer_contact_package_remaining_views || 0),
-    viewerContactPackageUsedForView: !isSelf && Boolean(rawProfile.value?.viewer_contact_package_used_for_view),
+      ? (selfHasContact ? '' : '你还未完善展示手机号、微信号或邮箱')
+      : (maskSensitive ? '开通会员即可查看联系方式' : String(rawProfile.value?.contact_locked_reason || '').trim()),
     isSelf
   }
 })
@@ -211,6 +349,7 @@ const syncPageData = () => {
   pageData.value = resolveProfileHomeData(rawProfile.value || {}, {
     posts: feedPosts.value,
     circles: joinedCircles.value,
+    locationLine: buildProfileLocationLine(rawProfile.value || {}),
     resourceCount: Number(feedTotal.value || feedPosts.value.length || 0),
     circleCount: Number(circlesTotal.value || rawProfile.value?.circle_count || joinedCircles.value.length || 0)
   })
@@ -238,6 +377,7 @@ const loadProfile = async () => {
     if (isSelf) {
       uni.setStorageSync('userInfo', profile || {})
     }
+    updateNavigationTitle()
   } catch (err) {
     const statusCode = Number(err?.statusCode || 0)
     if (statusCode === 401) {
@@ -248,6 +388,7 @@ const loadProfile = async () => {
     loadError.value = err?.message || '个人名片加载失败，请稍后重试'
   } finally {
     loading.value = false
+    updateNavigationTitle()
   }
 }
 
@@ -284,8 +425,8 @@ const fetchProfileFeed = async (reset = false) => {
 
     const incoming = Array.isArray(payload?.items)
       ? payload.items
-          .map((item) => mapProfilePostItem(item))
-          .filter((item) => item.type !== 'venue') // 过滤掉活动类型 - 第二版上线
+        .map((item) => mapProfilePostItem(item))
+        .filter((item) => item.type !== 'venue') // 过滤掉活动类型 - 第二版上线
       : []
     if (reset) {
       feedPosts.value = incoming
@@ -459,6 +600,140 @@ const onFollowBeforeLogin = () => {
   })
 }
 
+const onCreateCard = () => {
+  if (!isLoggedIn.value) {
+    onLoginToCreateCard()
+    return
+  }
+
+  uni.navigateTo({
+    url: '/pages/me/editInfo/index'
+  })
+}
+
+const onLoginToCreateCard = () => {
+  uni.navigateTo({
+    url: '/pages/auth/login/index'
+  })
+}
+
+const onOpenMemberCenter = () => {
+  if (!isLoggedIn.value) {
+    uni.navigateTo({
+      url: '/pages/auth/login/index'
+    })
+    return
+  }
+
+  uni.navigateTo({
+    url: '/pages/me/member-center/index'
+  })
+}
+
+const onOpenShareMenu = () => {
+  shareMenuVisible.value = true
+}
+
+const onCloseShareMenu = () => {
+  shareMenuVisible.value = false
+}
+
+const onTapFollowFromMenu = async () => {
+  onCloseShareMenu()
+  await onToggleFollow()
+}
+
+const onReportProfile = () => {
+  onCloseShareMenu()
+  const target = String(targetUserId.value || rawProfile.value?.user_id || rawProfile.value?.userId || '').trim()
+  if (!target) {
+    showToast('用户信息缺失')
+    return
+  }
+  if (!isLoggedIn.value) {
+    onLoginToCreateCard()
+    return
+  }
+  uni.showActionSheet({
+    itemList: ['色情低俗头像/资料', '广告引流或诈骗', '冒充他人', '其他违规'],
+    success: async (res) => {
+      const reasons = ['色情低俗头像/资料', '广告引流或诈骗', '冒充他人', '其他违规']
+      try {
+        await createContentReport({
+          target_type: 'profile',
+          target_id: target,
+          reason: reasons[Number(res.tapIndex || 0)] || '其他违规'
+        })
+        showToast('举报已提交')
+      } catch (err) {
+        showToast(err?.message || '举报失败，请稍后重试')
+      }
+    }
+  })
+}
+
+const onToggleFollow = async () => {
+  const target = String(targetUserId.value || '').trim()
+  if (!target) {
+    showToast('用户信息缺失')
+    return
+  }
+
+  const willFollow = !isFollowing.value
+
+  try {
+    await toggleUserFollow(target, willFollow)
+
+    // 更新本地状态
+    if (rawProfile.value) {
+      rawProfile.value.is_following = willFollow
+      rawProfile.value.followed = willFollow
+    }
+
+    showToast(willFollow ? '关注成功' : '已取消关注')
+  } catch (error) {
+    console.error('关注操作失败:', error)
+    showToast(error?.message || '操作失败，请稍后重试')
+  }
+}
+
+const onToggleNetworkCollect = async () => {
+  const target = String(targetUserId.value || rawProfile.value?.user_id || rawProfile.value?.userId || '').trim()
+  if (!target) {
+    showToast('用户信息缺失')
+    return
+  }
+  if (!isLoggedIn.value) {
+    onLoginToCreateCard()
+    return
+  }
+
+  const nextCollected = !isNetworkCollected.value
+  if (collectingNetwork.value) {
+    return
+  }
+  collectingNetwork.value = true
+  try {
+    const payload = await toggleUserInterest(target, nextCollected)
+    const resolvedCollected = Boolean(payload?.is_interested ?? payload?.interested ?? nextCollected)
+    if (rawProfile.value) {
+      rawProfile.value.is_interested = resolvedCollected
+      rawProfile.value.interested = resolvedCollected
+    }
+    showToast(resolvedCollected ? '已收藏人脉' : '已取消收藏')
+  } catch (error) {
+    const statusCode = Number(error?.statusCode || 0)
+    if (statusCode === 401) {
+      clearLoginState()
+      onLoginToCreateCard()
+      return
+    }
+    showToast(error?.message || '操作失败，请稍后重试')
+  } finally {
+    collectingNetwork.value = false
+  }
+}
+
 onShareAppMessage(() => {
   const target = String(rawProfile.value?.user_id || rawProfile.value?.userId || targetUserId.value || '').trim()
   const nickname = String(rawProfile.value?.nickname || pageData.value?.profile?.name || '好友名片').trim() || '好友名片'
@@ -473,7 +748,9 @@ onShareAppMessage(() => {
 
 
 onLoad((query = {}) => {
-  targetUserId.value = String(query?.userId || '').trim()
+  const sceneUserId = decodeURIComponent(String(query?.scene || '').trim())
+  targetUserId.value = String(query?.userId || sceneUserId || '').trim()
+  updateNavigationTitle()
 })
 
 onShow(() => {
@@ -578,11 +855,15 @@ onReachBottom(() => {
 }
 
 .content-list-wrap {
-  background: #ffffff;
+  background: #f8f8f8;
   padding: 16rpx 32rpx calc(5rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+}
+
+.content-list-wrap-with-bottom {
+  padding-bottom: calc(150rpx + env(safe-area-inset-bottom));
 }
 
 .status-wrap {
@@ -695,6 +976,69 @@ onReachBottom(() => {
   transform: scale(0.98);
 }
 
+.bottom-action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  box-sizing: border-box;
+  padding: 18rpx 32rpx calc(-20rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 20%, #ffffff 100%);
+  backdrop-filter: blur(10rpx);
+  display: flex;
+  gap: 16rpx;
+}
+
+.action-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 44rpx;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.action-btn::after {
+  border: 0;
+}
+
+.action-btn[disabled] {
+  opacity: 0.72;
+}
+
+.action-btn-primary {
+  background: linear-gradient(135deg, #1a57db 0%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.2);
+}
+
+.action-btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.08);
+}
+
+.action-btn-danger {
+  background: #fef2f2;
+  color: #dc2626;
+  box-shadow: 0 2rpx 8rpx rgba(220, 38, 38, 0.08);
+}
+
+.action-btn-followed {
+  background: #e0e7ff;
+  color: #4f46e5;
+  box-shadow: 0 2rpx 8rpx rgba(79, 70, 229, 0.15);
+}
+
+.action-btn-active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
 @media (prefers-color-scheme: dark) {
   .profile-home-page {
     background: #111621;
@@ -737,5 +1081,114 @@ onReachBottom(() => {
     background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
     box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
   }
+
+  .bottom-action-bar {
+    background: linear-gradient(180deg, rgba(17, 22, 33, 0) 0%, rgba(17, 22, 33, 0.95) 20%, #111621 100%);
+  }
+
+  .action-btn-primary {
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+  }
+
+  .action-btn-secondary {
+    background: #1e293b;
+    color: #e2e8f0;
+    box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.24);
+  }
+
+  .action-btn-danger {
+    background: #3f1d1d;
+    color: #fca5a5;
+  }
+
+  .action-btn-followed {
+    background: #312e81;
+    color: #a5b4fc;
+    box-shadow: 0 2rpx 8rpx rgba(165, 180, 252, 0.2);
+  }
+}
+
+/* 分享菜单弹窗样式 */
+.share-menu-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.share-menu-panel {
+  width: 100%;
+  max-width: 750rpx;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 0 0 calc(32rpx + env(safe-area-inset-bottom));
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.share-menu-list {
+  padding: 24rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.share-menu-item {
+  height: 96rpx;
+  margin: 0;
+  padding: 0 32rpx;
+  border: 0;
+  border-radius: 20rpx;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.share-menu-item::after {
+  border: 0;
+}
+
+.share-menu-text {
+  color: #111827;
+  font-size: 32rpx;
+  line-height: 40rpx;
+  font-weight: 500;
+}
+
+.share-menu-danger-text {
+  color: #dc2626;
+}
+
+.share-menu-item-hover {
+  background: #f8fafc;
 }
 </style>

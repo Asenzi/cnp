@@ -1,6 +1,6 @@
 <template>
   <view>
-    <image class="banner-image" mode="aspectFill" :src="detail.bannerImage" />
+    <image class="banner-image" mode="widthFix" :src="detail.bannerImage" />
 
     <view class="info-wrap">
       <view class="top-row">
@@ -18,7 +18,8 @@
       </view>
 
       <view class="description-wrap" @tap="toggleDescription">
-        <text class="description" :class="{ 'description-collapsed': !descriptionExpanded }">{{ detail.description }}</text>
+        <text class="description" :class="{ 'description-collapsed': !descriptionExpanded }">{{ detail.description
+          }}</text>
         <text v-if="shouldShowExpandBtn" class="expand-btn">{{ descriptionExpanded ? '收起' : '展开' }}</text>
       </view>
     </view>

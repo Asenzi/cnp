@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.circle import Circle
 from app.models.user_circle_membership import UserCircleMembership
 from app.models.user_connection import UserConnection
 from app.models.user_points_account import UserPointsAccount
@@ -58,9 +59,17 @@ def get_user_realtime_stats(
     fallback_balance: Decimal | int | float | str = Decimal("0.00"),
     fallback_points: int = 0,
 ) -> dict[str, Decimal | int]:
-    circle_stmt = select(func.count(UserCircleMembership.id)).where(
-        UserCircleMembership.user_pk == user_pk,
-        UserCircleMembership.is_active.is_(True),
+    circle_stmt = (
+        select(func.count(UserCircleMembership.id))
+        .join(
+            Circle,
+            Circle.circle_code == UserCircleMembership.circle_code,
+        )
+        .where(
+            UserCircleMembership.user_pk == user_pk,
+            UserCircleMembership.is_active.is_(True),
+            Circle.owner_user_pk != user_pk,
+        )
     )
     network_stmt = select(func.count(UserConnection.id)).where(
         UserConnection.user_pk == user_pk,

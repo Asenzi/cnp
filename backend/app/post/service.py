@@ -2,7 +2,7 @@ import base64
 from collections import Counter
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from math import exp, log1p
 from secrets import token_hex
 from typing import Any
@@ -13,12 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BusinessException
 from app.core.logger import logger
+from app.common.feed_visibility import is_feed_self_visible
 from app.models.circle import Circle
 from app.models.resource_post import ResourcePost, ResourcePostImpression, ResourcePostLike, ResourcePostRecoFeedback
 from app.models.resource_post_circle_sync import ResourcePostCircleSync
 from app.models.user import User
-from app.models.user_circle_membership import UserCircleMembership
-from app.payment import resolve_member_snapshot
 from app.points import grant_publish_resource_points
 
 SUPPORTED_POST_MODES = {"cooperate", "resource", "venue"}
@@ -40,15 +39,6 @@ def _normalize_circle_codes(circle_codes: list[str] | None) -> list[str]:
         seen.add(code)
         normalized.append(code)
     return normalized
-
-
-def _resolve_circle_sync_limit(db: Session, *, user: User) -> int:
-    if not bool(user.is_verified):
-        return 0
-    member_snapshot = resolve_member_snapshot(db=db, user_pk=int(user.id))
-    if bool(member_snapshot.get("is_member")):
-        return 5
-    return 1
 
 
 def _serialize_circle_sync(
@@ -114,7 +104,7 @@ def _refresh_circle_post_counts(db: Session, *, circle_codes: set[str] | list[st
     }
 
     circles = db.execute(select(Circle).where(Circle.circle_code.in_(normalized_codes))).scalars().all()
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     for circle in circles:
         next_count = int(count_map.get(_normalize_text(circle.circle_code).upper(), 0))
         circle.post_count = next_count
@@ -131,34 +121,20 @@ def _sync_post_to_circles(
     sync_circle_codes: list[str] | None,
 ) -> list[dict[str, Any]]:
     normalized_codes = _normalize_circle_codes(sync_circle_codes)
-    sync_limit = _resolve_circle_sync_limit(db=db, user=author)
-    if normalized_codes and sync_limit <= 0:
-        raise BusinessException(message="完成实名认证后才可同步资源到圈子", code=5463, status_code=400)
-    if len(normalized_codes) > sync_limit:
-        raise BusinessException(
-            message=f"当前账号最多可同时同步 {sync_limit} 个圈子",
-            code=5464,
-            status_code=400,
-        )
-
-    joined_circle_codes = {
-        _normalize_text(item).upper()
-        for item in db.execute(
-            select(UserCircleMembership.circle_code).where(
-                UserCircleMembership.user_pk == int(author.id),
-                UserCircleMembership.is_active.is_(True),
-            )
-        ).scalars().all()
-        if _normalize_text(item)
-    }
-
-    if any(code not in joined_circle_codes for code in normalized_codes):
-        raise BusinessException(message="仅可同步到自己已加入的圈子", code=5465, status_code=400)
+    post_mode = _normalize_text(post.mode).lower()
+    if post_mode != "venue" and normalized_codes:
+        raise BusinessException(message="普通资源无需关联圈子", code=5463, status_code=400)
+    if post_mode == "venue":
+        if not bool(author.is_circle_owner):
+            raise BusinessException(message="只有圈主可以发布活动", code=5464, status_code=403)
+        if len(normalized_codes) != 1:
+            raise BusinessException(message="活动必须选择一个自己创建的圈子", code=5465, status_code=400)
 
     circles = db.execute(
         select(Circle).where(
             Circle.circle_code.in_(normalized_codes),
             Circle.status == "active",
+            Circle.owner_user_pk == int(author.id),
         )
     ).scalars().all()
     circle_map = {
@@ -168,7 +144,7 @@ def _sync_post_to_circles(
     }
     missing_codes = [code for code in normalized_codes if code not in circle_map]
     if missing_codes:
-        raise BusinessException(message="部分圈子不存在或不可同步", code=5466, status_code=400)
+        raise BusinessException(message="活动只能发布到自己创建的圈子", code=5466, status_code=403)
 
     existing_rows = db.execute(
         select(ResourcePostCircleSync).where(ResourcePostCircleSync.post_pk == int(post.id))
@@ -180,7 +156,7 @@ def _sync_post_to_circles(
     }
     selected_set = set(normalized_codes)
     affected_codes = set(existing_map.keys()) | selected_set
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     for code, row in existing_map.items():
         if code not in selected_set and row.status != "cancelled":
@@ -197,15 +173,17 @@ def _sync_post_to_circles(
                 post_pk=int(post.id),
                 circle_code=code,
                 request_user_pk=int(author.id),
-                status="pending",
+                status="approved",
+                reviewed_by_user_pk=int(author.id),
+                reviewed_at=now,
             )
             db.add(row)
             continue
 
-        if row.status in {"cancelled", "rejected"}:
-            row.status = "pending"
-            row.reviewed_by_user_pk = None
-            row.reviewed_at = None
+        if row.status != "approved":
+            row.status = "approved"
+            row.reviewed_by_user_pk = int(author.id)
+            row.reviewed_at = now
             row.reject_reason = None
             db.add(row)
 
@@ -237,7 +215,7 @@ def _days_since(value: datetime | None, *, now: datetime) -> float:
         return 365.0
     safe_value = value
     if safe_value.tzinfo is not None:
-        safe_value = safe_value.astimezone(UTC).replace(tzinfo=None)
+        safe_value = safe_value.astimezone(timezone.utc).replace(tzinfo=None)
     return max((now - safe_value).total_seconds(), 0.0) / 86400.0
 
 
@@ -246,7 +224,7 @@ def _datetime_timestamp(value: datetime | None) -> float:
         return 0.0
     safe_value = value
     if safe_value.tzinfo is not None:
-        safe_value = safe_value.astimezone(UTC).replace(tzinfo=None)
+        safe_value = safe_value.astimezone(timezone.utc).replace(tzinfo=None)
     return max(safe_value.timestamp(), 0.0)
 
 
@@ -276,7 +254,7 @@ def _count_resource_impressions_in_days(
 ) -> dict[int, int]:
     if not post_ids:
         return {}
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(int(days or 1), 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(int(days or 1), 1))
     conditions = [
         ResourcePostImpression.post_pk.in_(post_ids),
         ResourcePostImpression.created_at >= since,
@@ -307,7 +285,7 @@ def _count_resource_feedback_in_days(
 ) -> dict[int, int]:
     if not post_ids or not event_types:
         return {}
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=max(int(days or 1), 1))
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(int(days or 1), 1))
     conditions = [
         ResourcePostRecoFeedback.post_pk.in_(post_ids),
         ResourcePostRecoFeedback.event_type.in_(event_types),
@@ -330,7 +308,7 @@ def _count_resource_feedback_in_days(
 
 
 def _build_resource_intent_profile(db: Session, *, viewer_user_pk: int) -> dict[str, dict[str, float]]:
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
     try:
         rows = db.execute(
             select(
@@ -354,7 +332,7 @@ def _build_resource_intent_profile(db: Session, *, viewer_user_pk: int) -> dict[
         if _is_missing_reco_table_error(exc):
             return {"industries": {}, "cities": {}}
         raise
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     industry_weights: dict[str, float] = {}
     city_weights: dict[str, float] = {}
     event_weights = {
@@ -564,7 +542,7 @@ def _format_time_text(raw_time: datetime | None) -> str:
     if not raw_time:
         return ""
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     target = raw_time.replace(tzinfo=None) if raw_time.tzinfo else raw_time
     delta = now - target
     total_seconds = max(int(delta.total_seconds()), 0)
@@ -630,11 +608,17 @@ def _serialize_post(
         "images": _parse_images(post.images_json),
         "view_count": int(post.view_count or 0),
         "like_count": int(post.like_count or 0),
+        "collect_count": int(post.like_count or 0),
+        "favorite_count": int(post.like_count or 0),
         "comment_count": int(post.comment_count or 0),
         "status": str(post.status or "active"),
         "is_pinned": bool(post.is_pinned),
         "pinned_at": post.pinned_at.isoformat() if post.pinned_at else None,
         "liked": bool(liked),
+        "collected": bool(liked),
+        "is_collected": bool(liked),
+        "interested": bool(liked),
+        "is_interested": bool(liked),
         "is_author": is_author,
         "time_text": _format_time_text(post.created_at),
         "created_at": post.created_at.isoformat() if post.created_at else None,
@@ -746,12 +730,14 @@ def list_resource_posts(
         raise BusinessException(message="用户不存在", code=4041, status_code=404)
     viewer_industry = _normalize_lower(viewer.industry_label)
     viewer_city = _normalize_lower(viewer.city_name)
+    show_self_resource = is_feed_self_visible(db=db, channel="resource", default=False)
 
     where_conditions = [
         ResourcePost.status == "active",
         User.is_active.is_(True),
-        ResourcePost.author_user_pk != int(viewer_user_pk),
     ]
+    if not show_self_resource:
+        where_conditions.append(ResourcePost.author_user_pk != int(viewer_user_pk))
     if safe_mode in SUPPORTED_POST_MODES:
         where_conditions.append(ResourcePost.mode == safe_mode)
     if safe_industry:
@@ -822,7 +808,7 @@ def list_resource_posts(
     )
     intent_profile = _build_resource_intent_profile(db=db, viewer_user_pk=int(viewer_user_pk))
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     scored_rows: list[tuple[float, tuple[ResourcePost, User, bool, bool, bool, dict[str, Any]]]] = []
     for post, author in rows:
         same_industry = bool(viewer_industry) and (
@@ -1415,7 +1401,13 @@ def set_resource_post_like(
     return {
         "post_code": str(post.post_code),
         "liked": bool(liked),
+        "collected": bool(liked),
+        "is_collected": bool(liked),
+        "interested": bool(liked),
+        "is_interested": bool(liked),
         "like_count": int(post.like_count or 0),
+        "collect_count": int(post.like_count or 0),
+        "favorite_count": int(post.like_count or 0),
     }
 
 
@@ -1656,108 +1648,6 @@ def list_circle_resource_posts(
     }
 
 
-def list_pending_circle_post_syncs(
-    db: Session,
-    *,
-    circle_code: str,
-    owner_user_pk: int,
-) -> list[dict[str, Any]]:
-    safe_circle_code = _normalize_text(circle_code).upper()
-    if not safe_circle_code:
-        raise BusinessException(message="圈子编号不能为空", code=5467, status_code=400)
-
-    circle = db.execute(
-        select(Circle).where(Circle.circle_code == safe_circle_code, Circle.status == "active")
-    ).scalar_one_or_none()
-    if circle is None:
-        raise BusinessException(message="圈子不存在", code=4043, status_code=404)
-    if int(circle.owner_user_pk) != int(owner_user_pk):
-        raise BusinessException(message="仅圈主可查看同步审核", code=5468, status_code=403)
-
-    rows = db.execute(
-        select(ResourcePostCircleSync, ResourcePost, User)
-        .join(ResourcePost, ResourcePost.id == ResourcePostCircleSync.post_pk)
-        .join(User, User.id == ResourcePost.author_user_pk)
-        .where(
-            ResourcePostCircleSync.circle_code == safe_circle_code,
-            ResourcePostCircleSync.status == "pending",
-            ResourcePost.status != "deleted",
-        )
-        .order_by(ResourcePostCircleSync.created_at.desc(), ResourcePostCircleSync.id.desc())
-    ).all()
-
-    return [
-        {
-            "sync_id": int(sync.id),
-            "post_code": _normalize_text(post.post_code),
-            "mode": _normalize_text(post.mode) or "cooperate",
-            "industry_label": _normalize_text(post.industry_label),
-            "title": _normalize_text(post.title),
-            "description": _normalize_text(post.description),
-            "images": _parse_images(post.images_json),
-            "created_at": post.created_at.isoformat() if post.created_at else None,
-            "requested_at": sync.created_at.isoformat() if sync.created_at else None,
-            "author": {
-                "user_id": _normalize_text(author.user_id),
-                "nickname": _normalize_text(author.nickname) or "未命名用户",
-                "avatar_url": _normalize_text(author.avatar_url) or "/static/logo.png",
-                "company_name": _normalize_text(author.company_name),
-                "job_title": _normalize_text(author.job_title),
-                "industry_label": _normalize_text(author.industry_label),
-                "is_verified": bool(author.is_verified),
-            },
-        }
-        for sync, post, author in rows
-    ]
-
-
-def review_circle_post_sync(
-    db: Session,
-    *,
-    circle_code: str,
-    sync_id: int,
-    owner_user_pk: int,
-    action: str,
-    reject_reason: str | None,
-) -> dict[str, Any]:
-    safe_circle_code = _normalize_text(circle_code).upper()
-    if not safe_circle_code:
-        raise BusinessException(message="圈子编号不能为空", code=5467, status_code=400)
-
-    circle = db.execute(
-        select(Circle).where(Circle.circle_code == safe_circle_code, Circle.status == "active")
-    ).scalar_one_or_none()
-    if circle is None:
-        raise BusinessException(message="圈子不存在", code=4043, status_code=404)
-    if int(circle.owner_user_pk) != int(owner_user_pk):
-        raise BusinessException(message="仅圈主可审核同步资源", code=5469, status_code=403)
-
-    sync = db.execute(
-        select(ResourcePostCircleSync).where(
-            ResourcePostCircleSync.id == int(sync_id),
-            ResourcePostCircleSync.circle_code == safe_circle_code,
-        )
-    ).scalar_one_or_none()
-    if sync is None:
-        raise BusinessException(message="同步申请不存在", code=5470, status_code=404)
-    if _normalize_text(sync.status) != "pending":
-        raise BusinessException(message="该同步申请已处理", code=5471, status_code=400)
-
-    safe_action = _normalize_lower(action)
-    if safe_action not in {"approve", "reject"}:
-        raise BusinessException(message="仅支持 approve/reject", code=5472, status_code=400)
-
-    sync.status = "approved" if safe_action == "approve" else "rejected"
-    sync.reviewed_by_user_pk = int(owner_user_pk)
-    sync.reviewed_at = datetime.now(UTC).replace(tzinfo=None)
-    sync.reject_reason = _normalize_text(reject_reason)[:255] if safe_action == "reject" else None
-    db.add(sync)
-    _refresh_circle_post_counts(db=db, circle_codes={safe_circle_code})
-    db.commit()
-    db.refresh(sync)
-    return _serialize_circle_sync(sync, circle=circle)
-
-
 def set_resource_post_status(
     db: Session,
     *,
@@ -1797,7 +1687,7 @@ def set_resource_post_pin(
         raise BusinessException(message="下架资源不能置顶", code=5462, status_code=400)
 
     post.is_pinned = bool(pinned)
-    post.pinned_at = datetime.now(UTC).replace(tzinfo=None) if post.is_pinned else None
+    post.pinned_at = datetime.now(timezone.utc).replace(tzinfo=None) if post.is_pinned else None
     db.add(post)
     db.commit()
     db.refresh(post)

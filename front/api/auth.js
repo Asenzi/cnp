@@ -8,14 +8,15 @@ export function sendSmsCode(phone) {
   })
 }
 
-export function loginBySmsCode(phone, code, inviteCode) {
+export function loginBySmsCode(phone, code, inviteCode, cityName) {
   return request({
     url: '/api/v1/auth/login',
     method: 'POST',
     data: {
       phone,
       code,
-      invite_code: String(inviteCode || '').trim() || undefined
+      invite_code: String(inviteCode || '').trim() || undefined,
+      city_name: String(cityName || '').trim() || undefined
     }
   })
 }

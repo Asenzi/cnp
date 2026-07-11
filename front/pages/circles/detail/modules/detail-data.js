@@ -26,8 +26,8 @@
 }
 
 export const detailTabs = [
-  { key: 'event', label: '活动' },
-  { key: 'member', label: '成员' }
+  { key: 'member', label: '成员' },
+  { key: 'event', label: '活动' }
 ]
 
 export const resourcePosts = [

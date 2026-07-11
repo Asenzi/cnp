@@ -97,7 +97,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
 import { getDiscoverCircles } from '../../../api/circle'
-import { toggleCircleInterest } from '../../../api/circle'
+import { toggleCircleCollection } from '../../../api/circle'
 import DiscoverList from './components/DiscoverList.vue'
 import NetworkFilterPanel from '../discover/components/NetworkFilterPanel.vue'
 import { buildCityQueryCandidates } from '../discover/modules/city-query'
@@ -225,6 +225,9 @@ const displayCityName = computed(() => {
   return String(filters.value.city_name || '').trim() || locationText.value || texts.defaultCity
 })
 const effectiveCityName = computed(() => {
+  if (!showLocationFilter) {
+    return ''
+  }
   if (isNationalScope.value) {
     return ''
   }
@@ -457,9 +460,13 @@ const mapCircleCard = (item = {}, index = 0) => {
     ownerName: String(item.owner_nickname || '').trim(),
     ownerAvatar: String(item.owner_avatar_url || '').trim(),
     ownerVerified: Boolean(item.owner_is_verified),
-    interested: Boolean(item.is_interested ?? item.interested),
-    isInterested: Boolean(item.is_interested ?? item.interested),
-    is_interested: Boolean(item.is_interested ?? item.interested)
+    collectCount: Number(item.collect_count ?? item.favorite_count ?? 0),
+    collected: Boolean(item.is_collected ?? item.collected ?? item.is_interested ?? item.interested),
+    isCollected: Boolean(item.is_collected ?? item.collected ?? item.is_interested ?? item.interested),
+    is_collected: Boolean(item.is_collected ?? item.collected ?? item.is_interested ?? item.interested),
+    interested: Boolean(item.is_collected ?? item.collected ?? item.is_interested ?? item.interested),
+    isInterested: Boolean(item.is_collected ?? item.collected ?? item.is_interested ?? item.interested),
+    is_interested: Boolean(item.is_collected ?? item.collected ?? item.is_interested ?? item.interested)
   }
 }
 
@@ -475,6 +482,9 @@ const applyCircleInterestChange = (payload) => {
     }
     return {
       ...item,
+      collected: interested,
+      isCollected: interested,
+      is_collected: interested,
       interested,
       isInterested: interested,
       is_interested: interested
@@ -510,13 +520,7 @@ const fetchCircles = async (reset = false) => {
       cityName: effectiveCityName.value,
       industryLabel: filters.value.industry_label || ''
     })
-    const excludeCircleCodes = isRecommendTab && reset
-      ? (
-        Array.isArray(firstPageHistoryByContext.value[contextKey])
-          ? firstPageHistoryByContext.value[contextKey]
-          : []
-      )
-      : []
+    const excludeCircleCodes = []
     const requestId = isRecommendTab
       ? (reset ? '' : String(recommendRequestId.value || '').trim())
       : ''
@@ -722,6 +726,9 @@ const onToggleInterest = async (circle) => {
   interestSubmittingCodes.add(circleCode)
 
   const wasInterested = Boolean(
+    circle?.collected ||
+    circle?.isCollected ||
+    circle?.is_collected ||
     circle?.interested ||
     circle?.isInterested ||
     circle?.is_interested ||
@@ -735,6 +742,9 @@ const onToggleInterest = async (circle) => {
   if (targetIndex >= 0) {
     circles.value[targetIndex] = {
       ...circles.value[targetIndex],
+      collected: !wasInterested,
+      isCollected: !wasInterested,
+      is_collected: !wasInterested,
       interested: !wasInterested,
       isInterested: !wasInterested,
       is_interested: !wasInterested
@@ -742,13 +752,13 @@ const onToggleInterest = async (circle) => {
   }
 
   try {
-    const result = await toggleCircleInterest(circleCode, !wasInterested)
-    const nextInterested = Boolean(result?.is_interested ?? result?.interested)
+    const result = await toggleCircleCollection(circleCode, !wasInterested)
+    const nextInterested = Boolean(result?.is_collected ?? result?.collected ?? result?.is_interested ?? result?.interested)
     applyCircleInterestChange({ circleCode, interested: nextInterested })
     publishCircleInterestChange(circleCode, nextInterested)
 
     uni.showToast({
-      title: nextInterested ? '已标记感兴趣' : '已取消感兴趣',
+      title: nextInterested ? '已收藏' : '已取消收藏',
       icon: 'none'
     })
   } catch (err) {
@@ -756,6 +766,9 @@ const onToggleInterest = async (circle) => {
     if (targetIndex >= 0) {
       circles.value[targetIndex] = {
         ...circles.value[targetIndex],
+        collected: wasInterested,
+        isCollected: wasInterested,
+        is_collected: wasInterested,
         interested: wasInterested,
         isInterested: wasInterested,
         is_interested: wasInterested
@@ -870,6 +883,7 @@ onUnmounted(() => {
 <style scoped>
 .discover-page {
   height: 100vh;
+  overflow: hidden;
   background: #f6f6f8;
   color: #111318;
   font-family: 'Manrope', 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -883,6 +897,7 @@ onUnmounted(() => {
   background: #ffffff;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.08);
 }
 
@@ -900,6 +915,8 @@ onUnmounted(() => {
 
 .circle-scroll {
   flex: 1;
+  height: 0;
+  min-height: 0;
   box-sizing: border-box;
   background: #f6f6f8;
 }

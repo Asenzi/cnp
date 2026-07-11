@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from secrets import token_hex
 
@@ -91,7 +91,7 @@ def _normalize_feedback_images(images: list[dict] | None) -> list[dict]:
 
 
 def _build_ticket_no() -> str:
-    return f"FB{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}{token_hex(2).upper()}"
+    return f"FB{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{token_hex(2).upper()}"
 
 
 @router.post("/assets/upload", summary="上传反馈截图")

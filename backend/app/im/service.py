@@ -1,12 +1,13 @@
 import base64
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import BusinessException
+from app.core.profile_display import public_avatar_url, public_nickname
 from app.models.network_reco_feedback import NetworkRecoFeedback
 from app.models.network_reco_impression import NetworkRecoImpression
 from app.models.system_notice import SystemNotice
@@ -43,7 +44,7 @@ def _format_time_text(raw_time: datetime | None) -> str:
     if not raw_time:
         return ""
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     target = raw_time.replace(tzinfo=None) if raw_time.tzinfo else raw_time
     delta = now - target
     total_seconds = max(int(delta.total_seconds()), 0)
@@ -262,10 +263,10 @@ def list_conversations(
             or 0
         )
 
-        display_name = str(target_user.nickname or "").strip() if target_user else ""
+        display_name = public_nickname(target_user) if target_user else ""
         industry_label = str(target_user.industry_label or "").strip() if target_user else ""
         business_user_id = str(target_user.user_id or "").strip() if target_user else ""
-        avatar_url = str(target_user.avatar_url or "").strip() if target_user else ""
+        avatar_url = public_avatar_url(target_user) if target_user else ""
 
         items.append(
             {
@@ -355,8 +356,8 @@ def list_conversation_messages(
         "next_cursor": next_cursor or "",
         "peer": {
             "user_id": str(target_user.user_id or "").strip(),
-            "name": str(target_user.nickname or "").strip() or "未命名联系人",
-            "avatar_url": str(target_user.avatar_url or "").strip() or "/static/logo.png",
+            "name": public_nickname(target_user),
+            "avatar_url": public_avatar_url(target_user),
         },
         "viewer_user_id": str(viewer.user_id or "").strip(),
     }
@@ -389,7 +390,7 @@ def _assert_can_chat(db: Session, *, viewer_user_pk: int, target_user_pk: int) -
 
 
 def _track_chat_start_feedback(db: Session, *, viewer_user_pk: int, target_user_pk: int) -> None:
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
     latest_impression = db.execute(
         select(NetworkRecoImpression)
         .where(
@@ -592,7 +593,7 @@ def revoke_conversation_message(
     if created_at is None:
         raise BusinessException(message="消息时间异常，无法撤回", code=4420, status_code=400)
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     elapsed = max(int((now - created_at).total_seconds()), 0)
     if elapsed > RECALL_WINDOW_SECONDS:
         raise BusinessException(message="仅支持2分钟内撤回消息", code=4421, status_code=400)
@@ -659,9 +660,9 @@ def list_friend_requests(
 
     items: list[dict[str, Any]] = []
     for idx, (request_row, related_user) in enumerate(rows):
-        nickname = str(related_user.nickname or "").strip() if related_user else ""
+        nickname = public_nickname(related_user) if related_user else ""
         role_text = str(related_user.industry_label or "").strip() if related_user else ""
-        avatar_url = str(related_user.avatar_url or "").strip() if related_user else ""
+        avatar_url = public_avatar_url(related_user) if related_user else ""
         business_user_id = str(related_user.user_id or "").strip() if related_user else ""
 
         request_message = str(request_row.request_message or "").strip()
@@ -716,12 +717,12 @@ def _ensure_connection(db: Session, *, source_user: User, target_user: User) -> 
         row = UserConnection(
             user_pk=source_user.id,
             target_user_pk=target_user.id,
-            target_name=target_user.nickname,
+            target_name=public_nickname(target_user),
             is_active=True,
         )
     else:
         row.is_active = True
-        row.target_name = target_user.nickname
+        row.target_name = public_nickname(target_user)
     db.add(row)
 
 
@@ -787,7 +788,7 @@ def create_friend_request(
     send_friend_request_notification.delay(
         from_user_id=int(viewer.id),
         to_user_id=int(target_user.id),
-        from_username=str(viewer.nickname or viewer.username or "").strip(),
+        from_username=public_nickname(viewer),
         message=normalized_message,
     )
 
@@ -815,7 +816,7 @@ def accept_friend_request(db: Session, *, viewer_user_pk: int, request_id: int) 
     _ensure_connection(db=db, source_user=viewer, target_user=requester)
 
     request_row.status = "accepted"
-    request_row.handled_at = datetime.now(UTC).replace(tzinfo=None)
+    request_row.handled_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(request_row)
 
     # Notify the requester that the friend request has been accepted.
@@ -824,7 +825,7 @@ def accept_friend_request(db: Session, *, viewer_user_pk: int, request_id: int) 
     send_friend_accepted_notification.delay(
         from_user_id=int(viewer.id),
         to_user_id=int(requester.id),
-        from_username=str(viewer.nickname or viewer.username or "").strip(),
+        from_username=public_nickname(viewer),
     )
 
     welcome_message = UserMessage(
@@ -856,7 +857,7 @@ def ignore_friend_request(db: Session, *, viewer_user_pk: int, request_id: int) 
         raise BusinessException(message="申请已处理", code=4406, status_code=400)
 
     request_row.status = "ignored"
-    request_row.handled_at = datetime.now(UTC).replace(tzinfo=None)
+    request_row.handled_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(request_row)
     db.commit()
 

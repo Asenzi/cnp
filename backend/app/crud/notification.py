@@ -72,13 +72,16 @@ def mark_notification_as_read(db: Session, notification_id: int) -> bool:
     return result.rowcount > 0
 
 
-def mark_all_notifications_as_read(db: Session, user_pk: int) -> int:
+def mark_all_notifications_as_read(
+    db: Session,
+    user_pk: int,
+    notification_type: Optional[str] = None,
+) -> int:
     """标记用户所有通知为已读"""
-    stmt = (
-        update(Notification)
-        .where(Notification.user_pk == user_pk, Notification.is_read == False)
-        .values(is_read=True, read_at=datetime.utcnow())
-    )
+    filters = [Notification.user_pk == user_pk, Notification.is_read == False]
+    if notification_type:
+        filters.append(Notification.type == notification_type)
+    stmt = update(Notification).where(*filters).values(is_read=True, read_at=datetime.utcnow())
     result = db.execute(stmt)
     db.commit()
     return result.rowcount

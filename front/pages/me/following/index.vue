@@ -5,117 +5,182 @@
         <view class="back-btn" hover-class="back-btn-active" @tap="onBack">
           <text class="back-icon">‹</text>
         </view>
-        <text class="header-title">我的关注</text>
+        <text class="header-title">我的收藏</text>
         <view class="header-spacer"></view>
       </view>
       <view class="search-bar">
         <view class="search-input-wrap">
-          <input
-            class="search-input"
-            type="text"
-            placeholder="搜索姓名、公司或职位"
-            :value="searchKeyword"
-            @input="onSearchInput"
-            confirm-type="search"
-            @confirm="onSearchConfirm"
-          />
+          <input class="search-input" type="text" placeholder="搜索已收藏的人脉、资源或圈子" :value="searchKeyword" @input="onSearchInput"
+            confirm-type="search" @confirm="onSearchConfirm" />
           <view v-if="searchKeyword" class="search-clear" @tap="onClearSearch">
             <text class="clear-icon">×</text>
           </view>
         </view>
       </view>
+      <view class="tabs-bar">
+        <view v-for="tab in tabs" :key="tab.key" class="tab-item" :class="{ 'tab-item-active': activeTab === tab.key }"
+          @tap="onSwitchTab(tab.key)">
+          <text class="tab-label">{{ tab.label }}</text>
+        </view>
+      </view>
     </view>
 
-    <scroll-view
-      class="content-scroll"
-      scroll-y
-      :show-scrollbar="false"
-      :refresher-enabled="true"
-      :refresher-triggered="refreshing"
-      :lower-threshold="120"
-      refresher-background="#f8f9fa"
-      @refresherrefresh="onRefresh"
-      @refresherrestore="onRefreshRestore"
-      @scrolltolower="onLoadMore"
-    >
+    <scroll-view class="content-scroll" scroll-y :show-scrollbar="false" :refresher-enabled="true"
+      :refresher-triggered="refreshing" :lower-threshold="120" refresher-background="#f8f9fa"
+      @refresherrefresh="onRefresh" @refresherrestore="onRefreshRestore" @scrolltolower="onLoadMore">
       <view class="following-list">
-        <!-- Loading skeleton -->
-        <view v-if="loading && !hasAny" class="skeleton-list">
-          <view v-for="i in 3" :key="`skeleton-${i}`" class="skeleton-card">
-            <view class="skeleton-avatar"></view>
-            <view class="skeleton-info">
-              <view class="skeleton-line skeleton-name"></view>
-              <view class="skeleton-line skeleton-detail"></view>
-              <view class="skeleton-line skeleton-bio"></view>
-            </view>
-          </view>
-        </view>
-
-        <!-- Error state -->
-        <view v-else-if="loadError && !hasAny" class="status-wrap">
-          <image class="status-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-          <text class="status-text">{{ loadError }}</text>
-          <view class="retry-btn" hover-class="retry-btn-active" @tap="onRetry">
-            <text class="retry-btn-text">重新加载</text>
-          </view>
-        </view>
-
-        <!-- Empty state -->
-        <view v-else-if="loaded && !hasAny" class="empty-wrap">
-          <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-          <text class="empty-title">还没有关注任何人</text>
-          <text class="empty-subtitle">关注感兴趣的人，及时了解他们的动态</text>
-          <view class="empty-action" hover-class="empty-action-active" @tap="onExplore">
-            <text class="empty-action-text">去发现</text>
-          </view>
-        </view>
-
-        <!-- Following list -->
-        <template v-else>
-          <view
-            v-for="item in followingList"
-            :key="item.id"
-            class="following-card"
-            hover-class="following-card-active"
-            @tap="onViewProfile(item)"
-          >
-            <view class="card-main">
-              <image class="user-avatar" mode="aspectFill" :src="item.avatar" />
-              <view class="user-info">
-                <view class="name-row">
-                  <text class="user-name">{{ item.name }}</text>
-                  <image
-                    v-if="item.isVerified"
-                    class="verified-badge"
-                    src="https://cos.cnptec.site/static/icon/certification.png"
-                    mode="aspectFit"
-                  />
-                </view>
-                <text v-if="item.detail" class="user-detail">{{ item.detail }}</text>
-                <text v-if="item.bio" class="user-bio">{{ item.bio }}</text>
+        <template v-if="activeTab === 'contacts'">
+          <!-- Loading skeleton -->
+          <view v-if="loading && !hasAny" class="skeleton-list">
+            <view v-for="i in 3" :key="`skeleton-${i}`" class="skeleton-card">
+              <view class="skeleton-avatar"></view>
+              <view class="skeleton-info">
+                <view class="skeleton-line skeleton-name"></view>
+                <view class="skeleton-line skeleton-detail"></view>
+                <view class="skeleton-line skeleton-bio"></view>
               </view>
             </view>
-            <view
-              class="follow-status"
-              :class="{ 'follow-status-pending': isUnfollowPending(item.id) }"
-              hover-class="follow-status-hover"
-              @tap.stop="onUnfollow(item)"
-            >
-              <text class="follow-status-icon">✓</text>
-              <text class="follow-status-text">已关注</text>
+          </view>
+
+          <!-- Error state -->
+          <view v-else-if="loadError && !hasAny" class="status-wrap">
+            <image class="status-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+            <text class="status-text">{{ loadError }}</text>
+            <view class="retry-btn" hover-class="retry-btn-active" @tap="onRetry">
+              <text class="retry-btn-text">重新加载</text>
             </view>
           </view>
 
-          <!-- Load more -->
-          <view v-if="loadingMore" class="load-more-wrap">
-            <text class="load-more-text">加载中...</text>
+          <!-- Empty state -->
+          <view v-else-if="loaded && !hasAny" class="empty-wrap">
+            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+            <text class="empty-title">{{ searchKeyword ? '未找到相关人脉' : '暂无收藏的人脉' }}</text>
+            <text class="empty-subtitle">{{ searchKeyword ? '换个关键词试试吧' : '去人脉库发现更多优质人脉' }}</text>
+            <view class="empty-action" hover-class="empty-action-active" @tap="onExplore">
+              <text class="empty-action-text">去发现</text>
+            </view>
           </view>
-          <view v-else-if="hasMore && hasAny" class="load-more-wrap">
-            <text class="load-more-text">上拉加载更多</text>
+
+          <!-- Following list -->
+          <template v-else>
+            <view v-for="item in followingList" :key="item.id" class="following-card"
+              hover-class="following-card-active" @tap="onViewProfile(item)">
+              <view class="card-main">
+                <image class="user-avatar" mode="aspectFill" :src="item.avatar" />
+                <view class="user-info">
+                  <view class="name-row">
+                    <text class="user-name">{{ item.name }}</text>
+                    <image v-if="item.isVerified" class="verified-badge"
+                      src="https://cos.cnptec.site/static/icon/certification.png" mode="aspectFit" />
+                  </view>
+                  <text v-if="item.detail" class="user-detail">{{ item.detail }}</text>
+                  <text v-if="item.bio" class="user-bio">{{ item.bio }}</text>
+                </view>
+              </view>
+              <view class="follow-status" :class="{ 'follow-status-pending': isUnfollowPending(item.id) }"
+                hover-class="follow-status-hover" @tap.stop="onUnfollow(item)">
+                <text class="follow-status-icon">✓</text>
+                <text class="follow-status-text">已收藏</text>
+              </view>
+            </view>
+
+            <!-- Load more -->
+            <view v-if="loadingMore" class="load-more-wrap">
+              <text class="load-more-text">加载中...</text>
+            </view>
+            <view v-else-if="hasMore && hasAny" class="load-more-wrap">
+              <text class="load-more-text">上拉加载更多</text>
+            </view>
+            <view v-else-if="!hasMore && hasAny" class="load-more-wrap">
+              <text class="load-more-text load-more-end">没有更多了</text>
+            </view>
+          </template>
+        </template>
+
+        <!-- 资源标签页 -->
+        <template v-else-if="activeTab === 'resources'">
+          <view v-if="resourcesLoading && !currentHasAny" class="skeleton-list">
+            <view v-for="i in 3" :key="`skeleton-${i}`" class="skeleton-card">
+              <view class="skeleton-avatar"></view>
+              <view class="skeleton-info">
+                <view class="skeleton-line skeleton-name"></view>
+                <view class="skeleton-line skeleton-detail"></view>
+                <view class="skeleton-line skeleton-bio"></view>
+              </view>
+            </view>
           </view>
-          <view v-else-if="!hasMore && hasAny" class="load-more-wrap">
-            <text class="load-more-text load-more-end">没有更多了</text>
+
+          <view v-else-if="resourcesLoadError && !currentHasAny" class="status-wrap">
+            <image class="status-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+            <text class="status-text">{{ resourcesLoadError }}</text>
+            <view class="retry-btn" hover-class="retry-btn-active" @tap="() => loadResources(true)">
+              <text class="retry-btn-text">重新加载</text>
+            </view>
           </view>
+
+          <view v-else-if="resourcesLoaded && !currentHasAny" class="empty-wrap">
+            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+            <text class="empty-title">{{ searchKeyword ? '未找到相关资源' : '暂无收藏的资源' }}</text>
+            <text class="empty-subtitle">{{ searchKeyword ? '换个关键词试试吧' : '去资源页面发现更多优质内容' }}</text>
+          </view>
+
+          <template v-else>
+            <ProfilePostCard v-for="item in filteredResourcesItems" :key="item.id" :item="item" :show-interest="true"
+              @detail="onTapPostDetail" @interest="onTogglePostInterest" />
+
+            <view v-if="resourcesLoadingMore" class="load-more-wrap">
+              <text class="load-more-text">加载中...</text>
+            </view>
+            <view v-else-if="resourcesHasMore && currentHasAny" class="load-more-wrap">
+              <text class="load-more-text">上拉加载更多</text>
+            </view>
+            <view v-else-if="!resourcesHasMore && currentHasAny" class="load-more-wrap">
+              <text class="load-more-text load-more-end">没有更多了</text>
+            </view>
+          </template>
+        </template>
+
+        <!-- 圈子标签页 -->
+        <template v-else>
+          <view v-if="circlesLoading && !currentHasAny" class="skeleton-list">
+            <view v-for="i in 3" :key="`skeleton-${i}`" class="skeleton-card">
+              <view class="skeleton-avatar"></view>
+              <view class="skeleton-info">
+                <view class="skeleton-line skeleton-name"></view>
+                <view class="skeleton-line skeleton-detail"></view>
+                <view class="skeleton-line skeleton-bio"></view>
+              </view>
+            </view>
+          </view>
+
+          <view v-else-if="circlesLoadError && !currentHasAny" class="status-wrap">
+            <image class="status-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+            <text class="status-text">{{ circlesLoadError }}</text>
+            <view class="retry-btn" hover-class="retry-btn-active" @tap="() => loadCircles(true)">
+              <text class="retry-btn-text">重新加载</text>
+            </view>
+          </view>
+
+          <view v-else-if="circlesLoaded && !currentHasAny" class="empty-wrap">
+            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
+            <text class="empty-title">{{ searchKeyword ? '未找到相关圈子' : '暂无收藏的圈子' }}</text>
+            <text class="empty-subtitle">{{ searchKeyword ? '换个关键词试试吧' : '去圈子页面发现更多优质圈子' }}</text>
+          </view>
+
+          <template v-else>
+            <DiscoverListCard v-for="item in filteredCirclesItems" :key="item.id" :circle="item"
+              @interest="onToggleCircleInterest" />
+
+            <view v-if="circlesLoadingMore" class="load-more-wrap">
+              <text class="load-more-text">加载中...</text>
+            </view>
+            <view v-else-if="circlesHasMore && currentHasAny" class="load-more-wrap">
+              <text class="load-more-text">上拉加载更多</text>
+            </view>
+            <view v-else-if="!circlesHasMore && currentHasAny" class="load-more-wrap">
+              <text class="load-more-text load-more-end">没有更多了</text>
+            </view>
+          </template>
         </template>
       </view>
     </scroll-view>
@@ -125,15 +190,15 @@
       <view class="unfollow-sheet" @tap.stop>
         <view class="sheet-content">
           <image class="sheet-avatar" mode="aspectFill" :src="unfollowTarget?.avatar" />
-          <text class="sheet-title">取消关注 {{ unfollowTarget?.name }}？</text>
-          <text class="sheet-desc">取消后将不再收到TA的动态更新</text>
+          <text class="sheet-title">取消收藏 {{ unfollowTarget?.name }}？</text>
+          <text class="sheet-desc">取消后将从收藏人脉中移除</text>
         </view>
         <view class="sheet-actions">
           <view class="sheet-btn sheet-btn-cancel" hover-class="sheet-btn-hover" @tap="onCancelUnfollow">
             <text class="sheet-btn-text">取消</text>
           </view>
           <view class="sheet-btn sheet-btn-confirm" hover-class="sheet-btn-hover" @tap="onConfirmUnfollow">
-            <text class="sheet-btn-text sheet-btn-text-confirm">取消关注</text>
+            <text class="sheet-btn-text sheet-btn-text-confirm">取消收藏</text>
           </view>
         </view>
       </view>
@@ -144,14 +209,27 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { getMyFollowingList } from '../../../api/user'
-import { toggleUserFollow } from '../../../api/network'
+import { getInterestedUsers, toggleUserInterest } from '../../../api/network'
+import { getInterestedResources, toggleResourceInterest } from '../../../api/post'
+import { getCollectedCircles, toggleCircleCollection } from '../../../api/circle'
+import ProfilePostCard from '../card/components/ProfilePostCard.vue'
+import DiscoverListCard from '../../tab/circles/components/DiscoverListCard.vue'
+import { mapProfilePostItem } from '../card/modules/profile-home-view-model'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
 const PAGE_SIZE = 20
 
+const tabs = [
+  { key: 'contacts', label: '人脉' },
+  { key: 'resources', label: '资源' },
+  { key: 'circles', label: '圈子' }
+]
+
+const activeTab = ref('contacts')
 const searchKeyword = ref('')
+
+// 人脉库数据
 const allFollowingList = ref([])
 const loading = ref(false)
 const loaded = ref(false)
@@ -159,12 +237,83 @@ const loadError = ref('')
 const refreshing = ref(false)
 const loadingMore = ref(false)
 const hasMore = ref(true)
+const followingCursor = ref('')
 const followingList = ref([])
 const unfollowPendingMap = ref({})
 const showUnfollowSheet = ref(false)
 const unfollowTarget = ref(null)
 
+// 资源和圈子数据
+const resourcesItems = ref([])
+const resourcesLoading = ref(false)
+const resourcesLoaded = ref(false)
+const resourcesLoadError = ref('')
+const resourcesLoadingMore = ref(false)
+const resourcesHasMore = ref(true)
+const resourcesCursor = ref('')
+
+const circlesItems = ref([])
+const circlesLoading = ref(false)
+const circlesLoaded = ref(false)
+const circlesLoadError = ref('')
+const circlesLoadingMore = ref(false)
+const circlesHasMore = ref(true)
+const circlesCursor = ref('')
+
 const hasAny = computed(() => followingList.value.length > 0)
+
+const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase())
+
+const includesKeyword = (values) => {
+  const keyword = normalizedSearchKeyword.value
+  if (!keyword) return true
+  return values.map((value) => String(value || '').toLowerCase()).join(' ').includes(keyword)
+}
+
+const filteredResourcesItems = computed(() => resourcesItems.value.filter((item) => includesKeyword([
+  item.title,
+  item.description,
+  item.content,
+  item.authorName,
+  item.rawPost?.title,
+  item.rawPost?.description,
+  item.rawPost?.content
+])))
+
+const filteredCirclesItems = computed(() => circlesItems.value.filter((item) => includesKeyword([
+  item.name,
+  item.title,
+  item.description,
+  item.intro,
+  item.ownerName,
+  item.industryLabel
+])))
+
+const currentItems = computed(() => {
+  if (activeTab.value === 'resources') return filteredResourcesItems.value
+  if (activeTab.value === 'circles') return filteredCirclesItems.value
+  return followingList.value
+})
+
+const currentLoading = computed(() => {
+  if (activeTab.value === 'resources') return resourcesLoading.value
+  if (activeTab.value === 'circles') return circlesLoading.value
+  return loading.value
+})
+
+const currentLoaded = computed(() => {
+  if (activeTab.value === 'resources') return resourcesLoaded.value
+  if (activeTab.value === 'circles') return circlesLoaded.value
+  return loaded.value
+})
+
+const currentLoadError = computed(() => {
+  if (activeTab.value === 'resources') return resourcesLoadError.value
+  if (activeTab.value === 'circles') return circlesLoadError.value
+  return loadError.value
+})
+
+const currentHasAny = computed(() => currentItems.value.length > 0)
 
 // 搜索相关
 const filterFollowingList = () => {
@@ -194,6 +343,18 @@ const onSearchConfirm = () => {
 const onClearSearch = () => {
   searchKeyword.value = ''
   filterFollowingList()
+}
+
+const onSwitchTab = async (tabKey) => {
+  if (activeTab.value === tabKey) return
+
+  activeTab.value = tabKey
+
+  if (tabKey === 'resources' && !resourcesLoaded.value) {
+    await loadResources(true)
+  } else if (tabKey === 'circles' && !circlesLoaded.value) {
+    await loadCircles(true)
+  }
 }
 
 const isUnfollowPending = (userId) => {
@@ -251,8 +412,8 @@ const loadFollowingList = async (reset = false) => {
   }
 
   try {
-    const response = await getMyFollowingList({
-      offset: reset ? 0 : followingList.value.length,
+    const response = await getInterestedUsers({
+      cursor: reset ? '' : followingCursor.value,
       limit: PAGE_SIZE
     })
 
@@ -272,6 +433,7 @@ const loadFollowingList = async (reset = false) => {
 
     filterFollowingList()
 
+    followingCursor.value = String(response?.next_cursor || '').trim()
     hasMore.value = Boolean(response?.has_more)
     loaded.value = true
   } catch (error) {
@@ -290,9 +452,103 @@ const loadFollowingList = async (reset = false) => {
   }
 }
 
+const loadResources = async (reset = false) => {
+  if (resourcesLoading.value || resourcesLoadingMore.value) return
+  if (!reset && (!resourcesHasMore.value || !resourcesCursor.value)) return
+
+  if (reset) {
+    resourcesLoading.value = true
+    resourcesLoadError.value = ''
+  } else {
+    resourcesLoadingMore.value = true
+  }
+
+  try {
+    const data = await getInterestedResources({
+      cursor: reset ? '' : resourcesCursor.value,
+      limit: PAGE_SIZE
+    })
+
+    const incoming = Array.isArray(data?.items) ? data.items.map(mapProfilePostItem) : []
+
+    if (reset) {
+      resourcesItems.value = incoming
+    } else {
+      const existed = new Set(resourcesItems.value.map(item => item.id))
+      const appended = incoming.filter(item => !existed.has(item.id))
+      resourcesItems.value = [...resourcesItems.value, ...appended]
+    }
+
+    resourcesCursor.value = String(data?.next_cursor || '').trim()
+    resourcesHasMore.value = Boolean(data?.has_more)
+    resourcesLoaded.value = true
+  } catch (error) {
+    console.error('Load resources failed:', error)
+    const message = error?.message || '加载失败，请稍后重试'
+    if (reset && resourcesItems.value.length === 0) {
+      resourcesLoadError.value = message
+    } else {
+      showToast(message)
+    }
+  } finally {
+    resourcesLoading.value = false
+    resourcesLoadingMore.value = false
+  }
+}
+
+const loadCircles = async (reset = false) => {
+  if (circlesLoading.value || circlesLoadingMore.value) return
+  if (!reset && (!circlesHasMore.value || !circlesCursor.value)) return
+
+  if (reset) {
+    circlesLoading.value = true
+    circlesLoadError.value = ''
+  } else {
+    circlesLoadingMore.value = true
+  }
+
+  try {
+    const data = await getCollectedCircles({
+      cursor: reset ? '' : circlesCursor.value,
+      limit: PAGE_SIZE
+    })
+
+    const incoming = Array.isArray(data?.items) ? data.items : []
+
+    if (reset) {
+      circlesItems.value = incoming
+    } else {
+      const existed = new Set(circlesItems.value.map(item => item.id))
+      const appended = incoming.filter(item => !existed.has(item.id))
+      circlesItems.value = [...circlesItems.value, ...appended]
+    }
+
+    circlesCursor.value = String(data?.next_cursor || '').trim()
+    circlesHasMore.value = Boolean(data?.has_more)
+    circlesLoaded.value = true
+  } catch (error) {
+    console.error('Load circles failed:', error)
+    const message = error?.message || '加载失败，请稍后重试'
+    if (reset && circlesItems.value.length === 0) {
+      circlesLoadError.value = message
+    } else {
+      showToast(message)
+    }
+  } finally {
+    circlesLoading.value = false
+    circlesLoadingMore.value = false
+  }
+}
+
 const onRefresh = async () => {
   refreshing.value = true
-  await loadFollowingList(true)
+  if (activeTab.value === 'resources') {
+    await loadResources(true)
+  } else if (activeTab.value === 'circles') {
+    await loadCircles(true)
+  } else {
+    await loadFollowingList(true)
+  }
   setTimeout(() => {
     refreshing.value = false
   }, 300)
@@ -303,13 +559,29 @@ const onRefreshRestore = () => {
 }
 
 const onLoadMore = () => {
-  if (!loadingMore.value && hasMore.value && hasAny.value) {
-    loadFollowingList(false)
+  if (activeTab.value === 'resources') {
+    if (!resourcesLoadingMore.value && resourcesHasMore.value && resourcesItems.value.length > 0) {
+      loadResources(false)
+    }
+  } else if (activeTab.value === 'circles') {
+    if (!circlesLoadingMore.value && circlesHasMore.value && circlesItems.value.length > 0) {
+      loadCircles(false)
+    }
+  } else {
+    if (!loadingMore.value && hasMore.value && hasAny.value) {
+      loadFollowingList(false)
+    }
   }
 }
 
 const onRetry = () => {
-  loadFollowingList(true)
+  if (activeTab.value === 'resources') {
+    loadResources(true)
+  } else if (activeTab.value === 'circles') {
+    loadCircles(true)
+  } else {
+    loadFollowingList(true)
+  }
 }
 
 const onViewProfile = (item) => {
@@ -342,17 +614,72 @@ const onConfirmUnfollow = async () => {
   showUnfollowSheet.value = false
 
   try {
-    await toggleUserFollow(userId, false)
+    await toggleUserInterest(userId, false)
 
-    // Remove from list
+    allFollowingList.value = allFollowingList.value.filter(item => item.id !== userId)
     followingList.value = followingList.value.filter(item => item.id !== userId)
-    showToast('已取消关注')
+    showToast('已取消收藏')
   } catch (error) {
-    console.error('Unfollow failed:', error)
+    console.error('Cancel network collection failed:', error)
     showToast('操作失败，请稍后重试')
   } finally {
     delete unfollowPendingMap.value[userId]
     unfollowTarget.value = null
+  }
+}
+
+const onTapPostDetail = (post) => {
+  const postCode = String(post?.postCode || post?.rawPost?.post_code || post?.post_code || '').trim()
+  if (!postCode) {
+    showToast('资源编号缺失')
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode)}`
+  })
+}
+
+const onTogglePostInterest = async (post) => {
+  const postCode = String(post?.postCode || post?.rawPost?.post_code || post?.post_code || '').trim()
+  if (!postCode) return
+
+  const targetIndex = resourcesItems.value.findIndex(item =>
+    (item.postCode || item.rawPost?.post_code || item.post_code) === postCode
+  )
+
+  if (targetIndex >= 0) {
+    const removedItem = resourcesItems.value[targetIndex]
+    resourcesItems.value.splice(targetIndex, 1)
+
+    try {
+      await toggleResourceInterest(postCode, false)
+      showToast('已取消感兴趣')
+    } catch (err) {
+      resourcesItems.value.splice(targetIndex, 0, removedItem)
+      const message = err?.message || '操作失败，请稍后重试'
+      showToast(message)
+    }
+  }
+}
+
+const onToggleCircleInterest = async (circle) => {
+  const circleCode = String(circle?.circleCode || '').trim()
+  if (!circleCode) return
+
+  const targetIndex = circlesItems.value.findIndex(item => item.circleCode === circleCode)
+
+  if (targetIndex >= 0) {
+    const removedItem = circlesItems.value[targetIndex]
+    circlesItems.value.splice(targetIndex, 1)
+
+    try {
+      await toggleCircleCollection(circleCode, false)
+      showToast('已取消收藏')
+    } catch (err) {
+      circlesItems.value.splice(targetIndex, 0, removedItem)
+      const message = err?.message || '操作失败，请稍后重试'
+      showToast(message)
+    }
   }
 }
 
@@ -388,6 +715,42 @@ onShow(() => {
 
 .search-bar {
   padding: 16rpx 24rpx;
+}
+
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 32rpx;
+  padding: 0 24rpx 16rpx;
+}
+
+.tab-item {
+  position: relative;
+  padding: 8rpx 0;
+  cursor: pointer;
+}
+
+.tab-label {
+  font-size: 28rpx;
+  color: #64748b;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.tab-item-active .tab-label {
+  color: #1a57db;
+  font-weight: 600;
+}
+
+.tab-item-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4rpx;
+  background: #1a57db;
+  border-radius: 2rpx;
 }
 
 .search-input-wrap {
@@ -461,7 +824,7 @@ onShow(() => {
 }
 
 .content-scroll {
-  height: calc(100vh - 88rpx - 104rpx);
+  height: calc(100vh - 88rpx - 104rpx - 68rpx);
 }
 
 .following-list {
@@ -528,6 +891,7 @@ onShow(() => {
   0% {
     background-position: 200% 0;
   }
+
   100% {
     background-position: -200% 0;
   }
@@ -727,11 +1091,11 @@ onShow(() => {
   top: 28rpx;
   right: 28rpx;
   flex-shrink: 0;
-  height: 56rpx;
-  padding: 0 20rpx;
+  height: 40rpx;
+  padding: 0 10rpx;
   background: rgba(26, 87, 219, 0.08);
-  border: 1rpx solid rgba(26, 87, 219, 0.2);
-  border-radius: 20rpx;
+  /* border: 1rpx solid rgba(26, 87, 219, 0.2); */
+  border-radius: 10rpx;
   display: flex;
   align-items: center;
   gap: 6rpx;
@@ -802,6 +1166,7 @@ onShow(() => {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -819,6 +1184,7 @@ onShow(() => {
   from {
     transform: translateY(100%);
   }
+
   to {
     transform: translateY(0);
   }
@@ -953,6 +1319,18 @@ onShow(() => {
 
   .sheet-btn-text {
     color: #cbd5e1;
+  }
+
+  .tab-label {
+    color: #94a3b8;
+  }
+
+  .tab-item-active .tab-label {
+    color: #3b82f6;
+  }
+
+  .tab-item-active::after {
+    background: #3b82f6;
   }
 }
 </style>

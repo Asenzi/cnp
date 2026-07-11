@@ -109,9 +109,9 @@ onMounted(() => {
 <template>
   <div class="space-y-4 p-5">
     <div class="space-y-1">
-      <h1 class="text-2xl font-semibold text-slate-900">用户管理</h1>
+      <h1 class="text-2xl font-semibold text-slate-900">人员管理</h1>
       <p class="text-sm text-slate-500">
-        统一管理用户状态、认证标记和账号基础信息。
+        统一管理人员账号状态、认证标记和基础信息。
       </p>
     </div>
 

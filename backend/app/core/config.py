@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     WECHAT_CODE2SESSION_URL: str = Field(
         default='https://api.weixin.qq.com/sns/jscode2session'
     )
+    WECHAT_CONTENT_SECURITY_ENABLED: bool = Field(default=True)
+    PRODUCT_SAFETY_ENABLED: bool = Field(default=True)
+    PRODUCT_SAFETY_REQUIRE_IMS: bool = Field(default=False)
+    PRODUCT_SAFETY_IMS_URL: str = Field(default="")
+    PRODUCT_SAFETY_IMS_TOKEN: str = Field(default="")
+    PRODUCT_SAFETY_NEW_USER_PROTECTION_HOURS: int = Field(default=24)
     WECHAT_PAY_ENABLED: bool = Field(default=False)
     WECHAT_PAY_APP_ID: str = Field(default='')
     WECHAT_PAY_MCH_ID: str = Field(default='')
@@ -65,7 +71,25 @@ class Settings(BaseSettings):
     WECHAT_PAY_REFUND_URL: str = Field(default='https://api.mch.weixin.qq.com/secapi/pay/refund')
     WECHAT_PAY_CERT_PATH: str = Field(default='')
     WECHAT_PAY_KEY_PATH: str = Field(default='')
-    DEFAULT_AVATAR_URL: str = Field(default='/static/logo.png')
+    WECHAT_PAY_PROFIT_SHARING_ENABLED: bool = Field(default=False)
+    WECHAT_PAY_PROFIT_SHARING_ADD_RECEIVER_URL: str = Field(
+        default='https://api.mch.weixin.qq.com/pay/profitsharingaddreceiver'
+    )
+    WECHAT_PAY_PROFIT_SHARING_URL: str = Field(
+        default='https://api.mch.weixin.qq.com/secapi/pay/profitsharing'
+    )
+    WECHAT_VIRTUAL_PAY_ENABLED: bool = Field(default=False)
+    WECHAT_VIRTUAL_PAY_OFFER_ID: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_APP_KEY: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_ENV: int = Field(default=0)
+    WECHAT_VIRTUAL_PAY_MODE: str = Field(default='short_series_goods')
+    WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_YEARLY: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_QUARTERLY: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_MONTHLY: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_OWNER: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_JOIN: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_CIRCLE_JOIN_PRODUCT_IDS: str = Field(default='')
+    DEFAULT_AVATAR_URL: str = Field(default='https://cpn-1422327087.cos.ap-guangzhou.myqcloud.com/static/logo.png')
     VERIFICATION_AUTO_APPROVE: bool = Field(default=False)
     VERIFICATION_DATA_SECRET: str = Field(default="")
     TENCENT_CLOUD_SECRET_ID: str = Field(default='')
@@ -83,7 +107,18 @@ class Settings(BaseSettings):
     # 腾讯地图 WebService API Key
     QQ_MAP_KEY: str = Field(default='')
 
-    @field_validator('DEBUG', 'REDIS_ENABLED', 'VERIFICATION_AUTO_APPROVE', 'WECHAT_PAY_ENABLED', mode='before')
+    @field_validator(
+        'DEBUG',
+        'REDIS_ENABLED',
+        'VERIFICATION_AUTO_APPROVE',
+        'WECHAT_PAY_ENABLED',
+        'WECHAT_CONTENT_SECURITY_ENABLED',
+        'PRODUCT_SAFETY_ENABLED',
+        'PRODUCT_SAFETY_REQUIRE_IMS',
+        'WECHAT_PAY_PROFIT_SHARING_ENABLED',
+        'WECHAT_VIRTUAL_PAY_ENABLED',
+        mode='before',
+    )
     @classmethod
     def parse_bool_value(cls, value):  # noqa: ANN206
         if isinstance(value, bool):

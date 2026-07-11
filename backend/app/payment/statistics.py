@@ -1,7 +1,7 @@
 """订单统计服务"""
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import and_, func, select
@@ -13,7 +13,7 @@ from app.models.wallet_recharge_order import WalletRechargeOrder
 
 
 def _utc_now_naive() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def get_payment_statistics(
@@ -53,7 +53,7 @@ def get_payment_statistics(
     member_count = int(member_result.count or 0) if member_result else 0
     member_amount = Decimal(str(member_result.total_amount or 0)) if member_result else Decimal("0.00")
 
-    # 钱包充值统计
+    # 历史充值统计，仅用于财务/审计回溯，不再作为前台储值产品展示。
     wallet_stmt = select(
         func.count(WalletRechargeOrder.id).label("count"),
         func.sum(WalletRechargeOrder.amount).label("total_amount"),
@@ -114,7 +114,7 @@ def get_user_payment_summary(db: Session, *, user_pk: int) -> dict:
     member_count = int(member_result.count or 0) if member_result else 0
     member_amount = Decimal(str(member_result.total_amount or 0)) if member_result else Decimal("0.00")
 
-    # 钱包充值统计
+    # 历史充值统计，仅用于财务/审计回溯，不再作为前台储值产品展示。
     wallet_stmt = select(
         func.count(WalletRechargeOrder.id).label("count"),
         func.sum(WalletRechargeOrder.amount).label("total_amount"),

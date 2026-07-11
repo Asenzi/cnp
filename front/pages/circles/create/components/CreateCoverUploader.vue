@@ -23,6 +23,7 @@ defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const CROP_RESULT_EVENT = 'circle-cover-image-cropped'
 
 const chooseCover = () => {
   uni.chooseImage({
@@ -32,10 +33,23 @@ const chooseCover = () => {
     success: (res) => {
       const tempPath = res?.tempFilePaths?.[0]
       if (tempPath) {
-        emit('update:modelValue', tempPath)
+        uni.$once(CROP_RESULT_EVENT, onCropConfirm)
+        uni.navigateTo({
+          url: `/pages/cropper/index?src=${encodeURIComponent(tempPath)}&event=${encodeURIComponent(CROP_RESULT_EVENT)}&ratioWidth=2&ratioHeight=1`,
+          fail: () => {
+            uni.$off(CROP_RESULT_EVENT, onCropConfirm)
+            uni.showToast({ title: '打开图片裁切失败', icon: 'none' })
+          }
+        })
       }
     }
   })
+}
+
+const onCropConfirm = (croppedPath) => {
+  if (croppedPath) {
+    emit('update:modelValue', croppedPath)
+  }
 }
 </script>
 
@@ -60,7 +74,7 @@ const chooseCover = () => {
   height: 330rpx;
   border-radius: 16rpx;
   overflow: hidden;
-  border: 2rpx dashed #cbd5e1;
+  /* border: 2rpx dashed #cbd5e1; */
   background: #e2e8f0;
 }
 

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from random import randint
 
 from sqlalchemy import select
@@ -31,7 +31,7 @@ def get_user_by_business_user_id(db: Session, business_user_id: str) -> User | N
 
 
 def _generate_business_user_id() -> str:
-    timestamp_tail = str(int(datetime.now(UTC).timestamp() * 1000))[-5:]
+    timestamp_tail = str(int(datetime.now(timezone.utc).timestamp() * 1000))[-5:]
     random_tail = f"{randint(0, 999):03d}"
     return f"{timestamp_tail}{random_tail}"
 
@@ -44,12 +44,14 @@ def create_user(
     intro: str | None = None,
     industry_code: str | None = None,
     industry_label: str | None = None,
+    city_name: str | None = None,
     company_name: str | None = None,
     show_contact: bool = False,
     business_user_id: str | None = None,
     is_verified: bool = False,
     wechat_openid: str | None = None,
     wechat_unionid: str | None = None,
+    wechat_session_key: str | None = None,
     wechat_bound_at: datetime | None = None,
     inviter_user_pk: int | None = None,
 ) -> User:
@@ -70,15 +72,18 @@ def create_user(
             phone=phone,
             wechat_openid=wechat_openid,
             wechat_unionid=wechat_unionid,
+            wechat_session_key=wechat_session_key,
             wechat_bound_at=wechat_bound_at,
             nickname=nickname,
             avatar_url=resolved_avatar_url,
             intro=intro,
             industry_code=industry_code,
             industry_label=industry_label,
+            city_name=city_name,
             company_name=company_name,
             show_contact=show_contact,
             is_verified=is_verified,
+            risk_level="L1",
             inviter_user_pk=int(inviter_user_pk) if inviter_user_pk else None,
         )
         db.add(user)
@@ -117,7 +122,7 @@ def create_user(
 
 
 def update_user_login_meta(db: Session, user: User, client_ip: str | None = None) -> User:
-    user.last_login_at = datetime.now(UTC).replace(tzinfo=None)
+    user.last_login_at = datetime.now(timezone.utc).replace(tzinfo=None)
     user.last_login_ip = client_ip
     db.add(user)
     db.commit()
@@ -144,10 +149,13 @@ def bind_wechat_identity(
     user: User,
     wechat_openid: str,
     wechat_unionid: str | None = None,
+    wechat_session_key: str | None = None,
 ) -> User:
     user.wechat_openid = wechat_openid
     user.wechat_unionid = wechat_unionid
-    user.wechat_bound_at = datetime.now(UTC).replace(tzinfo=None)
+    if wechat_session_key:
+        user.wechat_session_key = wechat_session_key
+    user.wechat_bound_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(user)
     db.commit()
     db.refresh(user)

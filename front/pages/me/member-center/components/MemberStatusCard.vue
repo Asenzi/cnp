@@ -35,7 +35,7 @@ defineProps({
   position: relative;
   overflow: hidden;
   border-radius: 24rpx;
-  padding: 40rpx 40rpx 40rpx 10rpx;
+  padding: 0rpx 40rpx 0rpx 10rpx;
   color: #111827;
   border: 0;
   box-shadow: none;
@@ -56,7 +56,7 @@ defineProps({
   position: relative;
   z-index: 1;
   display: flex;
-  justify-content: space-between;
+  /* justify-content: space-between; */
   align-items: flex-start;
   gap: 32rpx;
 }
@@ -129,5 +129,4 @@ defineProps({
   letter-spacing: 0.02em;
   font-family: var(--member-heading-font, 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
-
 </style>

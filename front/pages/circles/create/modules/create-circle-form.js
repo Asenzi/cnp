@@ -11,21 +11,3 @@ export const industryOptions = [
   '文化/创意',
   '其他'
 ]
-
-export const joinTypeOptions = [
-  // {
-  //   key: 'free',
-  //   title: '免费加入',
-  //   desc: '任何人均可直接进入圈子'
-  // }, // 第二版上线
-  {
-    key: 'paid',
-    title: '付费加入',
-    desc: '需支付一定金额后才能加入'
-  }
-  // {
-  //   key: 'review',
-  //   title: '审核加入',
-  //   desc: '管理员手动审批通过后加入'
-  // } // 第二版上线
-]

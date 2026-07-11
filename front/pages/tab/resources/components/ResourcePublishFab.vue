@@ -1,12 +1,12 @@
 <template>
-  <button class="fab-btn" hover-class="fab-btn-active" @tap="$emit('tap')">
+  <button class="fab-btn" hover-class="fab-btn-active" @tap.stop="emit('publish')">
     <view class="plus-horizontal"></view>
     <view class="plus-vertical"></view>
   </button>
 </template>
 
 <script setup>
-defineEmits(['tap'])
+const emit = defineEmits(['publish'])
 </script>
 
 <style scoped>

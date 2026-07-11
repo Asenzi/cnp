@@ -22,12 +22,20 @@ front/unpackage/
 # Scratch / temp folders in this workspace
 tmp-*/
 .playwright-mcp/
+.codex-logs/
+.codex-run/
+.codex/tmp/
+.codex/skills/deployment-database-safety/
+.codex/skills/friends-deploy/
 
 # Runtime uploads / local generated assets
 backend/static/uploads/
+backend/redis/
 
 # Local backup files
 *.backup*
+*.tgz
+*.zip
 * - 副本/
 
 # OS/editor noise

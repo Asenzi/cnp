@@ -22,6 +22,7 @@ class User(Base):
     )
     wechat_openid: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     wechat_unionid: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
+    wechat_session_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     wechat_bound_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     nickname: Mapped[str] = mapped_column(String(64), nullable=False)
     avatar_url: Mapped[str] = mapped_column(
@@ -29,7 +30,40 @@ class User(Base):
         nullable=False,
         server_default=text("'/static/logo.png'"),
     )
+    avatar_candidate_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_review_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    avatar_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    nickname_candidate: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nickname_review_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="approved",
+        server_default=text("'approved'"),
+    )
+    nickname_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     intro: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    intro_candidate: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    intro_review_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="approved",
+        server_default=text("'approved'"),
+    )
+    intro_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    risk_level: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        default="L0",
+        server_default=text("'L0'"),
+    )
+    profile_edit_blocked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    muted_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     industry_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     industry_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
     company_name: Mapped[str | None] = mapped_column(String(128), nullable=True)

@@ -38,7 +38,8 @@ export function resolveStatusTagType(status: null | string | undefined) {
     status === 'active' ||
     status === 'approved' ||
     status === 'paid' ||
-    status === 'auto_approved'
+    status === 'auto_approved' ||
+    status === 'success'
   ) {
     return 'success';
   }

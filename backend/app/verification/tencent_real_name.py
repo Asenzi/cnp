@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -12,7 +12,6 @@ from app.core.logger import logger
 from app.crud import (
     create_user_real_name_verification_session,
     get_user_real_name_profile,
-    get_user_real_name_profile_by_hash,
     get_user_real_name_verification_session_by_biz_token,
     set_user_real_name_profile_verified_at,
     set_user_verification_status,
@@ -83,10 +82,9 @@ def _assert_real_name_id_number_available(
     user_pk: int,
     id_number_hash: str,
 ) -> None:
-    existing_profile = get_user_real_name_profile_by_hash(db=db, id_number_hash=id_number_hash)
-    if existing_profile is None or int(existing_profile.user_pk) == int(user_pk):
-        return
-    raise BusinessException(message="该身份已绑定其他账号", code=4359, status_code=400)
+    # Product rule: the same ID card can be verified by multiple accounts.
+    # Keep this hook so call sites stay explicit about the policy.
+    return
 
 
 def start_tencent_real_name_verification(
@@ -237,7 +235,7 @@ def finish_tencent_real_name_verification(
 
     _assert_real_name_id_number_available(db=db, user_pk=int(user.id), id_number_hash=id_number_hash)
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     try:
         profile = upsert_user_real_name_profile(
             db=db,
@@ -267,8 +265,8 @@ def finish_tencent_real_name_verification(
         sync_user_verified_flag(db=db, user=user)
     except IntegrityError as exc:
         db.rollback()
-        logger.warning(f"Duplicate real-name identity binding detected. user_pk={user.id}, error={exc}")
-        raise BusinessException(message="该身份已绑定其他账号", code=4359, status_code=400) from exc
+        logger.warning(f"Real-name profile integrity error. user_pk={user.id}, error={exc}")
+        raise BusinessException(message="实名认证结果保存失败，请稍后重试", code=4366, status_code=400) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         logger.exception(f"Failed to complete Tencent real-name verification. user_pk={user.id}, error={exc}")

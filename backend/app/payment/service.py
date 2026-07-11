@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from secrets import token_hex
 
@@ -53,6 +54,7 @@ ORDER_STATUS_FAILED = "failed"
 PAY_CHANNEL_WALLET = "wallet"
 PAY_CHANNEL_MOCK = "mock"
 PAY_CHANNEL_WXPAY = "wxpay"
+PAY_CHANNEL_VIRTUAL = "virtualpay"
 
 CIRCLE_OWNER_PRODUCT_TYPE = "circle_owner"
 CIRCLE_OWNER_PLAN_ID = "circle_owner_lifetime"
@@ -146,8 +148,8 @@ DEFAULT_MEMBER_PLANS = [
 
 def ensure_default_payment_configs() -> None:
     default_rows: list[tuple[str, str, str]] = [
-        ("member.payment.default_channel", PAY_CHANNEL_WALLET, "会员订阅默认支付方式"),
-        ("member.payment.wallet_enabled", "1", "会员订阅是否启用钱包支付"),
+        ("member.payment.default_channel", PAY_CHANNEL_WXPAY, "会员订阅默认支付方式"),
+        ("member.payment.wallet_enabled", "0", "会员订阅是否启用钱包支付"),
         ("member.payment.mock_enabled", "1", "会员订阅是否启用模拟支付"),
         ("member.payment.wxpay_enabled", "1" if settings.WECHAT_PAY_ENABLED else "0", "会员订阅是否启用微信支付"),
         ("circle_owner.enabled", "1", "永久圈主商品是否启用"),
@@ -200,7 +202,7 @@ def ensure_default_payment_configs() -> None:
 
 
 def _utc_now_naive() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _to_decimal(value: object, default: Decimal) -> Decimal:
@@ -407,6 +409,19 @@ def _grant_circle_owner(db: Session, *, user_pk: int) -> bool:
     return already_owned
 
 
+def _require_yearly_member_for_circle_owner(db: Session, *, user_pk: int) -> None:
+    snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
+    plan_id = str(snapshot.get("plan_id") or snapshot.get("member_plan_id") or "").strip().lower()
+    if bool(snapshot.get("opened") or snapshot.get("is_member") or snapshot.get("member_opened")) and plan_id == "yearly":
+        return
+
+    raise BusinessException(
+        message="开通年度会员后才可购买圈主身份",
+        code=4520,
+        status_code=403,
+    )
+
+
 def _extract_contact_package_view_count(db: Session, *, order: MemberOrder) -> int:
     plan = get_contact_package_plan(db=db, plan_id=str(order.plan_id or "").strip(), include_disabled=True)
     if plan is not None:
@@ -458,26 +473,90 @@ def _resolve_member_plans(db: Session) -> list[dict]:
     return plans
 
 
+def _virtual_pay_config_ready() -> bool:
+    return bool(
+        settings.WECHAT_VIRTUAL_PAY_ENABLED
+        and str(settings.WECHAT_VIRTUAL_PAY_OFFER_ID or "").strip()
+        and str(settings.WECHAT_VIRTUAL_PAY_APP_KEY or "").strip()
+    )
+
+
+def _virtual_pay_product_id(plan_id: str) -> str:
+    normalized = str(plan_id or "").strip().lower()
+    mapping = {
+        "yearly": settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_YEARLY,
+        "quarterly": settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_QUARTERLY,
+        "monthly": settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_MONTHLY,
+        CIRCLE_OWNER_PLAN_ID: settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_OWNER,
+    }
+    product_id = str(mapping.get(normalized) or "").strip()
+    if not product_id:
+        raise BusinessException(message="小程序虚拟支付商品未配置", code=4528, status_code=500)
+    return product_id
+
+
+def build_virtual_payment_payload(
+    *,
+    session_key: str | None,
+    order_no: str,
+    amount_yuan: Decimal,
+    product_id: str,
+    attach: str | None = None,
+) -> dict:
+    if not _virtual_pay_config_ready():
+        raise BusinessException(message="小程序虚拟支付配置不完整", code=4520, status_code=500)
+    normalized_session_key = str(session_key or "").strip()
+    if not normalized_session_key:
+        raise BusinessException(message="微信登录态已过期，请重新登录后再支付", code=4515, status_code=400)
+
+    goods_price = int((Decimal(str(amount_yuan or 0)).quantize(Decimal("0.01")) * 100).to_integral_value())
+    if goods_price <= 0:
+        raise BusinessException(message="支付金额无效", code=4522, status_code=400)
+
+    sign_data = {
+        "attach": str(attach or order_no or "").strip(),
+        "buyQuantity": 1,
+        "currencyType": "CNY",
+        "env": int(settings.WECHAT_VIRTUAL_PAY_ENV or 0),
+        "goodsPrice": goods_price,
+        "offerId": str(settings.WECHAT_VIRTUAL_PAY_OFFER_ID or "").strip(),
+        "outTradeNo": str(order_no or "").strip(),
+        "productId": str(product_id or "").strip(),
+    }
+    sign_data_json = json.dumps(sign_data, ensure_ascii=False, separators=(",", ":"))
+    app_key = str(settings.WECHAT_VIRTUAL_PAY_APP_KEY or "").strip()
+    pay_sig = hmac.new(
+        key=app_key.encode("utf-8"),
+        msg=f"requestVirtualPayment&{sign_data_json}".encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    signature = hmac.new(
+        key=normalized_session_key.encode("utf-8"),
+        msg=sign_data_json.encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    return {
+        "mode": str(settings.WECHAT_VIRTUAL_PAY_MODE or "short_series_goods").strip() or "short_series_goods",
+        "signData": sign_data,
+        "signDataJson": sign_data_json,
+        "paySig": pay_sig,
+        "signature": signature,
+    }
+
+
 def _resolve_payment_options(db: Session) -> dict:
     config_values = _load_member_config_values(db=db)
-    wallet_enabled = _to_bool(config_values.get("member.payment.wallet_enabled"), True)
     mock_enabled = _to_bool(config_values.get("member.payment.mock_enabled"), True)
-    wxpay_enabled_by_config = _to_bool(config_values.get("member.payment.wxpay_enabled"), settings.WECHAT_PAY_ENABLED)
-    app_id_ready = bool(_resolve_pay_app_id())
-    merchant_ready = bool(str(settings.WECHAT_PAY_MCH_ID or "").strip() and str(settings.WECHAT_PAY_API_V2_KEY or "").strip())
-    wxpay_enabled = bool(wxpay_enabled_by_config and app_id_ready and merchant_ready)
-    default_channel = str(config_values.get("member.payment.default_channel") or PAY_CHANNEL_WALLET).strip().lower()
+    virtualpay_enabled = _virtual_pay_config_ready()
+    default_channel = str(config_values.get("member.payment.default_channel") or PAY_CHANNEL_VIRTUAL).strip().lower()
+    if default_channel == PAY_CHANNEL_WXPAY:
+        default_channel = PAY_CHANNEL_VIRTUAL
 
     channels = [
         {
-            "key": PAY_CHANNEL_WALLET,
-            "label": "钱包余额支付",
-            "enabled": wallet_enabled,
-        },
-        {
-            "key": PAY_CHANNEL_WXPAY,
-            "label": "微信支付",
-            "enabled": wxpay_enabled,
+            "key": PAY_CHANNEL_VIRTUAL,
+            "label": "小程序虚拟支付",
+            "enabled": virtualpay_enabled,
         },
         {
             "key": PAY_CHANNEL_MOCK,
@@ -487,8 +566,11 @@ def _resolve_payment_options(db: Session) -> dict:
     ]
     enabled_channels = [item["key"] for item in channels if item["enabled"]]
     if not enabled_channels:
-        channels[0]["enabled"] = True
-        enabled_channels = [PAY_CHANNEL_WALLET]
+        for item in channels:
+            if item["key"] == PAY_CHANNEL_MOCK:
+                item["enabled"] = True
+                break
+        enabled_channels = [PAY_CHANNEL_MOCK]
 
     if default_channel not in enabled_channels:
         default_channel = enabled_channels[0]
@@ -568,6 +650,7 @@ def _prepare_wxpay_params(
     plan_name: str,
     client_ip: str,
     notify_url: str,
+    profit_sharing: bool = False,
 ) -> dict:
     app_id = _resolve_pay_app_id()
     mch_id = str(settings.WECHAT_PAY_MCH_ID or "").strip()
@@ -595,6 +678,8 @@ def _prepare_wxpay_params(
         "trade_type": "JSAPI",
         "openid": str(user_openid).strip(),
     }
+    if profit_sharing:
+        req_params["profit_sharing"] = "Y"
     req_params["sign"] = _sign_wechat_v2(req_params, api_key=api_key)
     req_xml = _dict_to_xml(req_params).encode("utf-8")
 
@@ -633,7 +718,7 @@ def _prepare_wxpay_params(
         raise BusinessException(message="微信支付预下单失败（缺少 prepay_id）", code=4527, status_code=502)
 
     pay_nonce_str = _generate_nonce(24)
-    time_stamp = str(int(datetime.now(UTC).timestamp()))
+    time_stamp = str(int(datetime.now(timezone.utc).timestamp()))
     client_pay_params = {
         "appId": app_id,
         "timeStamp": time_stamp,
@@ -840,11 +925,13 @@ def get_circle_owner_overview(db: Session, *, user_pk: int) -> dict:
     )
     price = _to_decimal(plan.get("price"), Decimal("0.00"))
     original_price = _to_decimal(plan.get("original_price"), price)
+    member_snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
 
     return {
         "is_circle_owner": bool(user.is_circle_owner),
         "lifetime": True,
         "opened_at": paid_order.paid_at.isoformat() if paid_order and paid_order.paid_at else None,
+        "member": member_snapshot,
         "plan": {
             "id": str(plan["id"]),
             "name": str(plan["name"]),
@@ -955,6 +1042,8 @@ def subscribe_member_plan(
         payment_options = _resolve_payment_options(db=db)
         enabled_channels = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
         normalized_pay_channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
+        if normalized_pay_channel == PAY_CHANNEL_WALLET:
+            raise BusinessException(message="钱包余额支付已下线，请使用微信支付", code=4513, status_code=410)
         if normalized_pay_channel not in enabled_channels or not enabled_channels[normalized_pay_channel]:
             raise BusinessException(message="当前支付方式不可用", code=4513, status_code=400)
 
@@ -995,10 +1084,6 @@ def subscribe_member_plan(
         saved_amount = (original_amount - price_amount).quantize(Decimal("0.01"))
         wallet = ensure_user_wallet(db=db, user_pk=user_pk, default_balance=user.balance or 0)
         wallet_balance = Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))
-
-        # 余额支付不足时，自动降级到微信支付
-        if normalized_pay_channel == PAY_CHANNEL_WALLET and price_amount > wallet_balance:
-            normalized_pay_channel = PAY_CHANNEL_WXPAY
 
         now = _utc_now_naive()
         order_no = _generate_order_no()
@@ -1127,22 +1212,9 @@ def subscribe_member_plan(
                 "member_expire_date_text": snapshot["expire_date_text"],
             }
 
-        if normalized_pay_channel == PAY_CHANNEL_WXPAY:
-            if not enabled_channels.get(PAY_CHANNEL_WXPAY):
-                raise BusinessException(message="微信支付未开启，请联系管理员配置", code=4518, status_code=400)
-            openid = str(user.wechat_openid or "").strip()
-            if not openid:
-                raise BusinessException(message="请先绑定微信账号后再发起微信支付", code=4515, status_code=400)
-
-            if request_base_url:
-                base = str(request_base_url).rstrip("/")
-                fallback_notify_url = f"{base}/api/v1/payment/wechat/notify"
-            else:
-                fallback_notify_url = ""
-            notify_url = str(settings.WECHAT_PAY_NOTIFY_URL or "").strip() or fallback_notify_url
-            if not notify_url:
-                raise BusinessException(message="微信支付回调地址未配置", code=4516, status_code=500)
-
+        if normalized_pay_channel in {PAY_CHANNEL_VIRTUAL, PAY_CHANNEL_WXPAY}:
+            if not enabled_channels.get(PAY_CHANNEL_VIRTUAL):
+                raise BusinessException(message="小程序虚拟支付未开启，请联系管理员配置", code=4518, status_code=400)
             points_status = POINTS_STATUS_NONE
             if wants_points_discount and points_cost > 0:
                 reserve_points_for_member_order(
@@ -1154,13 +1226,12 @@ def subscribe_member_plan(
                 )
                 points_status = POINTS_STATUS_RESERVED
 
-            wxpay_params = _prepare_wxpay_params(
-                user_openid=openid,
+            virtual_payment = build_virtual_payment_payload(
+                session_key=getattr(user, "wechat_session_key", None),
                 order_no=order_no,
                 amount_yuan=price_amount,
-                plan_name=str(selected_plan["name"]),
-                client_ip=request_client_ip,
-                notify_url=notify_url,
+                product_id=_virtual_pay_product_id(str(selected_plan["id"])),
+                attach=json.dumps({"type": "member", "plan_id": str(selected_plan["id"])}, ensure_ascii=False),
             )
             order = MemberOrder(
                 order_no=order_no,
@@ -1174,16 +1245,16 @@ def subscribe_member_plan(
                 points_discount_rate=points_discount_rate,
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
-                pay_channel=PAY_CHANNEL_WXPAY,
+                pay_channel=PAY_CHANNEL_VIRTUAL,
                 status=ORDER_STATUS_PENDING,
-                remark="member subscribe by wxpay pending",
+                remark="member subscribe by virtual payment pending",
                 paid_at=None,
             )
             db.add(order)
             db.commit()
             db.refresh(order)
             return {
-                "action": "wxpay_required",
+                "action": "virtualpay_required",
                 "order_no": str(order.order_no),
                 "plan_id": str(order.plan_id),
                 "plan_name": str(order.plan_name),
@@ -1195,7 +1266,7 @@ def subscribe_member_plan(
                 "used_points_discount": bool(order.used_points_discount),
                 "points_status": str(order.points_status or POINTS_STATUS_NONE),
                 "need_confirm": True,
-                "wxpay": wxpay_params,
+                "virtual_payment": virtual_payment,
             }
 
         raise BusinessException(message="当前支付方式不支持", code=4517, status_code=400)
@@ -1255,9 +1326,14 @@ def subscribe_member_plan(
         if product_type == CIRCLE_OWNER_PRODUCT_TYPE and bool(user.is_circle_owner):
             raise BusinessException(message="您已经是永久圈主，无需重复购买", code=4529, status_code=409)
 
+        if product_type == CIRCLE_OWNER_PRODUCT_TYPE:
+            _require_yearly_member_for_circle_owner(db=db, user_pk=user_pk)
+
         payment_options = _resolve_payment_options(db=db)
         enabled_channels = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
         normalized_pay_channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
+        if normalized_pay_channel == PAY_CHANNEL_WALLET:
+            raise BusinessException(message="钱包余额支付已下线，请使用微信支付", code=4513, status_code=410)
         if normalized_pay_channel not in enabled_channels or not enabled_channels[normalized_pay_channel]:
             raise BusinessException(message="当前支付方式不可用", code=4513, status_code=400)
 
@@ -1319,9 +1395,6 @@ def subscribe_member_plan(
 
         wallet = ensure_user_wallet(db=db, user_pk=user_pk, default_balance=user.balance or 0)
         wallet_balance = Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))
-        if normalized_pay_channel == PAY_CHANNEL_WALLET and price_amount > wallet_balance:
-            normalized_pay_channel = PAY_CHANNEL_WXPAY
-
         now = _utc_now_naive()
         order_no = _generate_order_no()
         package_remark = json.dumps(
@@ -1585,22 +1658,9 @@ def subscribe_member_plan(
                 "member_expire_date_text": snapshot["expire_date_text"],
             }
 
-        if normalized_pay_channel == PAY_CHANNEL_WXPAY:
-            if not enabled_channels.get(PAY_CHANNEL_WXPAY):
-                raise BusinessException(message="微信支付未开启，请联系管理员配置", code=4518, status_code=400)
-            openid = str(user.wechat_openid or "").strip()
-            if not openid:
-                raise BusinessException(message="请先绑定微信账号后再发起微信支付", code=4515, status_code=400)
-
-            if request_base_url:
-                base = str(request_base_url).rstrip("/")
-                fallback_notify_url = f"{base}/api/v1/payment/wechat/notify"
-            else:
-                fallback_notify_url = ""
-            notify_url = str(settings.WECHAT_PAY_NOTIFY_URL or "").strip() or fallback_notify_url
-            if not notify_url:
-                raise BusinessException(message="微信支付回调地址未配置", code=4516, status_code=500)
-
+        if normalized_pay_channel in {PAY_CHANNEL_VIRTUAL, PAY_CHANNEL_WXPAY}:
+            if not enabled_channels.get(PAY_CHANNEL_VIRTUAL):
+                raise BusinessException(message="小程序虚拟支付未开启，请联系管理员配置", code=4518, status_code=400)
             points_status = POINTS_STATUS_NONE
             if wants_points_discount and points_cost > 0:
                 reserve_points_for_member_order(
@@ -1612,13 +1672,12 @@ def subscribe_member_plan(
                 )
                 points_status = POINTS_STATUS_RESERVED
 
-            wxpay_params = _prepare_wxpay_params(
-                user_openid=openid,
+            virtual_payment = build_virtual_payment_payload(
+                session_key=getattr(user, "wechat_session_key", None),
                 order_no=order_no,
                 amount_yuan=price_amount,
-                plan_name=str(selected_plan["name"]),
-                client_ip=request_client_ip,
-                notify_url=notify_url,
+                product_id=_virtual_pay_product_id(str(selected_plan["id"])),
+                attach=json.dumps({"type": product_type, "plan_id": str(selected_plan["id"])}, ensure_ascii=False),
             )
             order = MemberOrder(
                 order_no=order_no,
@@ -1632,16 +1691,16 @@ def subscribe_member_plan(
                 points_discount_rate=points_discount_rate,
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
-                pay_channel=PAY_CHANNEL_WXPAY,
+                pay_channel=PAY_CHANNEL_VIRTUAL,
                 status=ORDER_STATUS_PENDING,
-                remark=package_remark if product_type != "member" else "member subscribe by wxpay pending",
+                remark=package_remark if product_type != "member" else "member subscribe by virtual payment pending",
                 paid_at=None,
             )
             db.add(order)
             db.commit()
             db.refresh(order)
             return {
-                "action": "wxpay_required",
+                "action": "virtualpay_required",
                 "product_type": product_type,
                 "order_no": str(order.order_no),
                 "plan_id": str(order.plan_id),
@@ -1655,7 +1714,7 @@ def subscribe_member_plan(
                 "points_status": str(order.points_status or POINTS_STATUS_NONE),
                 "need_confirm": True,
                 "granted_view_count": contact_package_view_count if product_type == CONTACT_PACKAGE_PRODUCT_TYPE else 0,
-                "wxpay": wxpay_params,
+                "virtual_payment": virtual_payment,
             }
 
         raise BusinessException(message="当前支付方式不支持", code=4517, status_code=400)

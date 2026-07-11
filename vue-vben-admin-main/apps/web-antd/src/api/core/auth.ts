@@ -8,9 +8,9 @@ export namespace AuthApi {
   }
 
   /** 登录接口返回值 */
-  export interface LoginResult {
-    accessToken: string;
-  }
+export interface LoginResult {
+  accessToken: string;
+}
 
   export interface RefreshTokenResult {
     data: string;
@@ -22,14 +22,21 @@ export namespace AuthApi {
  * 登录
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/auth/login', data);
+  const result = await requestClient.post<{
+    access_token?: string;
+    accessToken?: string;
+  }>('/v1/admin/auth/login', data);
+
+  return {
+    accessToken: result.accessToken || result.access_token || '',
+  };
 }
 
 /**
  * 刷新accessToken
  */
 export async function refreshTokenApi() {
-  return baseRequestClient.post<AuthApi.RefreshTokenResult>('/auth/refresh', {
+  return baseRequestClient.post<AuthApi.RefreshTokenResult>('/v1/admin/auth/refresh', {
     withCredentials: true,
   });
 }
@@ -38,14 +45,12 @@ export async function refreshTokenApi() {
  * 退出登录
  */
 export async function logoutApi() {
-  return baseRequestClient.post('/auth/logout', {
-    withCredentials: true,
-  });
+  return Promise.resolve();
 }
 
 /**
  * 获取用户权限码
  */
 export async function getAccessCodesApi() {
-  return requestClient.get<string[]>('/auth/codes');
+  return Promise.resolve(['AC_100100', 'AC_100110', 'AC_100120', 'AC_100010']);
 }
