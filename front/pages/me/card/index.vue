@@ -7,7 +7,7 @@
 
       <view v-else-if="loadError && !hasProfileData" class="status-wrap">
         <text class="status-text">{{ loadError }}</text>
-        <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryAll">閲嶆柊鍔犺浇</button>
+        <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryAll">重新加载</button>
       </view>
 
       <view v-else>
@@ -23,37 +23,37 @@
         </view>
 
         <view class="content-list-wrap" :class="{ 'content-list-wrap-with-bottom': showBottomActionBar }">
-          <template v-if="activeTab === 'feed'">
-            <view v-if="feedLoading && !hasFeedAny" class="section-status-wrap">
+          <template v-if="activeTab === 'created-circles'">
+            <view v-if="ownedCirclesLoading && !hasOwnedCircleAny" class="section-status-wrap">
               <text class="section-status-text">加载中...</text>
             </view>
-            <view v-else-if="feedError && !hasFeedAny" class="section-status-wrap">
-              <text class="section-status-text">{{ feedError }}</text>
-              <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryFeed">閲嶈瘯</button>
+            <view v-else-if="ownedCirclesError && !hasOwnedCircleAny" class="section-status-wrap">
+              <text class="section-status-text">{{ ownedCirclesError }}</text>
+              <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryOwnedCircles">重试</button>
             </view>
             <template v-else>
-              <ProfilePostCard v-for="item in feedPosts" :key="item.id" :item="item" @detail="onTapPostDetail" />
-              <view v-if="feedLoaded && !hasFeedAny" class="section-status-wrap section-empty-wrap">
+              <ProfileCircleCard v-for="item in ownedCircles" :key="item.id" :item="item" @enter="onEnterCircle" />
+              <view v-if="ownedCirclesLoaded && !hasOwnedCircleAny" class="section-status-wrap section-empty-wrap">
                 <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png"
                   mode="aspectFit" />
-                <text class="section-status-text section-empty-text">暂无动态资源</text>
+                <text class="section-status-text section-empty-text">暂无创建的圈子</text>
               </view>
-              <view v-if="feedLoadingMore" class="load-more-wrap">
+              <view v-if="ownedCirclesLoadingMore" class="load-more-wrap">
                 <text class="load-more-text">加载中...</text>
               </view>
-              <view v-else-if="feedHasMore && hasFeedAny" class="load-more-wrap">
+              <view v-else-if="ownedCirclesHasMore && hasOwnedCircleAny" class="load-more-wrap">
                 <text class="load-more-text">上拉加载更多</text>
               </view>
             </template>
           </template>
 
-          <template v-else>
+          <template v-else-if="activeTab === 'joined-circles'">
             <view v-if="circlesLoading && !hasCircleAny" class="section-status-wrap">
               <text class="section-status-text">加载中...</text>
             </view>
             <view v-else-if="circlesError && !hasCircleAny" class="section-status-wrap">
               <text class="section-status-text">{{ circlesError }}</text>
-              <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryCircles">閲嶈瘯</button>
+              <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryCircles">重试</button>
             </view>
             <template v-else>
               <ProfileCircleCard v-for="item in joinedCircles" :key="item.id" :item="item" @enter="onEnterCircle" />
@@ -70,6 +70,30 @@
               </view>
             </template>
           </template>
+
+          <template v-else>
+            <view v-if="feedLoading && !hasFeedAny" class="section-status-wrap">
+              <text class="section-status-text">加载中...</text>
+            </view>
+            <view v-else-if="feedError && !hasFeedAny" class="section-status-wrap">
+              <text class="section-status-text">{{ feedError }}</text>
+              <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryFeed">重试</button>
+            </view>
+            <template v-else>
+              <ProfilePostCard v-for="item in feedPosts" :key="item.id" :item="item" @detail="onTapPostDetail" />
+              <view v-if="feedLoaded && !hasFeedAny" class="section-status-wrap section-empty-wrap">
+                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png"
+                  mode="aspectFit" />
+                <text class="section-status-text section-empty-text">暂无发布的资源</text>
+              </view>
+              <view v-if="feedLoadingMore" class="load-more-wrap">
+                <text class="load-more-text">加载中...</text>
+              </view>
+              <view v-else-if="feedHasMore && hasFeedAny" class="load-more-wrap">
+                <text class="load-more-text">上拉加载更多</text>
+              </view>
+            </template>
+          </template>
         </view>
 
       </view>
@@ -81,7 +105,7 @@
         创建名片
       </button>
       <template v-else>
-        <button class="action-btn action-btn-danger" hover-class="action-btn-active" @tap="onReportProfile">
+        <button v-if="false" class="action-btn action-btn-danger" hover-class="action-btn-active" @tap="onReportProfile">
           举报
         </button>
         <button class="action-btn action-btn-secondary" hover-class="action-btn-active" open-type="share">
@@ -111,7 +135,7 @@
           <button class="share-menu-item" hover-class="share-menu-item-hover" @tap="onTapFollowFromMenu">
             <text class="share-menu-text">{{ isFollowing ? '取消关注' : '关注' }}</text>
           </button>
-          <button v-if="!isSelfProfile" class="share-menu-item share-menu-danger" hover-class="share-menu-item-hover" @tap="onReportProfile">
+          <button v-if="false" class="share-menu-item share-menu-danger" hover-class="share-menu-item-hover" @tap="onReportProfile">
             <text class="share-menu-text share-menu-danger-text">举报资料</text>
           </button>
         </view>
@@ -123,10 +147,10 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom, onShareAppMessage, onShow } from '@dcloudio/uni-app'
-import { getMyCircles, getUserCircles } from '../../../api/circle'
+import { getMyCircles, getOwnedCircles, getUserCircles, getUserOwnedCircles } from '../../../api/circle'
 import { toggleUserFollow, toggleUserInterest } from '../../../api/network'
 import { getMyResourceFeed, getUserResourceFeed } from '../../../api/post'
-import { createContentReport, getCurrentUserProfile, getUserProfileById } from '../../../api/user'
+import { getCurrentUserProfile, getUserProfileById } from '../../../api/user'
 import { generateProfileShareImage } from '../../../utils/profile-share-image'
 import ProfileBioSection from './components/ProfileBioSection.vue'
 import ProfileCircleCard from './components/ProfileCircleCard.vue'
@@ -146,7 +170,7 @@ const PAGE_SIZE = 20
 const loading = ref(false)
 const loadError = ref('')
 const pageData = ref(resolveProfileHomeData({}, { posts: [], circles: [] }))
-const activeTab = ref('feed')
+const activeTab = ref('created-circles')
 const targetUserId = ref('')
 const rawProfile = ref({})
 const shareImageUrl = ref('') // 缓存分享图片
@@ -161,6 +185,14 @@ const feedLoading = ref(false)
 const feedLoadingMore = ref(false)
 const feedLoaded = ref(false)
 const feedError = ref('')
+
+const ownedCircles = ref([])
+const ownedCirclesTotal = ref(0)
+const ownedCirclesHasMore = ref(true)
+const ownedCirclesLoading = ref(false)
+const ownedCirclesLoadingMore = ref(false)
+const ownedCirclesLoaded = ref(false)
+const ownedCirclesError = ref('')
 
 const joinedCircles = ref([])
 const circlesTotal = ref(0)
@@ -284,6 +316,7 @@ const updateNavigationTitle = () => {
 
 const hasProfileData = computed(() => Boolean(String(rawProfile.value?.user_id || '').trim()))
 const hasFeedAny = computed(() => feedPosts.value.length > 0)
+const hasOwnedCircleAny = computed(() => ownedCircles.value.length > 0)
 const hasCircleAny = computed(() => joinedCircles.value.length > 0)
 const isFollowing = computed(() => Boolean(rawProfile.value?.is_following || rawProfile.value?.followed))
 const isNetworkCollected = computed(() => Boolean(rawProfile.value?.is_interested || rawProfile.value?.interested))
@@ -340,7 +373,10 @@ const contactSectionData = computed(() => {
     contactVisible: isSelf ? selfHasContact : (maskSensitive ? false : Boolean(rawProfile.value?.contact_visible)),
     contactLockedReason: isSelf
       ? (selfHasContact ? '' : '你还未完善展示手机号、微信号或邮箱')
-      : (maskSensitive ? '开通会员即可查看联系方式' : String(rawProfile.value?.contact_locked_reason || '').trim()),
+      : (maskSensitive
+        ? (isLoggedIn.value ? '开通会员即可查看联系方式' : '创建名片并开通会员后可见')
+        : String(rawProfile.value?.contact_locked_reason || '').trim()),
+    targetHasContact: rawProfile.value?.target_has_contact,
     isSelf
   }
 })
@@ -348,10 +384,16 @@ const contactSectionData = computed(() => {
 const syncPageData = () => {
   pageData.value = resolveProfileHomeData(rawProfile.value || {}, {
     posts: feedPosts.value,
-    circles: joinedCircles.value,
+    circles: [...ownedCircles.value, ...joinedCircles.value],
     locationLine: buildProfileLocationLine(rawProfile.value || {}),
     resourceCount: Number(feedTotal.value || feedPosts.value.length || 0),
-    circleCount: Number(circlesTotal.value || rawProfile.value?.circle_count || joinedCircles.value.length || 0)
+    circleCount: Number(
+      ownedCirclesTotal.value
+      + circlesTotal.value
+      || rawProfile.value?.circle_count
+      || ownedCircles.value.length + joinedCircles.value.length
+      || 0
+    )
   })
 }
 
@@ -463,6 +505,74 @@ const fetchProfileFeed = async (reset = false) => {
   }
 }
 
+const fetchOwnedCircles = async (reset = false) => {
+  const target = String(targetUserId.value || '').trim()
+  if (!target && !ensureLogin()) {
+    return
+  }
+  if (ownedCirclesLoading.value || ownedCirclesLoadingMore.value) {
+    return
+  }
+  if (!reset && !ownedCirclesHasMore.value) {
+    return
+  }
+
+  const nextOffset = reset ? 0 : ownedCircles.value.length
+  if (reset) {
+    ownedCirclesLoading.value = true
+    ownedCirclesError.value = ''
+  } else {
+    ownedCirclesLoadingMore.value = true
+  }
+
+  try {
+    const payload = target
+      ? await getUserOwnedCircles(target, {
+        offset: nextOffset,
+        limit: PAGE_SIZE
+      })
+      : await getOwnedCircles({
+        offset: nextOffset,
+        limit: PAGE_SIZE
+      })
+
+    const incoming = Array.isArray(payload?.items) ? payload.items.map((item) => mapProfileCircleItem(item)) : []
+    if (reset) {
+      ownedCircles.value = incoming
+    } else {
+      const existed = new Set(ownedCircles.value.map((item) => item.id))
+      const appended = incoming.filter((item) => !existed.has(item.id))
+      ownedCircles.value = [...ownedCircles.value, ...appended]
+    }
+
+    const serverTotal = Number(payload?.total)
+    ownedCirclesTotal.value = Number.isFinite(serverTotal)
+      ? Math.max(serverTotal, ownedCircles.value.length)
+      : ownedCircles.value.length
+    ownedCirclesHasMore.value = Boolean(payload?.has_more) && ownedCircles.value.length < ownedCirclesTotal.value
+    ownedCirclesLoaded.value = true
+    ownedCirclesError.value = ''
+    syncPageData()
+  } catch (err) {
+    const statusCode = Number(err?.statusCode || 0)
+    if (statusCode === 401) {
+      clearLoginState()
+      if (!target) {
+        ownedCirclesError.value = '请先登录查看自己创建的圈子'
+      }
+      return
+    }
+    const message = err?.message || '创建的圈子加载失败，请稍后重试'
+    if (reset && !hasOwnedCircleAny.value) {
+      ownedCirclesError.value = message
+    }
+    showToast(message)
+  } finally {
+    ownedCirclesLoading.value = false
+    ownedCirclesLoadingMore.value = false
+  }
+}
+
 const fetchJoinedCircles = async (reset = false) => {
   const target = String(targetUserId.value || '').trim()
   if (!target && !ensureLogin()) {
@@ -536,16 +646,19 @@ const loadAllData = async () => {
   if (loadError.value) {
     return
   }
-  await Promise.all([fetchProfileFeed(true), fetchJoinedCircles(true)])
+  await Promise.all([fetchOwnedCircles(true), fetchJoinedCircles(true), fetchProfileFeed(true)])
 }
 
 const onSwitchTab = async (tabKey) => {
-  activeTab.value = tabKey || 'feed'
+  activeTab.value = tabKey || 'created-circles'
+  if (activeTab.value === 'created-circles' && !ownedCirclesLoaded.value) {
+    await fetchOwnedCircles(true)
+  }
+  if (activeTab.value === 'joined-circles' && !circlesLoaded.value) {
+    await fetchJoinedCircles(true)
+  }
   if (activeTab.value === 'feed' && !feedLoaded.value) {
     await fetchProfileFeed(true)
-  }
-  if (activeTab.value === 'circles' && !circlesLoaded.value) {
-    await fetchJoinedCircles(true)
   }
 }
 
@@ -577,6 +690,10 @@ const onRetryAll = () => {
 
 const onRetryFeed = () => {
   fetchProfileFeed(true)
+}
+
+const onRetryOwnedCircles = () => {
+  fetchOwnedCircles(true)
 }
 
 const onRetryCircles = () => {
@@ -645,31 +762,7 @@ const onTapFollowFromMenu = async () => {
 
 const onReportProfile = () => {
   onCloseShareMenu()
-  const target = String(targetUserId.value || rawProfile.value?.user_id || rawProfile.value?.userId || '').trim()
-  if (!target) {
-    showToast('用户信息缺失')
-    return
-  }
-  if (!isLoggedIn.value) {
-    onLoginToCreateCard()
-    return
-  }
-  uni.showActionSheet({
-    itemList: ['色情低俗头像/资料', '广告引流或诈骗', '冒充他人', '其他违规'],
-    success: async (res) => {
-      const reasons = ['色情低俗头像/资料', '广告引流或诈骗', '冒充他人', '其他违规']
-      try {
-        await createContentReport({
-          target_type: 'profile',
-          target_id: target,
-          reason: reasons[Number(res.tapIndex || 0)] || '其他违规'
-        })
-        showToast('举报已提交')
-      } catch (err) {
-        showToast(err?.message || '举报失败，请稍后重试')
-      }
-    }
-  })
+  showToast('举报功能暂未开放')
 }
 
 const onToggleFollow = async () => {
@@ -812,11 +905,15 @@ onPullDownRefresh(async () => {
 })
 
 onReachBottom(() => {
-  if (activeTab.value === 'feed') {
-    fetchProfileFeed(false)
+  if (activeTab.value === 'created-circles') {
+    fetchOwnedCircles(false)
     return
   }
-  fetchJoinedCircles(false)
+  if (activeTab.value === 'joined-circles') {
+    fetchJoinedCircles(false)
+    return
+  }
+  fetchProfileFeed(false)
 })
 </script>
 
@@ -845,12 +942,12 @@ onReachBottom(() => {
   z-index: 50;
   width: 100%;
   box-sizing: border-box;
-  background: #ffffff;
-  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.05);
+  /* background: #ffffff; */
+  /* box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.05); */
 }
 
 .tab-divider {
-  height: 12rpx;
+  height: 2rpx;
   background: #eef2f7;
 }
 

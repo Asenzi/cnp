@@ -25,11 +25,6 @@
           @update:price="form.price = normalizePrice($event)"
         />
 
-        <CreateRulesCard
-          :rules="form.rules"
-          @update:rules="form.rules = $event"
-        />
-
         <CreateBottomAction :loading="submitting" :text="submitButtonText" @submit="onSubmit" />
       </view>
     </scroll-view>
@@ -53,7 +48,6 @@ import CreateBasicInfoCard from './components/CreateBasicInfoCard.vue'
 import CreateBottomAction from './components/CreateBottomAction.vue'
 import CreateCoverUploader from './components/CreateCoverUploader.vue'
 import CreateJoinMechanismCard from './components/CreateJoinMechanismCard.vue'
-import CreateRulesCard from './components/CreateRulesCard.vue'
 import IndustryPickerPanel from './components/IndustryPickerPanel.vue'
 import {
   defaultCircleAvatar,
@@ -70,8 +64,7 @@ const form = reactive({
   industry: '',
   description: '',
   joinType: 'paid',
-  price: '98',
-  rules: ''
+  price: '98'
 })
 const currentUser = ref({})
 const joinPriceTiers = [98, 198, 398, 598, 980, 1980, 3980, 5980, 9980]
@@ -254,8 +247,7 @@ const onSubmit = async () => {
       cover_url: finalCoverUrl,
       avatar_url: finalAvatarUrl,
       join_type: 'paid',
-      join_price: Number(form.price || 0),
-      rules_text: String(form.rules || '').trim() || null
+      join_price: Number(form.price || 0)
     }
 
     const created = await createCircle(payload)

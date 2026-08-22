@@ -223,8 +223,7 @@ const hasActiveFilter = computed(() => Boolean(selectedIndustry.value))
 const sortLabel = computed(() => (sortKey.value === 'latest' ? '最新' : '热门'))
 
 const resourceLeftTabs = computed(() => [
-  { key: 'cooperate', label: '需求' },
-  { key: 'venue', label: '活动' }
+  { key: 'cooperate', label: '需求' }
 ])
 
 const resourceRightControls = computed(() => [
@@ -515,7 +514,7 @@ const fetchFeed = async (reset = false) => {
 
 const onChangeFilter = (key) => {
   const nextMode = String(key || '').trim()
-  activeMode.value = ['resource', 'venue'].includes(nextMode) ? nextMode : 'cooperate'
+  activeMode.value = ['resource', 'cooperate'].includes(nextMode) ? nextMode : 'cooperate'
   fetchFeed(true)
 }
 

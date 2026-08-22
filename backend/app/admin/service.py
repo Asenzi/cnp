@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, aliased
@@ -13,19 +14,26 @@ from app.core.exceptions import BusinessException
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.admin_user import AdminUser
 from app.models.circle import Circle
+from app.models.member_order import MemberOrder
 from app.models.resource_post import ResourcePost
+from app.models.split_transaction import SplitTransaction
 from app.models.sys_config import SysConfig
 from app.models.system_notice import SystemNotice
 from app.models.user import User
 from app.models.user_verification import UserVerification
 from app.models.wallet_recharge_order import WalletRechargeOrder
 from app.payment.contact_package import (
+    CONTACT_PACKAGE_PLAN_ID_PREFIX,
+    LEGACY_CONTACT_PACKAGE_PLAN_ID_PREFIX,
     get_admin_contact_package_config as get_contact_package_admin_config,
     save_admin_contact_package_config as save_contact_package_admin_config,
 )
+from app.payment.service import CIRCLE_OWNER_PLAN_ID
 from app.schemas.admin import AdminLoginResponse, AdminProfile
 
 ADMIN_JWT_SCOPE = "admin"
+REVENUE_PERIODS = {"day", "week", "month", "quarter", "year"}
+ADMIN_REPORT_TZ = ZoneInfo("Asia/Shanghai")
 
 
 def _normalize_text(value: str | None) -> str:
@@ -53,6 +61,63 @@ def _serialize_decimal(value: Decimal | int | float | None) -> float:
     if value is None:
         return 0.0
     return float(value)
+
+
+def _revenue_range(period: str) -> tuple[datetime, datetime]:
+    now = datetime.now(ADMIN_REPORT_TZ)
+    safe_period = period if period in REVENUE_PERIODS else "day"
+    days = {
+        "day": 1,
+        "week": 7,
+        "month": 30,
+        "quarter": 90,
+        "year": 365,
+    }[safe_period]
+    start = now - timedelta(days=days)
+    return (
+        start.astimezone(timezone.utc).replace(tzinfo=None),
+        now.astimezone(timezone.utc).replace(tzinfo=None),
+    )
+
+
+def _sum_paid_member_orders(
+    db: Session,
+    *,
+    plan_kind: str,
+    start_at: datetime,
+    end_at: datetime,
+) -> tuple[int, float]:
+    conditions = [
+        MemberOrder.status == "paid",
+        MemberOrder.paid_at >= start_at,
+        MemberOrder.paid_at < end_at,
+    ]
+    if plan_kind == "circle_owner":
+        conditions.append(MemberOrder.plan_id == CIRCLE_OWNER_PLAN_ID)
+    else:
+        conditions.extend(
+            [
+                MemberOrder.plan_id != CIRCLE_OWNER_PLAN_ID,
+                ~MemberOrder.plan_id.like(f"{CONTACT_PACKAGE_PLAN_ID_PREFIX}%"),
+                ~MemberOrder.plan_id.like(f"{LEGACY_CONTACT_PACKAGE_PLAN_ID_PREFIX}%"),
+            ]
+        )
+    count_value, amount_value = db.execute(
+        select(func.count(MemberOrder.id), func.coalesce(func.sum(MemberOrder.amount), 0)).where(*conditions)
+    ).one()
+    return int(count_value or 0), _serialize_decimal(amount_value)
+
+
+def _sum_circle_join_platform_fee(db: Session, *, start_at: datetime, end_at: datetime) -> tuple[int, float]:
+    count_value, amount_value = db.execute(
+        select(func.count(SplitTransaction.id), func.coalesce(func.sum(SplitTransaction.platform_fee), 0)).where(
+            SplitTransaction.biz_type == "circle_join",
+            SplitTransaction.split_status.notin_(["cancelled", "returned"]),
+            SplitTransaction.created_at >= start_at,
+            SplitTransaction.created_at < end_at,
+        )
+    ).one()
+    return int(count_value or 0), _serialize_decimal(amount_value)
 
 
 def _serialize_admin_profile(admin: AdminUser) -> AdminProfile:
@@ -144,7 +209,7 @@ def get_admin_profile_data(admin: AdminUser) -> dict[str, Any]:
     return payload
 
 
-def get_admin_dashboard_overview(db: Session) -> dict[str, Any]:
+def get_admin_dashboard_overview(db: Session, *, revenue_period: str = "day") -> dict[str, Any]:
     user_total = int(db.execute(select(func.count(User.id))).scalar_one() or 0)
     active_user_total = int(db.execute(select(func.count(User.id)).where(User.is_active.is_(True))).scalar_one() or 0)
     verified_user_total = int(db.execute(select(func.count(User.id)).where(User.is_verified.is_(True))).scalar_one() or 0)
@@ -212,6 +277,24 @@ def get_admin_dashboard_overview(db: Session) -> dict[str, Any]:
         .order_by(WalletRechargeOrder.created_at.desc(), WalletRechargeOrder.id.desc())
         .limit(5)
     ).all()
+    revenue_start_at, revenue_end_at = _revenue_range(_normalize_lower(revenue_period))
+    member_order_count, member_order_amount = _sum_paid_member_orders(
+        db,
+        plan_kind="member",
+        start_at=revenue_start_at,
+        end_at=revenue_end_at,
+    )
+    circle_owner_order_count, circle_owner_amount = _sum_paid_member_orders(
+        db,
+        plan_kind="circle_owner",
+        start_at=revenue_start_at,
+        end_at=revenue_end_at,
+    )
+    circle_join_count, circle_join_fee = _sum_circle_join_platform_fee(
+        db,
+        start_at=revenue_start_at,
+        end_at=revenue_end_at,
+    )
 
     return {
         "summary": {
@@ -227,6 +310,18 @@ def get_admin_dashboard_overview(db: Session) -> dict[str, Any]:
             "pending_recharge_total": pending_recharge_total,
             "recharge_amount_total": recharge_amount_total,
             "notice_total": notice_total,
+        },
+        "revenue": {
+            "period": _normalize_lower(revenue_period) if _normalize_lower(revenue_period) in REVENUE_PERIODS else "day",
+            "start_at": _serialize_datetime(revenue_start_at),
+            "end_at": _serialize_datetime(revenue_end_at),
+            "total_amount": round(member_order_amount + circle_owner_amount + circle_join_fee, 2),
+            "member_amount": member_order_amount,
+            "member_count": member_order_count,
+            "circle_owner_amount": circle_owner_amount,
+            "circle_owner_count": circle_owner_order_count,
+            "circle_amount": circle_join_fee,
+            "circle_count": circle_join_count,
         },
         "recent_users": [
             {

@@ -148,10 +148,10 @@ DEFAULT_MEMBER_PLANS = [
 
 def ensure_default_payment_configs() -> None:
     default_rows: list[tuple[str, str, str]] = [
-        ("member.payment.default_channel", PAY_CHANNEL_WXPAY, "会员订阅默认支付方式"),
+        ("member.payment.default_channel", PAY_CHANNEL_VIRTUAL, "会员订阅默认支付方式"),
         ("member.payment.wallet_enabled", "0", "会员订阅是否启用钱包支付"),
-        ("member.payment.mock_enabled", "1", "会员订阅是否启用模拟支付"),
-        ("member.payment.wxpay_enabled", "1" if settings.WECHAT_PAY_ENABLED else "0", "会员订阅是否启用微信支付"),
+        ("member.payment.mock_enabled", "0", "会员订阅是否启用模拟支付"),
+        ("member.payment.wxpay_enabled", "0", "会员订阅是否启用微信支付"),
         ("circle_owner.enabled", "1", "永久圈主商品是否启用"),
         ("circle_owner.name", str(DEFAULT_CIRCLE_OWNER_PLAN["name"]), "永久圈主商品名称"),
         ("circle_owner.subtitle", str(DEFAULT_CIRCLE_OWNER_PLAN["subtitle"]), "永久圈主商品副标题"),
@@ -546,7 +546,11 @@ def build_virtual_payment_payload(
 
 def _resolve_payment_options(db: Session) -> dict:
     config_values = _load_member_config_values(db=db)
-    mock_enabled = _to_bool(config_values.get("member.payment.mock_enabled"), True)
+    app_env = str(settings.APP_ENV or "").strip().lower()
+    mock_enabled = bool(settings.DEBUG or app_env in {"dev", "local", "test", "testing"}) and _to_bool(
+        config_values.get("member.payment.mock_enabled"),
+        False,
+    )
     virtualpay_enabled = _virtual_pay_config_ready()
     default_channel = str(config_values.get("member.payment.default_channel") or PAY_CHANNEL_VIRTUAL).strip().lower()
     if default_channel == PAY_CHANNEL_WXPAY:
@@ -1043,7 +1047,7 @@ def subscribe_member_plan(
         enabled_channels = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
         normalized_pay_channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
         if normalized_pay_channel == PAY_CHANNEL_WALLET:
-            raise BusinessException(message="钱包余额支付已下线，请使用微信支付", code=4513, status_code=410)
+            raise BusinessException(message="钱包余额支付已下线，请使用小程序虚拟支付", code=4513, status_code=410)
         if normalized_pay_channel not in enabled_channels or not enabled_channels[normalized_pay_channel]:
             raise BusinessException(message="当前支付方式不可用", code=4513, status_code=400)
 
@@ -1333,7 +1337,7 @@ def subscribe_member_plan(
         enabled_channels = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
         normalized_pay_channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
         if normalized_pay_channel == PAY_CHANNEL_WALLET:
-            raise BusinessException(message="钱包余额支付已下线，请使用微信支付", code=4513, status_code=410)
+            raise BusinessException(message="钱包余额支付已下线，请使用小程序虚拟支付", code=4513, status_code=410)
         if normalized_pay_channel not in enabled_channels or not enabled_channels[normalized_pay_channel]:
             raise BusinessException(message="当前支付方式不可用", code=4513, status_code=400)
 

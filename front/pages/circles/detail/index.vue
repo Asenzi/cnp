@@ -2,9 +2,6 @@
   <view class="detail-page">
     <view class="content-wrap">
       <CircleDetailHero :detail="detail" />
-      <view class="section-gap">
-        <CircleNoticeCard :notice="detail.notice" @more="onMoreNotice" />
-      </view>
       <CircleOwnerCard :owner="detail.owner" />
 
       <view v-if="isOwner" class="owner-action-wrap">
@@ -82,7 +79,6 @@ import {
 import CircleBottomBar from './components/CircleBottomBar.vue'
 import CircleContentTabs from './components/CircleContentTabs.vue'
 import CircleDetailHero from './components/CircleDetailHero.vue'
-import CircleNoticeCard from './components/CircleNoticeCard.vue'
 import CircleOwnerCard from './components/CircleOwnerCard.vue'
 import CircleMemberCard from './components/CircleMemberCard.vue'
 import VenueEventCard from '../../tab/resources/components/VenueEventCard.vue'
@@ -233,7 +229,6 @@ const applyServerDetail = (serverDetail) => {
     membersText: memberCountText,
     postsText: postCountText,
     description: serverDetail.description || detail.value.description,
-    notice: String(serverDetail.rules_text || '').trim() || '暂无公告',
     owner: {
       ...detail.value.owner,
       userId: serverDetail?.owner?.user_id || detail.value.owner?.userId || '',
@@ -386,7 +381,6 @@ onShareTimeline(() => {
   }
 })
 
-const onMoreNotice = () => showToast('查看公告')
 const onPostDetail = (post) => {
   const postCode = String(post?.post_code || post?.postCode || '').trim()
   if (!postCode) {
@@ -503,7 +497,7 @@ const onApplyJoin = async () => {
   uni.showLoading({ title: amount > 0 ? '发起支付...' : '提交中...' })
   try {
     const result = await submitCircleJoinRequest(circleCode.value, {
-      pay_channel: amount > 0 ? 'wxpay' : undefined
+      pay_channel: amount > 0 ? 'virtualpay' : undefined
     })
     if (String(result?.action || '') === 'virtualpay_required') {
       await invokeJoinPayment(result)
@@ -555,10 +549,6 @@ const onEditCircle = () => {
 
 .content-wrap {
   padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
-}
-
-.section-gap {
-  padding: 16rpx 0;
 }
 
 .owner-action-wrap {

@@ -441,16 +441,15 @@ def get_my_circles(
     return success_response(data=payload)
 
 
-@router.get('/owned', summary='List circles owned by current user')
-def get_owned_circles(
+def _list_owned_circles_payload(
+    *,
+    db: Session,
     request: Request,
-    offset: int = 0,
-    limit: int = 20,
+    owner: User,
+    offset: int,
+    limit: int,
     keyword: str | None = None,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(db_session),
-):
-    owner = _require_current_user(db=db, current_user_pk=user_id)
+) -> dict:
     safe_offset = max(int(offset or 0), 0)
     safe_limit = min(max(int(limit or 20), 1), 50)
     normalized_keyword = str(keyword or '').strip()
@@ -521,14 +520,34 @@ def get_owned_circles(
             'updated_at': circle.updated_at.isoformat() if circle.updated_at else None,
         })
 
+    return {
+        'items': items,
+        'total': int(total),
+        'offset': safe_offset,
+        'limit': safe_limit,
+        'has_more': safe_offset + len(items) < int(total),
+    }
+
+
+@router.get('/owned', summary='List circles owned by current user')
+def get_owned_circles(
+    request: Request,
+    offset: int = 0,
+    limit: int = 20,
+    keyword: str | None = None,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    owner = _require_current_user(db=db, current_user_pk=user_id)
     return success_response(
-        data={
-            'items': items,
-            'total': int(total),
-            'offset': safe_offset,
-            'limit': safe_limit,
-            'has_more': safe_offset + len(items) < int(total),
-        }
+        data=_list_owned_circles_payload(
+            db=db,
+            request=request,
+            owner=owner,
+            offset=offset,
+            limit=limit,
+            keyword=keyword,
+        )
     )
 
 
@@ -628,6 +647,39 @@ def get_discover_circles(
             item['collect_count'] = collect_count
             item['favorite_count'] = collect_count
     return success_response(data=payload)
+
+
+@router.get('/user/{target_user_id}/owned', summary='List circles owned by target user')
+def get_user_owned_circles(
+    target_user_id: str,
+    request: Request,
+    offset: int = 0,
+    limit: int = 20,
+    keyword: str | None = None,
+    user_id: int | None = Depends(get_optional_current_user_id),
+    db: Session = Depends(db_session),
+):
+    if user_id is not None:
+        _require_current_user(db=db, current_user_pk=user_id)
+
+    normalized_target_user_id = str(target_user_id or '').strip()
+    if len(normalized_target_user_id) != 8:
+        raise BusinessException(message='目标用户ID格式无效', code=4233, status_code=400)
+
+    target_user = get_user_by_business_user_id(db=db, business_user_id=normalized_target_user_id)
+    if target_user is None or not bool(target_user.is_active):
+        raise BusinessException(message='目标用户不存在', code=4042, status_code=404)
+
+    return success_response(
+        data=_list_owned_circles_payload(
+            db=db,
+            request=request,
+            owner=target_user,
+            offset=offset,
+            limit=limit,
+            keyword=keyword,
+        )
+    )
 
 
 @router.get('/user/{target_user_id}', summary='List circles joined by target user')

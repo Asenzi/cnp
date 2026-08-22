@@ -16,11 +16,7 @@
     <view class="content-area" :style="{ paddingTop: statusBarHeight + 'px' }">
       <!-- 品牌区域 -->
       <view class="brand-section">
-        <view class="logo-container">
-          <view class="logo-glow"></view>
-          <image class="brand-logo-image" src="https://cos.cnptec.site/static/icon/cpn-logo.png" mode="aspectFit" />
-        </view>
-        <text class="brand-tagline">构建更高效的商业脉络</text>
+        <text class="auth-title"></text>
       </view>
 
       <!-- 登录区域 -->
@@ -29,10 +25,10 @@
           <view class="card-glow"></view>
 
           <button class="wechat-login-btn" :class="{ 'btn-loading': isLoading }" :disabled="isLoading"
-            hover-class="btn-hover" @tap="handleWechatLogin">
+            open-type="getPhoneNumber" hover-class="btn-hover" @getphonenumber="handleWechatLogin">
             <view class="btn-glow"></view>
             <view class="btn-content">
-              <text class="btn-text">{{ isLoading ? '登录中...' : '微信一键登录' }}</text>
+              <text class="btn-text">{{ isLoading ? '登录中...' : '手机号快捷登录' }}</text>
             </view>
             <view class="btn-shine"></view>
           </button>
@@ -88,6 +84,7 @@ const isLoading = ref(false)
 const inviteCode = ref('')
 
 const INVITE_CODE_STORAGE_KEY = '__INVITE_CODE__'
+const LOGIN_DISCOVER_REFRESH_STORAGE_KEY = 'discover_login_refresh_v1'
 const DEFAULT_CITY_NAME = '深圳'
 
 const showToast = (title) => {
@@ -98,8 +95,23 @@ const showToast = (title) => {
   })
 }
 
+const showReviewModal = (message) => {
+  uni.showModal({
+    title: '资料审核未通过',
+    content: message || '头像或昵称不符合平台规范，请修改后重新提交',
+    showCancel: false,
+    confirmText: '去修改'
+  })
+}
+
 const toggleAgreement = () => {
   agreed.value = !agreed.value
+}
+
+const resetLoginStorage = () => {
+  uni.removeStorageSync('token')
+  uni.removeStorageSync('isLoggedIn')
+  uni.removeStorageSync('userInfo')
 }
 
 const openAgreement = (type) => {
@@ -155,13 +167,21 @@ const resolveLoginCityName = async () => {
   return cachedCity || DEFAULT_CITY_NAME
 }
 
-const handleWechatLogin = async () => {
+const handleWechatLogin = async (event) => {
   if (isLoading.value) return
 
   if (!agreed.value) {
     showToast('请先同意用户协议与隐私政策')
     return
   }
+
+  const phoneCode = String(event?.detail?.code || '').trim()
+  // #ifdef MP-WEIXIN
+  if (!phoneCode) {
+    showToast('请先授权手机号后再登录')
+    return
+  }
+  // #endif
 
   isLoading.value = true
 
@@ -177,14 +197,16 @@ const handleWechatLogin = async () => {
 
     const result = await loginByWechatMiniapp({
       code,
+      phone_code: phoneCode || undefined,
       device_id: getWechatDeviceId(),
       invite_code: inviteCode.value,
       city_name: cityName || undefined
     })
 
     uni.setStorageSync('token', result?.access_token || '')
+    const userInfo = result?.user_info || {}
     uni.setStorageSync('isLoggedIn', true)
-    uni.setStorageSync('userInfo', result?.user_info || {})
+    uni.setStorageSync('userInfo', userInfo)
     uni.removeStorageSync(INVITE_CODE_STORAGE_KEY)
     connectRealtimeSocket()
 
@@ -195,29 +217,21 @@ const handleWechatLogin = async () => {
 
     showToast('登录成功')
 
-    // 检查是否有待关注的用户、待标记感兴趣的资源或圈子
-    const pendingFollowUserId = uni.getStorageSync('pendingFollowUserId')
-    const pendingInterestPostCode = uni.getStorageSync('pendingInterestPostCode')
-    const pendingInterestCircleCode = uni.getStorageSync('pendingInterestCircleCode')
-
     setTimeout(() => {
-      if (pendingFollowUserId) {
-        // 有待关注的用户，跳转到发现页
-        uni.switchTab({
-          url: '/pages/tab/discover/index'
-        })
-      } else if (pendingInterestPostCode || pendingInterestCircleCode) {
-        // 有待标记感兴趣的资源或圈子，返回上一页
-        uni.navigateBack()
-      } else {
-        // 正常跳转到个人中心
-        uni.switchTab({
-          url: '/pages/tab/me/index'
-        })
+      if (result?.is_new_user) {
+        uni.redirectTo({ url: '/pages/me/editInfo/index?from=login' })
+        return
       }
+      uni.setStorageSync(LOGIN_DISCOVER_REFRESH_STORAGE_KEY, Date.now())
+      uni.switchTab({ url: '/pages/tab/discover/index' })
     }, 300)
   } catch (err) {
-    showToast(err?.message || '登录失败，请稍后重试')
+    resetLoginStorage()
+    if ([4267, 4272, 4273].includes(Number(err?.code))) {
+      showReviewModal(err?.message)
+    } else {
+      showToast(err?.message || '登录失败，请稍后重试')
+    }
   } finally {
     isLoading.value = false
   }
@@ -360,68 +374,15 @@ page {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 225rpx;
+  width: 100%;
+  padding-top: 64rpx;
 }
 
-.logo-container {
-  position: relative;
-  width: 160rpx;
-  height: 160rpx;
-  margin-bottom: 48rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.logo-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 200rpx;
-  height: 200rpx;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(37, 99, 235, 0.15) 0%, rgba(212, 165, 116, 0.15) 50%, transparent 70%);
-  animation: glow-pulse 4s ease-in-out infinite;
-}
-
-@keyframes glow-pulse {
-
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  50% {
-    opacity: 0.8;
-    transform: translate(-50%, -50%) scale(1.1);
-  }
-}
-
-.brand-logo-image {
-  position: relative;
-  z-index: 2;
-  width: 160rpx;
-  height: 160rpx;
-  display: block;
-  border-radius: 40rpx;
-}
-
-.brand-title {
-  display: block;
-  color: #1a2332;
-  font-size: 64rpx;
-  line-height: 72rpx;
-  font-weight: 700;
-  margin-bottom: 12rpx;
-  letter-spacing: 0.2rpx;
-}
-
-.brand-tagline {
-  display: block;
-  color: #64748b;
+.auth-title {
+  color: #1f2937;
   font-size: 28rpx;
   line-height: 40rpx;
+  margin-bottom: 200rpx;
 }
 
 /* ===== 登录区域 ===== */

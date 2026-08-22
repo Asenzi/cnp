@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_OWNER: str = Field(default='')
     WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_JOIN: str = Field(default='')
     WECHAT_VIRTUAL_PAY_CIRCLE_JOIN_PRODUCT_IDS: str = Field(default='')
-    DEFAULT_AVATAR_URL: str = Field(default='https://cpn-1422327087.cos.ap-guangzhou.myqcloud.com/static/logo.png')
+    DEFAULT_AVATAR_URL: str = Field(default='https://cos.cnptec.site/static/logo.png')
     VERIFICATION_AUTO_APPROVE: bool = Field(default=False)
     VERIFICATION_DATA_SECRET: str = Field(default="")
     TENCENT_CLOUD_SECRET_ID: str = Field(default='')

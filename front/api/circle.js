@@ -111,6 +111,21 @@ export function getOwnedCircles(params = {}) {
   })
 }
 
+export function getUserOwnedCircles(targetUserId, params = {}) {
+  const safeTargetUserId = encodeURIComponent(String(targetUserId || '').trim())
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const keyword = String(params.keyword || '').trim()
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (keyword) {
+    query.push(`keyword=${encodeURIComponent(keyword)}`)
+  }
+  return request({
+    url: `/api/v1/circle/user/${safeTargetUserId}/owned?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
 export function getUserCircles(targetUserId, params = {}) {
   const safeTargetUserId = encodeURIComponent(String(targetUserId || '').trim())
   const offset = Math.max(Number(params.offset || 0), 0)

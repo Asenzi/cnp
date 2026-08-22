@@ -370,6 +370,21 @@ def _quality_score(user: User) -> float:
         score += 0.09
     return _clamp_score(score)
 
+
+def _is_default_avatar_url(avatar_url: str | None) -> bool:
+    normalized = str(avatar_url or "").strip()
+    if not normalized:
+        return True
+    return normalized in {"/static/logo.png", settings.DEFAULT_AVATAR_URL}
+
+
+def _is_incomplete_recommendation_profile(user: User) -> bool:
+    nickname = public_nickname(user).strip()
+    if nickname.startswith("微信用户"):
+        return True
+    return _is_default_avatar_url(public_avatar_url(user))
+
+
 def _content_match_score(viewer: User, candidate: User, keyword: str | None, domain: str | None) -> float:
     score = 0.0
     viewer_industry = str(viewer.industry_label or "").strip().lower()
@@ -909,6 +924,7 @@ def list_network_recommendations(
             item
             for item in raw_candidates
             if item.id not in excluded_set and int(item.id) not in seen_candidate_ids
+            and not _is_incomplete_recommendation_profile(item)
         ]
         if not current_group:
             continue

@@ -11,13 +11,14 @@
     <view class="main">
       <!-- 头像区域 -->
       <view class="avatar-section">
-        <view class="avatar-wrap" @tap="onChangeAvatar">
+        <button class="avatar-wrap" open-type="chooseAvatar" @chooseavatar="onChooseWechatAvatar">
           <image class="avatar" mode="aspectFill" :src="avatarUrl" />
           <view class="camera-badge">
             <image class="camera-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/camera-white.png" />
           </view>
-        </view>
+        </button>
         <text class="avatar-tip">{{ uploadingAvatar ? '上传中...' : avatarTipText }}</text>
+        <text v-if="fromLogin && !hasSelectedNewAvatar" class="required-tip">头像为必填项，请上传真实头像</text>
       </view>
 
       <view v-if="reviewNoticeText" class="review-notice">
@@ -34,14 +35,16 @@
           </view>
 
           <view class="field">
-            <text class="label">昵称</text>
+            <text class="label">昵称 <text class="required-mark">*</text></text>
             <input
               v-model="nickname"
               class="input"
+              type="nickname"
               maxlength="64"
               placeholder="请输入您的昵称"
               placeholder-class="placeholder"
             />
+            <text v-if="fromLogin && !String(nickname || '').trim()" class="required-tip field-tip">昵称为必填项</text>
           </view>
 
           <view class="field">
@@ -201,7 +204,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import {
   getCurrentUserProfile,
   updateCurrentUserProfile,
@@ -211,6 +214,7 @@ import { getApiBaseUrl } from '../../../utils/request'
 import { PROVINCE_CITY_OPTIONS } from './modules/city-picker-data'
 
 const DEFAULT_AVATAR = 'https://cos.cnptec.site/static/logo.png'
+const LOGIN_DISCOVER_REFRESH_STORAGE_KEY = 'discover_login_refresh_v1'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
@@ -220,6 +224,7 @@ const uploadingAvatar = ref(false)
 const locating = ref(false)
 const hasSelectedNewAvatar = ref(false) // 标记是否选择了新头像
 const profileReview = ref({})
+const fromLogin = ref(false)
 
 const avatarUrl = ref(DEFAULT_AVATAR)
 const nickname = ref('')
@@ -331,7 +336,26 @@ const showToast = (title) => {
   })
 }
 
+const isSystemNickname = (value) => /^(微信用户|用户)[A-Za-z0-9]{4}$/.test(String(value || '').trim())
+
+const showReviewModal = (message) => {
+  uni.showModal({
+    title: '资料审核未通过',
+    content: message || '提交的信息不符合平台规范，请修改后重新提交',
+    showCancel: false,
+    confirmText: '去修改'
+  })
+}
+
+const isReviewBlockedError = (err) => [4267, 4272, 4273].includes(Number(err?.code))
+
 const goBack = () => {
+  if (fromLogin.value) {
+    uni.setStorageSync(LOGIN_DISCOVER_REFRESH_STORAGE_KEY, Date.now())
+    uni.switchTab({ url: '/pages/tab/discover/index' })
+    return
+  }
+
   if (getCurrentPages().length > 1) {
     uni.navigateBack()
     return
@@ -468,7 +492,8 @@ const applyProfile = (profile = {}) => {
   if (!hasSelectedNewAvatar.value) {
     avatarUrl.value = typeof profile?.avatar_url === 'string' && profile.avatar_url.trim() ? profile.avatar_url : DEFAULT_AVATAR
   }
-  nickname.value = typeof profile?.nickname === 'string' ? profile.nickname : ''
+  const nextNickname = typeof profile?.nickname === 'string' ? profile.nickname : ''
+  nickname.value = fromLogin.value && isSystemNickname(nextNickname) ? '' : nextNickname
   bio.value = typeof profile?.intro === 'string' ? profile.intro : ''
   companyName.value = typeof profile?.company_name === 'string' ? profile.company_name : ''
   jobTitle.value = typeof profile?.job_title === 'string' ? profile.job_title : ''
@@ -545,36 +570,11 @@ const loadProfile = async () => {
   }
 }
 
-const onChangeAvatar = () => {
-  if (uploadingAvatar.value) {
-    return
-  }
-
-  uni.chooseImage({
-    count: 1,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: (res) => {
-      const filePath = res?.tempFilePaths?.[0]
-      if (!filePath) {
-        return
-      }
-
-      console.log('选择的图片路径:', filePath)
-
-      // 标记已选择新头像
-      hasSelectedNewAvatar.value = true
-
-      // 更新本地预览，使用临时文件路径
-      avatarUrl.value = filePath
-
-      showToast('头像已选择，点击提交保存')
-    },
-    fail: (err) => {
-      console.error('选择图片失败:', err)
-      showToast('选择图片失败')
-    }
-  })
+const onChooseWechatAvatar = (event) => {
+  const filePath = String(event?.detail?.avatarUrl || '').trim()
+  if (!filePath) return
+  hasSelectedNewAvatar.value = true
+  avatarUrl.value = filePath
 }
 
 const onSave = async () => {
@@ -599,6 +599,11 @@ const onSave = async () => {
 
   const baseUrl = getApiBaseUrl()
   const normalizedAvatarUrl = String(avatarUrl.value || DEFAULT_AVATAR).trim()
+
+  if (fromLogin.value && !hasSelectedNewAvatar.value) {
+    showToast('请上传头像')
+    return
+  }
 
   if (normalizedDisplayPhone && !DISPLAY_PHONE_REGEX.test(normalizedDisplayPhone)) {
     showToast('请输入正确的展示手机号')
@@ -648,7 +653,11 @@ const onSave = async () => {
         saving.value = false
         uploadingAvatar.value = false
         console.error('头像上传失败:', err)
-        showToast(err?.message || '头像上传失败，请重试')
+        if (isReviewBlockedError(err)) {
+          showReviewModal(err?.message)
+        } else {
+          showToast(err?.message || '头像上传失败，请重试')
+        }
         return
       } finally {
         uploadingAvatar.value = false
@@ -690,7 +699,7 @@ const onSave = async () => {
         hasSelectedNewAvatar.value = false
         showToast('头像更新成功')
         setTimeout(() => {
-          uni.redirectTo({ url: '/pages/me/card/index' })
+          goBack()
         }, 250)
         saving.value = false
         return
@@ -699,7 +708,6 @@ const onSave = async () => {
 
     const payload = {
       nickname: normalizedNickname,
-      avatar_url: avatarForSave || DEFAULT_AVATAR,
       intro,
       industry_code: selectedIndustry.value || null,
       industry_label: selectedIndustry.value ? selectedIndustry.label : null,
@@ -745,7 +753,7 @@ const onSave = async () => {
 
     showToast('保存成功')
     setTimeout(() => {
-      uni.redirectTo({ url: '/pages/me/card/index' })
+      goBack()
     }, 250)
   } catch (err) {
     console.error('保存失败，完整错误:', err)
@@ -753,11 +761,19 @@ const onSave = async () => {
     console.error('错误信息:', err?.message)
     console.error('错误payload:', err?.payload)
 
-    showToast(err?.message || '保存失败，请稍后重试')
+    if (isReviewBlockedError(err)) {
+      showReviewModal(err?.message)
+    } else {
+      showToast(err?.message || '保存失败，请稍后重试')
+    }
   } finally {
     saving.value = false
   }
 }
+
+onLoad((options) => {
+  fromLogin.value = String(options?.from || '').trim() === 'login'
+})
 
 onShow(() => {
   loadProfile()
@@ -821,6 +837,15 @@ onShow(() => {
 
 .avatar-wrap {
   position: relative;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 1;
+}
+
+.avatar-wrap::after {
+  border: 0;
 }
 
 .avatar {
@@ -852,6 +877,12 @@ onShow(() => {
 .avatar-tip {
   font-size: 24rpx;
   color: #66758a;
+}
+
+.required-tip {
+  font-size: 23rpx;
+  line-height: 32rpx;
+  color: #dc2626;
 }
 
 .review-notice {
@@ -928,6 +959,15 @@ onShow(() => {
   font-weight: 500;
   color: #172033;
   margin-bottom: 12rpx;
+}
+
+.required-mark {
+  color: #dc2626;
+}
+
+.field-tip {
+  display: block;
+  margin-top: 10rpx;
 }
 
 .input,

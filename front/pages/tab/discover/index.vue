@@ -128,12 +128,13 @@ const SPARSE_FIRST_PAGE_THRESHOLD = 3
 const LOCATION_HISTORY_STORAGE_KEY = 'network_location_history_v1'
 const LOCATION_HISTORY_LIMIT = 8
 const LOCATION_PAGE_RESULT_STORAGE_KEY = 'discover_location_page_result_v1'
+const LOGIN_DISCOVER_REFRESH_STORAGE_KEY = 'discover_login_refresh_v1'
 const RECOMMENDATION_CACHE_STORAGE_KEY = 'discover_recommendation_cache_v2'
 const RECOMMENDATION_CACHE_TTL_MS = 60 * 1000
 const RECOMMENDATION_CACHE_MAX_ENTRIES = 12
 const FILTER_OPTIONS_CACHE_STORAGE_KEY = 'discover_filter_options_cache_v1'
 const FILTER_OPTIONS_CACHE_TTL_MS = 10 * 60 * 1000
-const DEFAULT_AVATAR_URL = 'https://cpn-1422327087.cos.ap-guangzhou.myqcloud.com/static/logo.png'
+const DEFAULT_AVATAR_URL = 'https://cos.cnptec.site/static/logo.png'
 let hasShownOnce = false
 const initialLocationCache = loadLocationFilterCache()
 const hasInitialLocationCache = Boolean(
@@ -156,7 +157,7 @@ const uiText = {
   sameCityTag: '\u540c\u57ce',
   unnamedUser: '\u672a\u547d\u540d\u7528\u6237',
   verifyLv1: 'LV1 \u5df2\u8ba4\u8bc1',
-  defaultRole: '暂未填写行业/职位',
+  defaultRole: '暂未填写行业',
   activeFallback: '\u6700\u8fd1\u6d3b\u8dc3',
   recommendationLoadError: '\u4eba\u8109\u63a8\u8350\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
   missingTarget: '\u76ee\u6807\u7528\u6237\u4fe1\u606f\u7f3a\u5931',
@@ -905,7 +906,6 @@ const mapMemberCard = (item = {}) => {
   const cityName = String(item.city_name || '').trim()
   const intro = String(item.intro || '').trim()
   const industryLabel = String(item.industry_label || '').trim()
-  const jobTitle = String(item.job_title || '').trim()
   const reasonTags = Array.isArray(item.reason_tags)
     ? item.reason_tags.map((tag) => normalizeTag(tag)).filter(Boolean)
     : []
@@ -925,7 +925,7 @@ const mapMemberCard = (item = {}) => {
     name: String(item.nickname || '').trim() || uiText.unnamedUser,
     verifyType: resolveIdentityVerified(item) ? 'lv1' : '',
     verifyText: resolveIdentityVerified(item) ? uiText.verifyLv1 : '',
-    detailLine: joinNonEmpty(industryLabel, jobTitle) || uiText.defaultRole,
+    detailLine: industryLabel || uiText.defaultRole,
     distanceText: String(item.distance_text || '').trim(),
     memberEnabled: resolveMemberEnabled(item),
     circleOwner: resolveCircleOwnerEnabled(item),
@@ -1548,6 +1548,11 @@ onPullDownRefresh(async () => {
 })
 
 onShow(() => {
+  const shouldRefreshAfterLogin = Boolean(uni.getStorageSync(LOGIN_DISCOVER_REFRESH_STORAGE_KEY))
+  if (shouldRefreshAfterLogin) {
+    uni.removeStorageSync(LOGIN_DISCOVER_REFRESH_STORAGE_KEY)
+  }
+
   if (!hasShownOnce) {
     hasShownOnce = true
     return
@@ -1565,7 +1570,7 @@ onShow(() => {
 
   consumePendingLocationResult()
   // 仅在确有状态变化时刷新，避免从名片详情返回就整页强制重刷
-  if ((hasPendingFollow || hasPendingLocationResult) && members.value.length > 0) {
+  if ((shouldRefreshAfterLogin || hasPendingFollow || hasPendingLocationResult) && members.value.length > 0) {
     fetchRecommendations(true, { forceRefresh: true })
   }
 })

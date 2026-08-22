@@ -86,7 +86,7 @@ const isFollowed = (item = {}) => {
 }
 
 const invalidAvatarValues = new Set(['', 'null', 'undefined', 'none'])
-const DEFAULT_AVATAR_URL = 'https://cpn-1422327087.cos.ap-guangzhou.myqcloud.com/static/logo.png'
+const DEFAULT_AVATAR_URL = 'https://cos.cnptec.site/static/logo.png'
 
 const avatarUrl = computed(() => String(props.member?.avatar || '').trim())
 const displayAvatarUrl = computed(() => {

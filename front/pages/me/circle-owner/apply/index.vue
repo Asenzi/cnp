@@ -137,7 +137,7 @@ const overview = ref({
     enabled: true
   },
   payment: {
-    default_channel: 'wxpay',
+    default_channel: 'virtualpay',
     channels: []
   }
 })
@@ -192,7 +192,7 @@ const selectedPaymentLabel = computed(() => {
   const current = enabledPaymentChannels.value.find(
     (item) => String(item?.key || '') === selectedPaymentChannel.value
   )
-  return String(current?.label || '微信支付')
+  return String(current?.label || '小程序虚拟支付')
 })
 const purchaseButtonText = computed(() => {
   if (submitting.value) return '处理中...'
@@ -212,9 +212,9 @@ const syncPaymentChannel = () => {
     return
   }
   const defaultChannel = String(overview.value?.payment?.default_channel || '').trim()
-  const wxpay = channels.find((item) => item.key === 'wxpay')
   const defaultItem = channels.find((item) => item.key === defaultChannel)
-  selectedPaymentChannel.value = String(wxpay?.key || defaultItem?.key || channels[0]?.key || '')
+  const virtualpay = channels.find((item) => item.key === 'virtualpay')
+  selectedPaymentChannel.value = String(virtualpay?.key || defaultItem?.key || channels[0]?.key || '')
 }
 
 const loadOverview = async () => {

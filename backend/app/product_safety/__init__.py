@@ -3,6 +3,7 @@ from .service import (
     enforce_profile_edit_allowed,
     enqueue_retry,
     log_review,
+    punish_profile_violation,
     punish_user,
     report_content,
 )
@@ -12,6 +13,7 @@ __all__ = [
     "enforce_profile_edit_allowed",
     "enqueue_retry",
     "log_review",
+    "punish_profile_violation",
     "punish_user",
     "report_content",
 ]

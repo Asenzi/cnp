@@ -89,10 +89,11 @@ def admin_profile(
 
 @router.get("/dashboard/overview", summary="Get admin dashboard overview")
 def admin_dashboard_overview(
+    revenue_period: str = Query(default="day", pattern="^(day|week|month|quarter|year)$"),
     _: AdminUser = Depends(get_current_admin_user),
     db: Session = Depends(db_session),
 ):
-    return success_response(data=get_admin_dashboard_overview(db=db))
+    return success_response(data=get_admin_dashboard_overview(db=db, revenue_period=revenue_period))
 
 
 @router.get("/product-safety/overview", summary="Get product safety overview")

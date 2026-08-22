@@ -39,6 +39,21 @@ export interface DashboardSummary {
   verified_user_total: number;
 }
 
+export type DashboardRevenuePeriod = 'day' | 'month' | 'quarter' | 'week' | 'year';
+
+export interface DashboardRevenue {
+  circle_amount: number;
+  circle_count: number;
+  circle_owner_amount: number;
+  circle_owner_count: number;
+  end_at: null | string;
+  member_amount: number;
+  member_count: number;
+  period: DashboardRevenuePeriod;
+  start_at: null | string;
+  total_amount: number;
+}
+
 export interface DashboardUserItem {
   city_name: string;
   created_at: null | string;
@@ -92,6 +107,7 @@ export interface DashboardOverview {
   recent_posts: DashboardPostItem[];
   recent_recharges?: DashboardRechargeItem[];
   recent_users: DashboardUserItem[];
+  revenue?: DashboardRevenue;
   summary: DashboardSummary;
 }
 
@@ -365,8 +381,10 @@ export async function getAdminProfileApi() {
   return requestClient.get<AdminProfile>('/auth/profile');
 }
 
-export async function getAdminDashboardOverviewApi() {
-  return requestClient.get<DashboardOverview>('/dashboard/overview');
+export async function getAdminDashboardOverviewApi(params?: {
+  revenue_period?: DashboardRevenuePeriod;
+}) {
+  return requestClient.get<DashboardOverview>('/dashboard/overview', { params });
 }
 
 export async function getAdminProductSafetyOverviewApi() {

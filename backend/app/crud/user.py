@@ -76,6 +76,8 @@ def create_user(
             wechat_bound_at=wechat_bound_at,
             nickname=nickname,
             avatar_url=resolved_avatar_url,
+            avatar_review_status="approved",
+            avatar_reviewed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             intro=intro,
             industry_code=industry_code,
             industry_label=industry_label,

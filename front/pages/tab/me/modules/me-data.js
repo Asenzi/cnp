@@ -51,7 +51,8 @@ export const serviceList = [
 ]
 
 export const settingList = [
-  { key: 'account-security', iconPath: 'https://cos.cnptec.site/static/icon/safe.png', label: '账号与安全' },
+  { key: 'account-security', iconPath: 'https://cos.cnptec.site/static/icon/safe.png', label: '账号管理' },
+  { key: 'profile-card', iconPath: 'https://cos.cnptec.site/static/icon/card.png', label: '个人名片' },
   { key: 'help', iconPath: 'https://cos.cnptec.site/static/icon/help.png', label: '帮助与反馈' },
   { key: 'about', iconPath: 'https://cos.cnptec.site/static/icon/about.png', label: '关于我们' }
 ]

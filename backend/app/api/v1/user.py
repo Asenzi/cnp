@@ -6,7 +6,7 @@ from pathlib import Path
 from secrets import token_hex
 import time
 from urllib.error import URLError
-from urllib.parse import urlencode
+from urllib.parse import urlparse, urlencode
 from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
@@ -48,7 +48,7 @@ from app.models.user import User
 from app.models.circle_interest import CircleInterest
 from app.models.resource_post import ResourcePostLike
 from app.models.user_interest import UserInterest
-from app.product_safety import enforce_profile_edit_allowed, enqueue_retry, log_review, punish_user
+from app.product_safety import enforce_profile_edit_allowed, enqueue_retry, log_review, punish_profile_violation
 from app.review import submit_profile_update_review
 from app.verification.constants import VerificationStatus, VerificationType
 
@@ -117,6 +117,23 @@ def _to_public_avatar_url(avatar_url: str | None, request: Request) -> str:
     return _to_public_file_url(final_avatar_url, request)
 
 
+def _to_moderation_media_url(media_url: str) -> str:
+    normalized = str(media_url or "").strip()
+    domain = str(settings.COS_DOMAIN or "").strip().rstrip("/")
+    if not normalized or not domain or not settings.COS_BUCKET or not settings.COS_REGION:
+        return normalized
+
+    parsed = urlparse(normalized)
+    host = parsed.netloc.lower()
+    expected_host = domain.removeprefix("https://").removeprefix("http://").lower()
+    if host != expected_host:
+        return normalized
+
+    scheme = str(settings.COS_SCHEME or "https").strip() or "https"
+    path = parsed.path.lstrip("/")
+    return f"{scheme}://{settings.COS_BUCKET}.cos.{settings.COS_REGION}.myqcloud.com/{path}"
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -144,11 +161,21 @@ def _public_intro(user) -> str | None:
 
 
 def _profile_review_status_payload(user) -> dict[str, str | None]:
+    avatar_status = _review_status(user, "avatar")
+    avatar_candidate_url = getattr(user, "avatar_candidate_url", None)
+    avatar_url = str(getattr(user, "avatar_url", "") or "").strip()
+    if (
+        avatar_status == "pending"
+        and not avatar_candidate_url
+        and avatar_url == settings.DEFAULT_AVATAR_URL
+    ):
+        avatar_status = "approved"
+
     return {
-        "avatar_status": _review_status(user, "avatar"),
+        "avatar_status": avatar_status,
         "nickname_status": _review_status(user, "nickname"),
         "intro_status": _review_status(user, "intro"),
-        "avatar_candidate_url": getattr(user, "avatar_candidate_url", None),
+        "avatar_candidate_url": avatar_candidate_url,
         "nickname_candidate": getattr(user, "nickname_candidate", None),
         "intro_candidate": getattr(user, "intro_candidate", None),
     }
@@ -354,14 +381,38 @@ def _assert_ims_safe(*, content_type: str, value: str, user: User) -> None:
         "user_id": str(user.user_id or ""),
         "openid": str(user.wechat_openid or ""),
     }
-    try:
-        result = _request_json(
-            endpoint,
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers=_ims_headers(),
-        )
-    except (OSError, URLError) as exc:
-        raise BusinessException(message="内容审核服务异常，请稍后重试", code=4266, status_code=502) from exc
+    last_error: Exception | None = None
+    max_attempts = 3 if content_type == "image" else 1
+    for attempt in range(max_attempts):
+        try:
+            if "/product-safety/ims/tencent" in endpoint:
+                from app.product_safety.tencent_cloud import moderate_with_tencent_cloud
+
+                result = moderate_with_tencent_cloud(
+                    content_type=str(content_type or "").strip().lower(),
+                    value=str(value or "").strip(),
+                    user_id=str(user.user_id or ""),
+                )
+            else:
+                result = _request_json(
+                    endpoint,
+                    data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                    headers=_ims_headers(),
+                )
+            break
+        except BusinessException as exc:
+            last_error = exc
+            if getattr(exc, "status_code", 500) < 500 or attempt == max_attempts - 1:
+                raise
+            time.sleep(attempt + 1)
+        except (OSError, URLError) as exc:
+            last_error = exc
+            if attempt == max_attempts - 1:
+                raise BusinessException(message="内容审核服务异常，请稍后重试", code=4266, status_code=502) from exc
+            time.sleep(attempt + 1)
+    else:
+        raise BusinessException(message="内容审核服务异常，请稍后重试", code=4266, status_code=502) from last_error
+
     if _ims_result_is_pass(result):
         return
     raise BusinessException(message="资料包含不合规内容，请修改后再提交", code=4267, status_code=400)
@@ -375,8 +426,9 @@ def _assert_profile_text_safe(*, user: User, fields: dict[str, str | None]) -> N
 
 
 def _assert_profile_image_safe(*, user: User, media_url: str) -> None:
-    _submit_wechat_image_check(user=user, media_url=media_url)
-    _assert_ims_safe(content_type="image", value=media_url, user=user)
+    moderation_url = _to_moderation_media_url(media_url)
+    _submit_wechat_image_check(user=user, media_url=moderation_url)
+    _assert_ims_safe(content_type="image", value=moderation_url, user=user)
 
 
 def _approved_profile_fields(updates: dict[str, str | None]) -> dict[str, str | None | datetime]:
@@ -601,6 +653,7 @@ def _resolve_contact_view_state(
     target_display_wechat = _normalize_optional_text(target_user.display_wechat, 64)
     target_display_email = _normalize_optional_text(target_user.email, 100)
     target_has_contact = bool(target_display_phone or target_display_wechat or target_display_email)
+    target_contact_enabled = True
     is_self = int(viewer_user.id) == int(target_user.id)
 
     if is_self:
@@ -611,22 +664,23 @@ def _resolve_contact_view_state(
             "contact_visible": bool(target_has_contact),
             "contact_locked_reason": None if target_has_contact else "你还未完善展示手机号、微信号或邮箱",
             "target_has_contact": target_has_contact,
-            "target_contact_enabled": True,
+            "target_contact_enabled": target_contact_enabled,
             "viewer_contact_package_remaining_views": 0,
             "viewer_contact_package_used_for_view": False,
         }
 
     viewer_member_snapshot = resolve_member_snapshot(db=db, user_pk=int(viewer_user.id))
     viewer_is_member = bool(viewer_member_snapshot["is_member"])
-    contact_visible = viewer_is_member
+    contact_visible = bool(viewer_is_member)
+    locked_reason = "开通会员后可查看联系方式"
     return {
         "display_phone": target_display_phone if contact_visible else None,
         "display_wechat": target_display_wechat if contact_visible else None,
         "display_email": target_display_email if contact_visible else None,
         "contact_visible": contact_visible,
-        "contact_locked_reason": None if contact_visible else "开通会员后可查看联系方式",
+        "contact_locked_reason": None if contact_visible else locked_reason,
         "target_has_contact": target_has_contact,
-        "target_contact_enabled": True,
+        "target_contact_enabled": target_contact_enabled,
         "viewer_contact_package_remaining_views": 0,
         "viewer_contact_package_used_for_view": False,
     }
@@ -642,6 +696,7 @@ def _unlock_contact_with_package(
     target_display_wechat = _normalize_optional_text(target_user.display_wechat, 64)
     target_display_email = _normalize_optional_text(target_user.email, 100)
     target_has_contact = bool(target_display_phone or target_display_wechat or target_display_email)
+    target_contact_enabled = True
 
     if int(viewer_user.id) == int(target_user.id):
         return {
@@ -651,7 +706,7 @@ def _unlock_contact_with_package(
             "contact_visible": bool(target_has_contact),
             "contact_locked_reason": None if target_has_contact else "你还未完善展示手机号、微信号或邮箱",
             "target_has_contact": target_has_contact,
-            "target_contact_enabled": True,
+            "target_contact_enabled": target_contact_enabled,
             "viewer_contact_package_remaining_views": 0,
             "viewer_contact_package_used_for_view": False,
         }
@@ -667,7 +722,7 @@ def _unlock_contact_with_package(
         "contact_visible": True,
         "contact_locked_reason": None,
         "target_has_contact": target_has_contact,
-        "target_contact_enabled": True,
+        "target_contact_enabled": target_contact_enabled,
         "viewer_contact_package_remaining_views": 0,
         "viewer_contact_package_used_for_view": False,
     }
@@ -833,7 +888,7 @@ def _serialize_public_user_profile(
                 or str(target_user.display_wechat or "").strip()
                 or str(target_user.email or "").strip()
             ),
-            "target_contact_enabled": bool(target_user.show_contact),
+            "target_contact_enabled": True,
             "viewer_contact_package_remaining_views": 0,
             "viewer_contact_package_used_for_view": False,
         }
@@ -1169,24 +1224,36 @@ def update_current_user_profile(
     for content_type in ("nickname", "intro"):
         if content_type in safety_updates:
             enforce_profile_edit_allowed(db=db, user=user, content_type=content_type)
+    text_field_names = {"industry_label", "company_name", "job_title", "city_name"}
+    safety_text_updates = {
+        key: value
+        for key, value in safety_updates.items()
+        if key in {"nickname", "intro"}
+    }
+    ordinary_text_updates = {
+        key: value
+        for key, value in final_updates.items()
+        if key in text_field_names
+    }
+    text_review_scope = ""
     try:
-        _assert_profile_text_safe(
-            user=user,
-            fields={
-                key: value
-                for key, value in {**final_updates, **safety_updates}.items()
-                if key in {"nickname", "intro", "industry_label", "company_name", "job_title", "display_wechat", "email", "city_name"}
-            },
-        )
+        if safety_text_updates:
+            text_review_scope = "safety"
+            _assert_profile_text_safe(user=user, fields=safety_text_updates)
+        if ordinary_text_updates:
+            text_review_scope = "ordinary"
+            _assert_profile_text_safe(user=user, fields=ordinary_text_updates)
     except BusinessException as exc:
-        for content_type in ("nickname", "intro"):
-            if content_type in safety_updates:
+        if text_review_scope == "safety":
+            for content_type in ("nickname", "intro"):
+                if content_type not in safety_text_updates:
+                    continue
                 final_result = "review_failed" if getattr(exc, "code", None) in {4262, 4265, 4266} else "rejected"
                 log_review(
                     db,
                     user=user,
                     content_type=content_type,
-                    content_value=str(safety_updates.get(content_type) or ""),
+                    content_value=str(safety_text_updates.get(content_type) or ""),
                     provider="wechat+ims",
                     provider_result="error" if final_result == "review_failed" else "reject",
                     final_result=final_result,
@@ -1197,17 +1264,23 @@ def update_current_user_profile(
                         db,
                         user=user,
                         content_type=content_type,
-                        content_value=str(safety_updates.get(content_type) or ""),
+                        content_value=str(safety_text_updates.get(content_type) or ""),
                         error=exc.message,
                     )
-        if any(field in safety_updates for field in ("nickname", "intro")) and getattr(exc, "code", None) not in {4262, 4265, 4266}:
-            punish_user(
+        else:
+            final_result = "review_failed" if getattr(exc, "code", None) in {4262, 4265, 4266} else "rejected"
+            log_review(
                 db,
                 user=user,
-                punishment_type="profile_edit_block",
-                reason="资料文本审核不通过",
-                duration_hours=24,
+                content_type="profile_text",
+                content_value="\n".join(str(value or "").strip() for value in ordinary_text_updates.values() if str(value or "").strip())[:2500],
+                provider="wechat+ims",
+                provider_result="error" if final_result == "review_failed" else "reject",
+                final_result=final_result,
+                reject_reason=exc.message,
             )
+        if text_review_scope == "safety" and getattr(exc, "code", None) not in {4262, 4265, 4266}:
+            punish_profile_violation(db, user=user, reason="资料文本审核不通过")
             db.commit()
         raise
     if "avatar_url" in safety_updates:
@@ -1483,7 +1556,7 @@ async def upload_current_user_avatar(
         _assert_profile_image_safe(user=user, media_url=stored.url)
     except BusinessException as exc:
         try:
-            final_result = "review_failed" if getattr(exc, "code", None) in {4264, 4265, 4266} else "rejected"
+            final_result = "review_failed" if getattr(exc, "code", None) in {4264, 4265, 4266, 4276} else "rejected"
             log_review(
                 db,
                 user=user,
@@ -1503,13 +1576,7 @@ async def upload_current_user_avatar(
                     error=exc.message,
                 )
             else:
-                punish_user(
-                    db,
-                    user=user,
-                    punishment_type="profile_edit_block",
-                    reason="头像审核不通过",
-                    duration_hours=24,
-                )
+                punish_profile_violation(db, user=user, reason="头像审核不通过")
             db.commit()
         except SQLAlchemyError:
             db.rollback()

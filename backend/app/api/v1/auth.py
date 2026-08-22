@@ -79,6 +79,7 @@ async def wechat_miniapp_login(
     client_ip = request.client.host if request.client else None
     result = await login_with_wechat_code(
         code=payload.code,
+        phone_code=payload.phone_code,
         db=db,
         client_ip=client_ip,
         nickname=payload.nickname,

@@ -2,7 +2,10 @@ export function formatDateTime(value: null | string | undefined) {
   if (!value) {
     return '--';
   }
-  const date = new Date(value);
+  const normalizedValue = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value)
+    ? value
+    : `${value}Z`;
+  const date = new Date(normalizedValue);
   if (Number.isNaN(date.getTime())) {
     return '--';
   }

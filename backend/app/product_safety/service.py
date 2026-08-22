@@ -65,6 +65,7 @@ def count_today_reviews(db: Session, *, user: User, content_type: str) -> int:
                 ProductSafetyReviewLog.user_pk == int(user.id),
                 ProductSafetyReviewLog.content_type == content_type,
                 ProductSafetyReviewLog.created_at >= today,
+                ProductSafetyReviewLog.final_result != "review_failed",
             )
         )
         or 0
@@ -120,6 +121,38 @@ def punish_user(
             ends_at=ends_at,
         )
     )
+
+
+def count_consecutive_profile_violations(db: Session, *, user: User) -> int:
+    rows = db.scalars(
+        select(ProductSafetyReviewLog.final_result)
+        .where(
+            ProductSafetyReviewLog.user_pk == int(user.id),
+            ProductSafetyReviewLog.content_type.in_(("avatar", "nickname", "intro", "profile_text")),
+            ProductSafetyReviewLog.final_result != "review_failed",
+        )
+        .order_by(ProductSafetyReviewLog.id.desc())
+        .limit(20)
+    ).all()
+    count = 0
+    for result in rows:
+        if result != "rejected":
+            break
+        count += 1
+    return count
+
+
+def punish_profile_violation(db: Session, *, user: User, reason: str) -> int:
+    violations = count_consecutive_profile_violations(db=db, user=user)
+    if violations >= 16:
+        punish_user(db, user=user, punishment_type="ban", reason=reason)
+    elif violations >= 11:
+        punish_user(db, user=user, punishment_type="profile_edit_block", reason=reason, duration_hours=72)
+        _set_min_risk(user, "L3")
+        db.add(user)
+    else:
+        punish_user(db, user=user, punishment_type="profile_edit_block", reason=reason, duration_hours=24)
+    return violations
 
 
 def report_content(

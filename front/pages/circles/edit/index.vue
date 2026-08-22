@@ -20,10 +20,6 @@
           @update:price="form.price = normalizePrice($event)"
         />
 
-        <CreateRulesCard
-          :rules="form.rules"
-          @update:rules="form.rules = $event"
-        />
       </view>
     </scroll-view>
 
@@ -46,7 +42,6 @@ import CreateBasicInfoCard from '../create/components/CreateBasicInfoCard.vue'
 import CreateBottomAction from '../create/components/CreateBottomAction.vue'
 import CreateCoverUploader from '../create/components/CreateCoverUploader.vue'
 import CreateJoinMechanismCard from '../create/components/CreateJoinMechanismCard.vue'
-import CreateRulesCard from '../create/components/CreateRulesCard.vue'
 import {
   defaultCircleAvatar,
   defaultCoverImage,
@@ -65,8 +60,7 @@ const form = reactive({
   industry: '',
   description: '',
   joinType: 'paid',
-  price: '98',
-  rules: ''
+  price: '98'
 })
 const joinPriceTiers = [98, 198, 398, 598, 980, 1980, 3980, 5980, 9980]
 
@@ -145,7 +139,6 @@ const applyCircleDetail = (detail = {}) => {
   form.description = String(detail?.description || '').trim()
   form.joinType = 'paid'
   form.price = joinPriceTiers.includes(joinPrice) ? normalizePrice(joinPrice.toFixed(2)) : '98'
-  form.rules = String(detail?.rules_text || '').trim()
 }
 
 const loadCircleDetail = async () => {
@@ -212,8 +205,7 @@ const onSubmit = async () => {
       cover_url: finalCoverUrl,
       avatar_url: finalAvatarUrl,
       join_type: 'paid',
-      join_price: Number(form.price || 0),
-      rules_text: String(form.rules || '').trim() || null
+      join_price: Number(form.price || 0)
     }
 
     const result = await updateCircle(circleCode.value, payload)

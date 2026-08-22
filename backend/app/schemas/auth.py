@@ -26,6 +26,7 @@ class PasswordLoginRequest(BaseModel):
 
 class WechatMiniLoginRequest(BaseModel):
     code: str = Field(..., min_length=2, max_length=128, description="WeChat miniapp login code")
+    phone_code: str | None = Field(default=None, min_length=2, max_length=128)
     nickname: str | None = Field(default=None, max_length=64)
     avatar_url: str | None = Field(default=None, max_length=255)
     device_id: str | None = Field(default=None, max_length=128)

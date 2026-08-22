@@ -122,7 +122,7 @@ const contactPackageState = ref({
   purchasedViews: 0
 })
 const selectedPlanId = ref('')
-const paymentChannel = ref('wxpay')
+const paymentChannel = ref('virtualpay')
 const pointsOverview = ref({
   balance: 0,
   available_balance: 0,
@@ -459,7 +459,7 @@ const loadMemberCenterOverview = async () => {
       usedViews: Number(overview?.contact_package?.used_views || 0),
       purchasedViews: Number(overview?.contact_package?.purchased_views || 0)
     }
-    paymentChannel.value = String(overview?.payment?.default_channel || 'wxpay').trim() || 'wxpay'
+    paymentChannel.value = String(overview?.payment?.default_channel || 'virtualpay').trim() || 'virtualpay'
     syncSelectedPlan()
     syncPointsToggle()
   } catch (err) {

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import type { DashboardOverview } from '#/api/admin';
+import type { DashboardOverview, DashboardRevenuePeriod } from '#/api/admin';
 
 import { computed, onMounted, ref } from 'vue';
 
 import {
+  ElButton,
+  ElButtonGroup,
   ElCard,
   ElCol,
   ElRow,
@@ -25,10 +27,23 @@ import {
 defineOptions({ name: 'AdminDashboardPage' });
 
 const loading = ref(false);
+const revenuePeriod = ref<DashboardRevenuePeriod>('day');
 const overview = ref<DashboardOverview>({
   recent_circles: [],
   recent_posts: [],
   recent_users: [],
+  revenue: {
+    circle_amount: 0,
+    circle_count: 0,
+    circle_owner_amount: 0,
+    circle_owner_count: 0,
+    end_at: null,
+    member_amount: 0,
+    member_count: 0,
+    period: 'day',
+    start_at: null,
+    total_amount: 0,
+  },
   summary: {
     active_circle_total: 0,
     active_resource_total: 0,
@@ -41,6 +56,23 @@ const overview = ref<DashboardOverview>({
     verified_user_total: 0,
   },
 });
+
+const revenuePeriods: { label: string; value: DashboardRevenuePeriod }[] = [
+  { label: '近1天', value: 'day' },
+  { label: '近7天', value: 'week' },
+  { label: '近30天', value: 'month' },
+  { label: '近90天', value: 'quarter' },
+  { label: '近365天', value: 'year' },
+];
+
+const revenue = computed(() => overview.value.revenue);
+
+function moneyText(value?: number) {
+  return Number(value || 0).toLocaleString('zh-CN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+}
 
 const statCards = computed(() => {
   const summary = overview.value.summary;
@@ -79,10 +111,17 @@ const statCards = computed(() => {
 async function loadOverview() {
   loading.value = true;
   try {
-    overview.value = await getAdminDashboardOverviewApi();
+    overview.value = await getAdminDashboardOverviewApi({
+      revenue_period: revenuePeriod.value,
+    });
   } finally {
     loading.value = false;
   }
+}
+
+function setRevenuePeriod(period: DashboardRevenuePeriod) {
+  revenuePeriod.value = period;
+  void loadOverview();
 }
 
 onMounted(() => {
@@ -121,6 +160,69 @@ onMounted(() => {
         </ElCard>
       </ElCol>
     </ElRow>
+
+    <ElCard shadow="never" class="rounded-2xl border-0">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-slate-900">收益</span>
+          <ElButtonGroup>
+            <ElButton
+              v-for="item in revenuePeriods"
+              :key="item.value"
+              :type="revenuePeriod === item.value ? 'primary' : 'default'"
+              size="small"
+              @click="setRevenuePeriod(item.value)"
+            >
+              {{ item.label }}
+            </ElButton>
+          </ElButtonGroup>
+        </div>
+      </template>
+      <ElSkeleton :loading="loading" animated>
+        <ElRow :gutter="16">
+          <ElCol :lg="8" :md="12" :xs="24">
+            <ElStatistic
+              :formatter="() => `¥${moneyText(revenue?.total_amount)}`"
+              title="平台收益"
+              :value="revenue?.total_amount || 0"
+            />
+            <div class="mt-3 text-sm text-slate-500">
+              {{ formatDateTime(revenue?.start_at) }} 至 {{ formatDateTime(revenue?.end_at) }}
+            </div>
+          </ElCol>
+          <ElCol :lg="8" :md="12" :xs="24">
+            <ElStatistic
+              :formatter="() => `¥${moneyText(revenue?.member_amount)}`"
+              title="会员收益"
+              :value="revenue?.member_amount || 0"
+            />
+            <div class="mt-3 text-sm text-slate-500">
+              会员订单 {{ formatCompactNumber(revenue?.member_count || 0) }} 笔
+            </div>
+          </ElCol>
+          <ElCol :lg="8" :md="12" :xs="24">
+            <ElStatistic
+              :formatter="() => `¥${moneyText(revenue?.circle_owner_amount)}`"
+              title="圈主收益"
+              :value="revenue?.circle_owner_amount || 0"
+            />
+            <div class="mt-3 text-sm text-slate-500">
+              圈主订单 {{ formatCompactNumber(revenue?.circle_owner_count || 0) }} 笔
+            </div>
+          </ElCol>
+          <ElCol :lg="8" :md="12" :xs="24" class="mt-4">
+            <ElStatistic
+              :formatter="() => `¥${moneyText(revenue?.circle_amount)}`"
+              title="圈子收益"
+              :value="revenue?.circle_amount || 0"
+            />
+            <div class="mt-3 text-sm text-slate-500">
+              付费入圈 {{ formatCompactNumber(revenue?.circle_count || 0) }} 笔
+            </div>
+          </ElCol>
+        </ElRow>
+      </ElSkeleton>
+    </ElCard>
 
     <ElRow :gutter="16">
       <ElCol :lg="12" :xs="24" class="mb-4">

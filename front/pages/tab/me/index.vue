@@ -178,7 +178,7 @@ const visibleServiceList = computed(() => {
 })
 
 const visibleSettingList = computed(() => {
-  return settingList.filter((item) => item.key !== 'account-security')
+  return settingList
 })
 
 const displayName = computed(() => {
@@ -445,6 +445,7 @@ const onSettingTap = (item) => {
 
   const urlMap = {
     'account-security': '/pages/me/security/index',
+    'profile-card': '/pages/me/card/index',
     'help': '/pages/me/help-feedback/index',
     'about': '/pages/me/about/index'
   }

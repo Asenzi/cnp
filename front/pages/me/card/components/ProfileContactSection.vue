@@ -64,7 +64,7 @@ const shouldShowPermissionMask = computed(() => {
   if (hasVisibleContact.value || props.contact?.isSelf) {
     return false
   }
-  return true
+  return props.contact?.contactVisible !== true
 })
 
 const showAccessMask = computed(() => {
@@ -80,8 +80,13 @@ const maskTitle = computed(() => {
 })
 
 const maskDesc = computed(() => {
-  return '开通会员即可解锁'
+  if (props.contact?.targetHasContact === false) {
+    return '对方暂未完善联系方式'
+  }
+  return String(props.contact?.contactLockedReason || '').trim() || '开通会员即可解锁'
 })
+
+const targetHasNoContact = computed(() => props.contact?.targetHasContact === false)
 
 const lockedTitle = computed(() => {
   return String(props.contact?.contactLockedReason || '').trim() || '暂时无法查看联系方式'
@@ -97,6 +102,14 @@ const jobTitleLine = computed(() => String(props.contact?.jobTitle || '').trim()
 const cityText = computed(() => String(props.contact?.cityName || '').trim() || '圈脉链个人名片')
 const contactRows = computed(() => {
   const hiddenValue = '*******'
+  if (targetHasNoContact.value) {
+    return [
+      ['微信：', ''],
+      ['手机：', ''],
+      ['邮箱：', '']
+    ]
+  }
+
   if (showAccessMask.value) {
     return [
       ['微信：', hiddenValue],
@@ -106,9 +119,9 @@ const contactRows = computed(() => {
   }
 
   return [
-    ['微信：', String(props.contact?.displayWechat || '').trim() || hiddenValue],
-    ['手机：', String(props.contact?.displayPhone || '').trim() || hiddenValue],
-    ['邮箱：', String(props.contact?.displayEmail || '').trim() || hiddenValue]
+    ['微信：', String(props.contact?.displayWechat || '').trim()],
+    ['手机：', String(props.contact?.displayPhone || '').trim()],
+    ['邮箱：', String(props.contact?.displayEmail || '').trim()]
   ]
 })
 
@@ -521,7 +534,7 @@ function onTapCard() {
 
   if (!actions.length) {
     if (showAccessMask.value) {
-      emit('unlock-contact')
+      onTapLockedCard()
       return
     }
 
@@ -544,6 +557,13 @@ function onTapCard() {
 }
 
 function onTapLockedCard() {
+  if (targetHasNoContact.value) {
+    uni.showToast({
+      title: maskDesc.value,
+      icon: 'none'
+    })
+    return
+  }
   emit('unlock-contact')
 }
 
