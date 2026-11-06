@@ -116,23 +116,6 @@
           <text class="sync-meta-text">{{ syncMetaText }}</text>
         </view>
 
-        <view class="card settings-card">
-          <text class="settings-label">信息有效期</text>
-
-          <view class="settings-grid">
-            <button
-              v-for="item in validityOptions"
-              :key="item.value"
-              class="settings-option"
-              :class="selectedValidity === item.value ? 'settings-option-active' : ''"
-              hover-class="settings-option-hover"
-              @tap="selectedValidity = item.value"
-            >
-              {{ item.label }}
-            </button>
-          </view>
-        </view>
-
         <view class="card visibility-card">
           <view>
             <text class="card-head-title">谁可以看</text>
@@ -265,13 +248,6 @@ import {
 } from '../../../api/post'
 import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
 
-const validityOptions = [ 
-  { value: '3d', label: '3天' },
-  { value: '7d', label: '7天' },
-  { value: '30d', label: '30天' },
-  { value: 'forever', label: '永久' }
-]
-
 const visibilityOptions = [
   { value: 'all', label: '所有人' },
   { value: 'verified', label: '仅实名用户' }
@@ -304,7 +280,6 @@ const venueForm = ref({
   location: ''
 })
 
-const selectedValidity = ref('30d')
 const selectedVisibility = ref('all')
 const industryPopupVisible = ref(false)
 const draftIndustry = ref('')
@@ -941,7 +916,6 @@ onLoad((query = {}) => {
 .mode-tab,
 .upload-tile,
 .remove-btn,
-.settings-option,
 .visibility-option,
 .submit-btn,
 .location-trigger,
@@ -954,7 +928,6 @@ onLoad((query = {}) => {
 .mode-tab::after,
 .upload-tile::after,
 .remove-btn::after,
-.settings-option::after,
 .visibility-option::after,
 .submit-btn::after,
 .location-trigger::after,
@@ -978,7 +951,6 @@ onLoad((query = {}) => {
 .mode-tab-hover,
 .upload-tile-hover,
 .remove-btn-active,
-.settings-option-hover,
 .visibility-option-hover,
 .submit-btn-hover,
 .location-trigger-hover,
@@ -1071,8 +1043,7 @@ onLoad((query = {}) => {
   margin-top: 20rpx;
 }
 
-.media-label,
-.settings-label {
+.media-label {
   display: block;
   color: #94a3b8;
   font-size: 22rpx;
@@ -1213,7 +1184,6 @@ onLoad((query = {}) => {
 .venue-card,
 .tags-card,
 .sync-card,
-.settings-card,
 .visibility-card {
   padding: 24rpx 28rpx;
 }
@@ -1482,31 +1452,6 @@ onLoad((query = {}) => {
 .apply-btn {
   flex: 2;
   background: #1a57db;
-  color: #ffffff;
-}
-
-.settings-grid {
-  display: flex;
-  gap: 12rpx;
-  margin-top: 20rpx;
-}
-
-.settings-option {
-  flex: 1;
-  height: 72rpx;
-  border-radius: 14rpx;
-  background: #ffffff;
-  border: 2rpx solid #f1f5f9;
-  color: #64748b;
-  font-size: 24rpx;
-  line-height: 68rpx;
-  font-weight: 700;
-  text-align: center;
-}
-
-.settings-option-active {
-  background: #1a57db;
-  border-color: #1a57db;
   color: #ffffff;
 }
 
