@@ -324,8 +324,8 @@
       "path": "pages/resources/detail/index",
       "style": {
         "navigationBarTitleText": "资源详情",
-        "navigationBarBackgroundColor": "#f6f6f8",
-        "backgroundColor": "#f6f6f8",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#f5f6f8",
         "enablePullDownRefresh": true
       }
     },

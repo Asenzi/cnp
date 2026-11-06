@@ -1,6 +1,6 @@
 <template>
   <view class="detail-page">
-    <scroll-view class="detail-scroll" :class="{ 'detail-scroll-self': isSelfPost }" scroll-y :show-scrollbar="false">
+    <scroll-view class="detail-scroll" :class="{ 'detail-scroll-with-bar': !!post.post_code }" scroll-y :show-scrollbar="false">
       <view class="detail-main">
         <view v-if="loading && !post.post_code" class="status-wrap">
           <text class="status-text">加载中...</text>
@@ -14,15 +14,9 @@
         <template v-else>
           <view class="content-card">
             <view class="content-head">
-              <view class="tag-row">
-                <text class="tag tag-primary">{{ modeText }}</text>
-                <text v-if="post.industry_label" class="tag">{{ post.industry_label }}</text>
-                <text class="tag">{{ sceneTag }}</text>
-              </view>
-
               <text class="detail-title">{{ post.title || '' }}</text>
 
-              <view class="detail-body">
+              <view v-if="descLines.length" class="detail-body">
                 <text v-for="(line, index) in descLines" :key="`line-${index}`" class="detail-line">{{ line }}</text>
               </view>
             </view>
@@ -34,92 +28,59 @@
                 mode="aspectFill" :src="url" @tap="previewImage(index + 1)" />
             </view>
 
-            <view class="stats-wrap">
-              <view class="stats-top">
-                <view class="stats-left">
-                  <view class="stat-item">
-                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/see.png" mode="aspectFit" />
-                    <text class="stat-text">{{ formatNumber(post.view_count) }}</text>
-                  </view>
-                  <view class="stat-item">
-                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/interested.png" mode="aspectFit" />
-                    <text class="stat-text">{{ formatNumber(resourceCollectCount) }}</text>
-                  </view>
+            <view class="publisher-row" hover-class="publisher-row-hover" @tap="onTapProfile">
+              <view class="publisher-left">
+                <view class="avatar-wrap">
+                  <image class="avatar" :src="authorAvatar" mode="aspectFill" />
                 </view>
-                <text class="publish-time">发布于 {{ publishDateText }}</text>
+                <view class="publisher-main">
+                  <view class="name-row">
+                    <text class="publisher-name">{{ authorName }}</text>
+                    <view v-if="authorBadges.length" class="badge-row">
+                      <image
+                        v-for="badge in authorBadges"
+                        :key="badge.key"
+                        class="identity-badge"
+                        :src="badge.icon"
+                        mode="aspectFit"
+                      />
+                    </view>
+                  </view>
+                  <text class="publisher-role">{{ authorRole }}</text>
+                </view>
               </view>
+              <view class="publisher-chevron"></view>
+            </view>
 
-              <view class="expire-card">
-                <view class="expire-row">
-                  <view class="stat-icon-clock">
-                    <view class="clock-face"></view>
-                    <view class="clock-hand-hour"></view>
-                    <view class="clock-hand-minute"></view>
-                  </view>
-                  <text class="expire-text">有效期至：{{ expireDateText }} (剩余{{ remainDays }}天)</text>
-                </view>
-              </view>
+            <view class="publish-meta">
+              <image class="publish-clock" src="/static/icon/detail-clock.png" mode="aspectFit" />
+              <text class="publish-time">发布于 {{ publishDateText }}</text>
             </view>
           </view>
-
-          <!-- 相关资源推荐 - 待后端接口实现 -->
-          <!-- <view class="recommend-wrap">
-            <text class="recommend-title">相关资源推荐</text>
-            <view class="recommend-card">
-              <view class="recommend-icon">AI</view>
-              <view class="recommend-main">
-                <text class="recommend-name">寻求智能视觉识别方案</text>
-                <text class="recommend-from">来自：平台推荐</text>
-              </view>
-              <text class="recommend-arrow">›</text>
-            </view>
-          </view> -->
         </template>
       </view>
     </scroll-view>
 
-    <view v-if="!isSelfPost && post.post_code" class="bottom-nav">
-      <view class="publisher-card-bottom">
-        <view class="publisher-left">
-          <view class="avatar-wrap">
-            <image class="avatar" :src="authorAvatar" mode="aspectFill" />
+    <view v-if="post.post_code" class="bottom-bar">
+      <view class="bottom-actions">
+        <button class="icon-action" open-type="share" hover-class="icon-action-hover" @tap="onShare">
+          <view class="icon-action-inner">
+            <image class="icon-action-image" src="/static/icon/detail-share.png" mode="aspectFit" />
+            <text class="icon-action-label">分享</text>
           </view>
-          <view class="publisher-main">
-            <view class="name-row">
-              <text class="publisher-name">{{ authorName }}</text>
-              <view v-if="authorBadges.length" class="badge-row">
-                <image
-                  v-for="badge in authorBadges"
-                  :key="badge.key"
-                  class="identity-badge"
-                  :src="badge.icon"
-                  mode="aspectFit"
-                />
-              </view>
-            </view>
-            <text class="publisher-role">{{ authorRole }}</text>
+        </button>
+        <button class="icon-action" hover-class="icon-action-hover" @tap="onTapCollect">
+          <view class="icon-action-inner">
+            <image
+              class="icon-action-image"
+              :src="isPostInterested ? '/static/icon/detail-bookmark-on.png' : '/static/icon/detail-bookmark.png'"
+              mode="aspectFit"
+            />
+            <text class="icon-action-label" :class="{ 'icon-action-label-active': isPostInterested }">收藏</text>
           </view>
-        </view>
-        <button class="profile-btn" hover-class="profile-btn-active" @tap="onTapProfile">查看主页</button>
+        </button>
       </view>
-
-      <view class="bottom-buttons">
-        <!-- 未登录时只显示收藏按钮 -->
-        <template v-if="!isLoggedIn()">
-          <button class="bottom-btn bottom-btn-single" hover-class="bottom-btn-hover" @tap="onCollectBeforeLogin">
-            <text class="btn-label-primary">去收藏</text>
-          </button>
-        </template>
-        <!-- 已登录时显示分享和收藏按钮 -->
-        <template v-else>
-          <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
-            <text class="btn-label">分享</text>
-          </button>
-          <button class="bottom-btn bottom-btn-plain" hover-class="bottom-btn-hover" @tap="onToggleResourceCollect">
-            <text class="btn-label">{{ isPostInterested ? '已收藏' : '去收藏' }}</text>
-          </button>
-        </template>
-      </view>
+      <button class="contact-btn" hover-class="contact-btn-hover" @tap="onTapProfile">查看人脉</button>
     </view>
 
     <view v-if="cardPopupVisible" class="card-popup-mask" @tap="closeCardPopup">
@@ -269,11 +230,20 @@ const subImages = computed(() => imageList.value.slice(1, 3))
 const authorName = computed(() => String(post.value?.author?.nickname || '未命名用户').trim())
 const authorAvatar = computed(() => String(post.value?.author?.avatar_url || 'https://cos.cnptec.site/static/logo.png').trim() || 'https://cos.cnptec.site/static/logo.png')
 const authorRole = computed(() => {
-  const companyName = String(post.value?.author?.company_name || '').trim()
-  const jobTitle = String(post.value?.author?.job_title || '').trim()
-  const fallbackRole = String(post.value?.author?.role || '商务人士').trim()
-  const parts = [companyName, jobTitle].filter(Boolean)
-  return parts.length ? parts.join(' | ') : fallbackRole
+  const profile = cardProfile.value && typeof cardProfile.value === 'object' ? cardProfile.value : {}
+  const author = post.value?.author && typeof post.value.author === 'object' ? post.value.author : {}
+  const jobTitle = String(profile.job_title || author.job_title || '').trim()
+  const cityName = String(profile.city_name || author.city_name || '').trim()
+  const companyName = String(profile.company_name || author.company_name || '').trim()
+  const fallbackRole = String(author.role || profile.industry_label || author.industry_label || '').trim()
+  const secondary = cityName || companyName
+  if (jobTitle && secondary) {
+    return `${jobTitle} · ${secondary}`
+  }
+  if (jobTitle || secondary) {
+    return jobTitle || secondary
+  }
+  return fallbackRole || '商务人士'
 })
 const authorVerified = computed(() => Boolean(post.value?.author?.is_verified))
 const authorUserId = computed(() => {
@@ -359,28 +329,6 @@ const cardLockedDesc = computed(() => {
   }
   return '请根据平台权限规则查看完整联系方式'
 })
-const modeText = computed(() => {
-  const mode = String(post.value?.mode || '').trim()
-  if (mode === 'resource') {
-    return '找资源'
-  }
-  if (mode === 'venue') {
-    return '发布活动'
-  }
-  return '找合作'
-})
-
-const sceneTag = computed(() => {
-  const mode = String(post.value?.mode || '').trim()
-  if (mode === 'resource') {
-    return '资源匹配'
-  }
-  if (mode === 'venue') {
-    return '活动对接'
-  }
-  return '合作对接'
-})
-
 const descLines = computed(() => {
   const raw = String(post.value?.description || '').trim()
   if (!raw) {
@@ -401,38 +349,9 @@ const publishDateText = computed(() => {
   const y = date.getFullYear()
   const m = `${date.getMonth() + 1}`.padStart(2, '0')
   const d = `${date.getDate()}`.padStart(2, '0')
-  return `${y}-${m}-${d}`
-})
-
-const expireDateText = computed(() => {
-  const raw = String(post.value?.created_at || '').trim()
-  if (!raw) {
-    return '--'
-  }
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) {
-    return '--'
-  }
-  const expire = new Date(date.getTime() + 180 * 24 * 60 * 60 * 1000)
-  const y = expire.getFullYear()
-  const m = `${expire.getMonth() + 1}`.padStart(2, '0')
-  const d = `${expire.getDate()}`.padStart(2, '0')
-  return `${y}-${m}-${d}`
-})
-
-const remainDays = computed(() => {
-  const raw = String(post.value?.created_at || '').trim()
-  if (!raw) {
-    return 0
-  }
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) {
-    return 0
-  }
-  const expire = new Date(date.getTime() + 180 * 24 * 60 * 60 * 1000)
-  const now = new Date()
-  const days = Math.ceil((expire.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-  return Math.max(days, 0)
+  const hh = `${date.getHours()}`.padStart(2, '0')
+  const mm = `${date.getMinutes()}`.padStart(2, '0')
+  return `${y}-${m}-${d} ${hh}:${mm}`
 })
 
 const resourceCollectCount = computed(() => {
@@ -467,17 +386,6 @@ const reportDetailFeedback = (eventType, ext = {}) => {
   }).catch(() => {
     // 推荐反馈失败不影响详情页操作。
   })
-}
-
-const formatNumber = (value) => {
-  const num = Number(value || 0)
-  if (!Number.isFinite(num) || num <= 0) {
-    return '0'
-  }
-  if (num >= 10000) {
-    return `${(num / 10000).toFixed(1)}w`
-  }
-  return `${Math.round(num)}`
 }
 
 const fetchDetail = async () => {
@@ -594,6 +502,14 @@ const onChat = async () => {
   reportDetailFeedback('contact')
   cardPopupVisible.value = true
   await loadCardProfile(targetUserId)
+}
+
+const onTapCollect = () => {
+  if (!isLoggedIn()) {
+    onCollectBeforeLogin()
+    return
+  }
+  onToggleResourceCollect()
 }
 
 const onCollectBeforeLogin = () => {
@@ -745,34 +661,37 @@ onPullDownRefresh(async () => {
 .detail-page {
   height: 100vh;
   overflow: hidden;
-  background: #f9fafb;
+  background: #f5f6f8;
   color: #111827;
   font-family: 'Public Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .detail-scroll {
-  height: calc(100vh - 220rpx - env(safe-area-inset-bottom));
-}
-
-.detail-scroll-self {
   height: 100vh;
 }
 
+.detail-scroll-with-bar {
+  height: calc(100vh - 136rpx - env(safe-area-inset-bottom));
+}
+
 .detail-main {
-  padding: 24rpx 32rpx 32rpx;
   display: flex;
   flex-direction: column;
   gap: 24rpx;
+  padding-bottom: 24rpx;
 }
 
-.publisher-card {
-  background: #ffffff;
-  border-radius: 16rpx;
-  padding: 28rpx;
+.publisher-row {
+  padding: 28rpx 32rpx;
+  border-top: 1rpx solid #eef1f4;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
+}
+
+.publisher-row-hover {
+  background: #f8fafc;
 }
 
 .publisher-left {
@@ -785,17 +704,17 @@ onPullDownRefresh(async () => {
 
 .avatar-wrap {
   position: relative;
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 48rpx;
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 42rpx;
   flex-shrink: 0;
 }
 
 .avatar {
   width: 100%;
   height: 100%;
-  border-radius: 48rpx;
-  background: #f3f6fa;
+  border-radius: 42rpx;
+  background: #e8f1ff;
 }
 
 .publisher-main {
@@ -814,14 +733,14 @@ onPullDownRefresh(async () => {
 }
 
 .publisher-name {
-  max-width: 260rpx;
+  max-width: 420rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #172033;
-  font-size: 28rpx;
-  line-height: 36rpx;
-  font-weight: 600;
+  color: #1f2329;
+  font-size: 32rpx;
+  line-height: 44rpx;
+  font-weight: 700;
 }
 
 .badge-row {
@@ -840,109 +759,50 @@ onPullDownRefresh(async () => {
 }
 
 .publisher-role {
-  color: #66758a;
+  color: #9aa1ab;
   font-size: 24rpx;
-  line-height: 32rpx;
+  line-height: 34rpx;
 }
 
-.profile-btn {
-  border: 0;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 24rpx;
-  line-height: 56rpx;
-  font-weight: 600;
-  height: 56rpx;
-  padding: 0 20rpx;
-  border-radius: 999rpx;
-}
-
-.profile-btn::after {
-  border: 0;
-}
-
-.profile-btn-active {
-  opacity: 0.82;
-}
-
-.publisher-share-btn {
-  width: 72rpx;
-  height: 72rpx;
-  padding: 0;
-  border: 0;
-  border-radius: 12rpx;
-  background: #f6f8fc;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.publisher-chevron {
+  width: 16rpx;
+  height: 16rpx;
+  margin-right: 8rpx;
+  border-top: 3rpx solid #c5cad3;
+  border-right: 3rpx solid #c5cad3;
+  transform: rotate(45deg);
   flex-shrink: 0;
-}
-
-.publisher-share-btn::after {
-  border: 0;
-}
-
-.publisher-share-btn-active {
-  opacity: 0.82;
-}
-
-.publisher-share-icon {
-  width: 32rpx;
-  height: 32rpx;
-  display: block;
 }
 
 .content-card {
   background: #ffffff;
-  border-radius: 16rpx;
   overflow: hidden;
 }
 
 .content-head {
-  padding: 32rpx;
+  padding: 36rpx 32rpx 24rpx;
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
-}
-
-.tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-}
-
-.tag {
-  background: #f3f6fa;
-  color: #66758a;
-  font-size: 22rpx;
-  line-height: 30rpx;
-  font-weight: 600;
-  border-radius: 8rpx;
-  padding: 4rpx 12rpx;
-}
-
-.tag-primary {
-  background: #eff6ff;
-  color: #2563eb;
+  gap: 28rpx;
 }
 
 .detail-title {
-  color: #172033;
-  font-size: 34rpx;
-  line-height: 48rpx;
-  font-weight: 600;
+  color: #1f2329;
+  font-size: 40rpx;
+  line-height: 56rpx;
+  font-weight: 700;
 }
 
 .detail-body {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 28rpx;
 }
 
 .detail-line {
-  color: #66758a;
+  color: #8b919c;
   font-size: 28rpx;
-  line-height: 44rpx;
+  line-height: 48rpx;
   white-space: pre-wrap;
 }
 
@@ -969,106 +829,25 @@ onPullDownRefresh(async () => {
   height: 200rpx;
 }
 
-.stats-wrap {
-  border-top: 1rpx solid #f3f6fa;
-  padding: 24rpx 32rpx 32rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.stats-top {
+.publish-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
+  gap: 12rpx;
+  padding: 4rpx 32rpx 36rpx;
 }
 
-.stats-left {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 32rpx;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.stat-icon {
-  width: 32rpx;
-  height: 32rpx;
+.publish-clock {
+  width: 28rpx;
+  height: 28rpx;
   display: block;
   flex-shrink: 0;
 }
 
-.stat-icon-clock {
-  flex-shrink: 0;
-  position: relative;
-  width: 22rpx;
-  height: 22rpx;
-}
-
-.clock-face {
-  position: absolute;
-  inset: 0;
-  border-radius: 999rpx;
-  background: #2563eb;
-}
-
-.clock-hand-hour,
-.clock-hand-minute {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 2rpx;
-  background: #ffffff;
-  border-radius: 999rpx;
-  transform-origin: center bottom;
-}
-
-.clock-hand-hour {
-  height: 6rpx;
-  transform: translate(-50%, -100%);
-}
-
-.clock-hand-minute {
-  height: 7rpx;
-  transform: translate(-50%, -100%) rotate(48deg);
-}
-
-.stat-text,
 .publish-time {
-  color: #66758a;
+  color: #a0a6b0;
   font-size: 24rpx;
-  line-height: 32rpx;
-}
-
-.publish-time {
+  line-height: 34rpx;
   flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.expire-card {
-  border-radius: 12rpx;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  padding: 16rpx 18rpx;
-}
-
-.expire-row {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-}
-
-.expire-text {
-  color: #2563eb;
-  font-size: 24rpx;
-  line-height: 32rpx;
-  font-weight: 600;
 }
 
 .recommend-wrap {
@@ -1134,6 +913,7 @@ onPullDownRefresh(async () => {
 }
 
 .status-wrap {
+  margin: 24rpx 32rpx;
   border-radius: 16rpx;
   background: #ffffff;
   min-height: 280rpx;
@@ -1170,96 +950,94 @@ onPullDownRefresh(async () => {
   opacity: 0.86;
 }
 
-.bottom-nav {
+.bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 20;
   background: #ffffff;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.publisher-card-bottom {
-  padding: 16rpx 32rpx;
-  border-top: 1rpx solid #e7ecf3;
+  border-top: 1rpx solid #eef1f4;
+  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
-.bottom-buttons {
-  padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
+.bottom-actions {
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  flex-shrink: 0;
 }
 
-.bottom-btn {
-  flex: 1;
+.icon-action {
+  width: 96rpx;
+  min-width: 96rpx;
+  height: 88rpx;
+  margin: 0;
+  padding: 0;
   border: 0;
-  border-radius: 12rpx;
-  height: 72rpx;
+  border-radius: 0;
+  background: transparent;
+  line-height: 1;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
 }
 
-.bottom-btn::after {
+.icon-action-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+}
+
+.icon-action::after {
   border: 0;
 }
 
-.bottom-btn-plain {
-  padding: 0 20rpx;
-  background: #f6f8fc;
-  color: #66758a;
+.icon-action-hover {
+  opacity: 0.72;
 }
 
-.bottom-btn-primary {
-  flex: 1;
-  background: #2563eb;
-  color: #ffffff;
-}
-
-.bottom-btn-single {
-  width: 100%;
-  background: linear-gradient(135deg, #1a57db 0%, #2563eb 100%);
-  color: #ffffff;
-  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.2);
-}
-
-.bottom-btn-hover {
-  opacity: 0.8;
-}
-
-.btn-icon-image {
-  width: 32rpx;
-  height: 32rpx;
+.icon-action-image {
+  width: 44rpx;
+  height: 44rpx;
   display: block;
-  flex: 0 0 auto;
 }
 
-.btn-icon-image-primary {
-  width: 34rpx;
-  height: 34rpx;
+.icon-action-label {
+  color: #6b7280;
+  font-size: 20rpx;
+  line-height: 28rpx;
 }
 
-.btn-label {
-  font-size: 24rpx;
-  line-height: 32rpx;
-  font-weight: 500;
-  white-space: nowrap;
+.icon-action-label-active {
+  color: #2f6bff;
 }
 
-.btn-label-primary {
-  font-size: 28rpx;
-  line-height: 36rpx;
+.contact-btn {
+  flex: 1;
+  height: 88rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999rpx;
+  background: #2f6bff;
+  color: #ffffff;
+  font-size: 32rpx;
+  line-height: 88rpx;
   font-weight: 600;
-  white-space: nowrap;
+}
+
+.contact-btn::after {
+  border: 0;
+}
+
+.contact-btn-hover {
+  opacity: 0.88;
 }
 
 .card-popup-mask {
@@ -1511,16 +1289,20 @@ onPullDownRefresh(async () => {
     background: #0a0a0a;
   }
 
-  .publisher-card,
-  .publisher-card-bottom,
   .content-card,
   .recommend-card,
-  .status-wrap {
+  .status-wrap,
+  .bottom-bar {
     background: #1a1a1a;
   }
 
-  .publisher-card-bottom {
+  .publisher-row,
+  .bottom-bar {
     border-top-color: #2a2a2a;
+  }
+
+  .publisher-row-hover {
+    background: #222222;
   }
 
   .publisher-name,
@@ -1532,32 +1314,20 @@ onPullDownRefresh(async () => {
 
   .publisher-role,
   .detail-line,
-  .stat-text,
   .publish-time,
-  .status-text {
+  .status-text,
+  .icon-action-label {
     color: #8a8a8a;
+  }
+
+  .publisher-chevron {
+    border-top-color: #6b7280;
+    border-right-color: #6b7280;
   }
 
   .avatar,
   .gallery-image {
     background: #2a2a2a;
-  }
-
-  .profile-btn {
-    background: rgba(37, 99, 235, 0.18);
-  }
-
-  .publisher-share-btn {
-    background: #2a2a2a;
-  }
-
-  .tag {
-    background: #2a2a2a;
-    color: #8a8a8a;
-  }
-
-  .stats-wrap {
-    border-top-color: #2a2a2a;
   }
 
   .recommend-from {
@@ -1566,19 +1336,6 @@ onPullDownRefresh(async () => {
 
   .recommend-arrow {
     color: #4a4a4a;
-  }
-
-  .bottom-nav {
-    background: #1a1a1a;
-  }
-
-  .publisher-card-bottom {
-    border-top-color: #2a2a2a;
-  }
-
-  .bottom-btn-plain {
-    background: #2a2a2a;
-    color: #8a8a8a;
   }
 
   .card-popup-sheet,
