@@ -17,10 +17,12 @@ router = APIRouter(prefix="/settlement", tags=["Settlement"])
 @router.get("/income", summary="Get current user income overview")
 def get_income_overview(
     limit: int = Query(default=20, ge=1, le=50),
+    before_id: int | None = Query(default=None, ge=1),
+    type: str | None = Query(default=None, max_length=32),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    payload = get_user_income_overview(db=db, user_pk=user_id, limit=limit)
+    payload = get_user_income_overview(db=db, user_pk=user_id, limit=limit, biz_type=type, before_id=before_id)
     return success_response(data=payload)
 
 
@@ -36,10 +38,12 @@ def get_settlement_ledgers(
 @router.get("/withdrawals", summary="List current user withdrawals")
 def get_withdrawals(
     limit: int = Query(default=30, ge=1, le=100),
+    before_id: int | None = Query(default=None, ge=1),
+    status: str | None = Query(default=None, max_length=16),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(db_session),
 ):
-    return success_response(data=list_user_withdrawals(db=db, user_pk=user_id, limit=limit))
+    return success_response(data=list_user_withdrawals(db=db, user_pk=user_id, limit=limit, before_id=before_id, status=status))
 
 
 @router.post("/withdrawals", summary="Create current user withdrawal")

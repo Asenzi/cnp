@@ -11,18 +11,12 @@
       </view>
 
       <view v-else>
-        <ProfileHeroSection :profile="pageData.profile" :show-action="true" action-type="share" :is-self="isSelfProfile"
-          @share="onOpenShareMenu" />
-        <ProfileBioSection :bio="pageData.profile.bio" />
-        <ProfileContactSection :contact="contactSectionData" @unlock-contact="onOpenMemberCenter" />
-        <!-- <ProfileStatsSection :stats="pageData.stats" /> -->
-
-        <view class="tab-divider"></view>
-        <view class="tabs-sticky">
+        <ProfileHeroSection :profile="heroProfile" :collected="isNetworkCollected" :collecting="collectingNetwork"
+          @collect="onToggleNetworkCollect" @share="onCloseShareMenu" @contact="onContactProfile" />
+        <ProfileBioSection :bio="pageData.profile.bio" :details="bioDetails" />
+        <view class="activity-section">
           <ProfileTabsBar :tabs="pageData.tabs" :active-key="activeTab" @change="onSwitchTab" />
-        </view>
-
-        <view class="content-list-wrap" :class="{ 'content-list-wrap-with-bottom': showBottomActionBar }">
+          <view class="content-list-wrap">
           <template v-if="activeTab === 'created-circles'">
             <view v-if="ownedCirclesLoading && !hasOwnedCircleAny" class="section-status-wrap">
               <text class="section-status-text">加载中...</text>
@@ -33,11 +27,7 @@
             </view>
             <template v-else>
               <ProfileCircleCard v-for="item in ownedCircles" :key="item.id" :item="item" @enter="onEnterCircle" />
-              <view v-if="ownedCirclesLoaded && !hasOwnedCircleAny" class="section-status-wrap section-empty-wrap">
-                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png"
-                  mode="aspectFit" />
-                <text class="section-status-text section-empty-text">暂无创建的圈子</text>
-              </view>
+              <AppEmptyState v-if="ownedCirclesLoaded && !hasOwnedCircleAny"><template #title>暂无创建的圈子</template></AppEmptyState>
               <view v-if="ownedCirclesLoadingMore" class="load-more-wrap">
                 <text class="load-more-text">加载中...</text>
               </view>
@@ -57,11 +47,7 @@
             </view>
             <template v-else>
               <ProfileCircleCard v-for="item in joinedCircles" :key="item.id" :item="item" @enter="onEnterCircle" />
-              <view v-if="circlesLoaded && !hasCircleAny" class="section-status-wrap section-empty-wrap">
-                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png"
-                  mode="aspectFit" />
-                <text class="section-status-text section-empty-text">暂无加入的圈子</text>
-              </view>
+              <AppEmptyState v-if="circlesLoaded && !hasCircleAny"><template #title>暂无加入的圈子</template></AppEmptyState>
               <view v-if="circlesLoadingMore" class="load-more-wrap">
                 <text class="load-more-text">加载中...</text>
               </view>
@@ -80,12 +66,8 @@
               <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetryFeed">重试</button>
             </view>
             <template v-else>
-              <ProfilePostCard v-for="item in feedPosts" :key="item.id" :item="item" @detail="onTapPostDetail" />
-              <view v-if="feedLoaded && !hasFeedAny" class="section-status-wrap section-empty-wrap">
-                <image class="section-empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png"
-                  mode="aspectFit" />
-                <text class="section-status-text section-empty-text">暂无发布的资源</text>
-              </view>
+              <ProfileDetailResourceCard v-for="item in feedPosts" :key="item.id" :item="item" @detail="onTapPostDetail" />
+              <AppEmptyState v-if="feedLoaded && !hasFeedAny"><template #title>暂无发布的资源</template></AppEmptyState>
               <view v-if="feedLoadingMore" class="load-more-wrap">
                 <text class="load-more-text">加载中...</text>
               </view>
@@ -94,33 +76,15 @@
               </view>
             </template>
           </template>
+          </view>
         </view>
 
       </view>
     </view>
 
-    <view v-if="showBottomActionBar" class="bottom-action-bar">
-      <button v-if="!isLoggedIn" class="action-btn action-btn-primary" hover-class="action-btn-active"
-        @tap="onLoginToCreateCard">
-        创建名片
-      </button>
-      <template v-else>
-        <button v-if="false" class="action-btn action-btn-danger" hover-class="action-btn-active" @tap="onReportProfile">
-          举报
-        </button>
-        <button class="action-btn action-btn-secondary" hover-class="action-btn-active" open-type="share">
-          分享名片
-        </button>
-        <button class="action-btn action-btn-primary" :class="{ 'action-btn-followed': isNetworkCollected }"
-          :disabled="collectingNetwork" hover-class="action-btn-active" @tap="onToggleNetworkCollect">
-          {{ collectingNetwork ? '处理中...' : (isNetworkCollected ? '已收藏' : '收藏人脉') }}
-        </button>
-      </template>
-    </view>
-
     <!-- 隐藏的Canvas用于生成分享图 -->
-    <canvas canvas-id="shareCanvas"
-      style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 900px; border: none;"></canvas>
+    <canvas id="shareCanvas" type="2d" canvas-id="shareCanvas"
+      style="position: fixed; left: -9999px; top: -9999px; width: 750px; height: 600px; border: none;"></canvas>
 
     <!-- 分享菜单弹窗 -->
     <view v-if="shareMenuVisible" class="share-menu-mask" @tap="onCloseShareMenu">
@@ -145,6 +109,9 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
+import { reportActivity } from '../../../utils/activity-notification'
 import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom, onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { getMyCircles, getOwnedCircles, getUserCircles, getUserOwnedCircles } from '../../../api/circle'
@@ -154,10 +121,8 @@ import { getCurrentUserProfile, getUserProfileById } from '../../../api/user'
 import { generateProfileShareImage } from '../../../utils/profile-share-image'
 import ProfileBioSection from './components/ProfileBioSection.vue'
 import ProfileCircleCard from './components/ProfileCircleCard.vue'
-import ProfileContactSection from './components/ProfileContactSection.vue'
 import ProfileHeroSection from './components/ProfileHeroSection.vue'
-import ProfilePostCard from './components/ProfilePostCard.vue'
-import ProfileStatsSection from './components/ProfileStatsSection.vue'
+import ProfileDetailResourceCard from './components/ProfileDetailResourceCard.vue'
 import ProfileTabsBar from './components/ProfileTabsBar.vue'
 import {
   mapProfileCircleItem,
@@ -170,7 +135,7 @@ const PAGE_SIZE = 20
 const loading = ref(false)
 const loadError = ref('')
 const pageData = ref(resolveProfileHomeData({}, { posts: [], circles: [] }))
-const activeTab = ref('created-circles')
+const activeTab = ref('feed')
 const targetUserId = ref('')
 const rawProfile = ref({})
 const shareImageUrl = ref('') // 缓存分享图片
@@ -310,7 +275,7 @@ const buildProfileLocationLine = (profile = {}) => {
 
 const updateNavigationTitle = () => {
   uni.setNavigationBarTitle({
-    title: isSelfProfile.value ? '我的名片' : '人脉详情'
+    title: '个人名片'
   })
 }
 
@@ -320,15 +285,14 @@ const hasOwnedCircleAny = computed(() => ownedCircles.value.length > 0)
 const hasCircleAny = computed(() => joinedCircles.value.length > 0)
 const isFollowing = computed(() => Boolean(rawProfile.value?.is_following || rawProfile.value?.followed))
 const isNetworkCollected = computed(() => Boolean(rawProfile.value?.is_interested || rawProfile.value?.interested))
-const showBottomActionBar = computed(() => Boolean(!isSelfProfile.value && String(targetUserId.value || '').trim()))
+const showBottomActionBar = computed(() => Boolean(hasProfileData.value && (isSelfProfile.value || String(targetUserId.value || '').trim())))
 const isActiveMemberValue = (value) => {
   if (typeof value === 'boolean') return value
   if (typeof value === 'number') return value > 0
   const normalized = String(value ?? '').trim().toLowerCase()
   return ['1', 'true', 'yes', 'active', 'opened', 'member', 'vip', 'paid', 'enabled', 'on', '已开通', '会员'].includes(normalized)
 }
-const getCurrentUserIsMember = () => {
-  const userInfo = uni.getStorageSync('userInfo') || {}
+const profileIsMember = (userInfo = {}) => {
   if ([
     userInfo.is_member,
     userInfo.member_opened,
@@ -349,6 +313,7 @@ const getCurrentUserIsMember = () => {
   }
   return false
 }
+const getCurrentUserIsMember = () => profileIsMember(uni.getStorageSync('userInfo') || {})
 const shouldMaskProfileSensitiveInfo = () => Boolean(!isSelfProfile.value && !getCurrentUserIsMember())
 const MASK_TEXT = '********'
 const contactSectionData = computed(() => {
@@ -380,6 +345,43 @@ const contactSectionData = computed(() => {
     isSelf
   }
 })
+
+const heroProfile = computed(() => ({
+  ...pageData.value.profile,
+  name: getCurrentUserIsMember()
+    ? String(rawProfile.value.verified_real_name || rawProfile.value.nickname || '未命名用户')
+    : String(rawProfile.value.nickname || '未命名用户'),
+  companyName: String(rawProfile.value.company_name || rawProfile.value.company || ''),
+  jobTitle: String(rawProfile.value.job_title || rawProfile.value.position || ''),
+  tags: String(rawProfile.value.industry_label || '').split(/[／/|｜,，、;；]/).map(item => item.trim()).filter(Boolean).slice(0, 4)
+}))
+const bioDetails = computed(() => ({
+  location: buildProfileLocationLine(rawProfile.value),
+  occupation: String(rawProfile.value.occupation || rawProfile.value.intro || ''),
+  service: String(rawProfile.value.service_description || rawProfile.value.services || ''),
+  problem: String(rawProfile.value.problem_solved || ''),
+  value: String(rawProfile.value.value_proposition || ''),
+  hobbies: Array.isArray(rawProfile.value.hobbies) ? rawProfile.value.hobbies.join('、') : String(rawProfile.value.hobbies || '')
+}))
+const onContactProfile = () => {
+  if (!getCurrentUserIsMember()) {
+    uni.showModal({ title: '成为会员', content: '开通会员即可查看并复制微信号', confirmText: '成为会员', success: result => { if (result.confirm) onOpenMemberCenter() } })
+    return
+  }
+  const contact = contactSectionData.value
+  if (!contact.contactVisible || !contact.displayWechat) {
+    showToast(contact.contactLockedReason || '对方暂未公开微信号')
+    return
+  }
+  uni.setClipboardData({
+    data: contact.displayWechat,
+    showToast: false,
+    success: () => uni.showModal({ title: '微信号已复制', content: contact.displayWechat, showCancel: false }),
+    fail: () => uni.showModal({ title: '联系微信', content: contact.displayWechat, confirmText: '重新复制', success: result => {
+      if (result.confirm) uni.setClipboardData({ data: contact.displayWechat })
+    } })
+  })
+}
 
 const syncPageData = () => {
   pageData.value = resolveProfileHomeData(rawProfile.value || {}, {
@@ -646,6 +648,7 @@ const loadAllData = async () => {
   if (loadError.value) {
     return
   }
+  void prepareProfileShareImage()
   await Promise.all([fetchOwnedCircles(true), fetchJoinedCircles(true), fetchProfileFeed(true)])
 }
 
@@ -827,15 +830,53 @@ const onToggleNetworkCollect = async () => {
   }
 }
 
+let shareImageKey = ''
+let shareImageTask = Promise.resolve('')
+
+const prepareProfileShareImage = () => {
+  const profile = rawProfile.value || {}
+  const userData = {
+    nickname: String(profile.nickname || pageData.value?.profile?.name || '好友名片').trim(),
+    avatarUrl: String(profile.avatar_url || pageData.value?.profile?.avatarUrl || '').trim(),
+    bio: String(profile.occupation || profile.intro || '').trim(),
+    company: String(profile.company_name || profile.company || '').trim(),
+    jobTitle: String(profile.job_title || profile.card_title || profile.position || '').trim(),
+    isMember: profileIsMember(profile),
+    isCircleOwner: isActiveMemberValue(profile.is_circle_owner),
+    isVerified: isActiveMemberValue(profile.is_verified) || isActiveMemberValue(profile.real_name_verified) || Boolean(String(profile.verified_real_name || '').trim())
+  }
+  const key = JSON.stringify([targetUserId.value, userData])
+  if (key === shareImageKey) return shareImageTask
+  shareImageKey = key
+  shareImageUrl.value = ''
+  // 串行绘制同一个画布，避免刷新资料时两次生成互相覆盖。
+  shareImageTask = shareImageTask.catch(() => '').then(async () => {
+    try {
+      const imagePath = await generateProfileShareImage(userData)
+      if (shareImageKey === key) shareImageUrl.value = imagePath
+      return imagePath
+    } catch (error) {
+      console.error('生成分享图失败:', error)
+      uni.showToast({title:'分享图生成失败，请稍后重试',icon:'none'})
+      if (shareImageKey === key) shareImageKey = ''
+      return userData.avatarUrl || undefined
+    }
+  })
+  return shareImageTask
+}
+
 onShareAppMessage(() => {
+  reportActivity('user', targetUserId.value, 'share')
   const target = String(rawProfile.value?.user_id || rawProfile.value?.userId || targetUserId.value || '').trim()
   const nickname = String(rawProfile.value?.nickname || pageData.value?.profile?.name || '好友名片').trim() || '好友名片'
-  const avatarUrl = String(rawProfile.value?.avatar_url || pageData.value?.profile?.avatarUrl || '').trim()
-
-  return {
+  const shareOptions = {
     title: `${nickname}的个人名片`,
     path: `/pages/me/card/index?userId=${encodeURIComponent(target)}`,
-    imageUrl: avatarUrl || undefined
+    imageUrl: shareImageUrl.value || String(rawProfile.value?.avatar_url || '').trim() || undefined
+  }
+  return {
+    ...shareOptions,
+    promise: prepareProfileShareImage().then((imageUrl) => ({ ...shareOptions, imageUrl }))
   }
 })
 
@@ -847,57 +888,9 @@ onLoad((query = {}) => {
 })
 
 onShow(() => {
-  // 清除分享图缓存，确保使用最新的分享图生成逻辑
-  shareImageUrl.value = ''
   loadAllData()
 })
 
-onShareAppMessage(async () => {
-  const target = String(rawProfile.value?.user_id || rawProfile.value?.userId || targetUserId.value || '').trim()
-  const nickname = String(rawProfile.value?.nickname || pageData.value?.profile?.name || '好友名片').trim() || '好友名片'
-  const avatarUrl = String(rawProfile.value?.avatar_url || pageData.value?.profile?.avatarUrl || '').trim()
-
-  // 如果已有缓存的分享图，直接使用
-  if (shareImageUrl.value) {
-    return {
-      title: `${nickname}的个人名片`,
-      path: `/pages/me/card/index?userId=${encodeURIComponent(target)}`,
-      imageUrl: shareImageUrl.value
-    }
-  }
-
-  // 生成自定义分享图
-  try {
-    const userData = {
-      nickname: nickname,
-      avatarUrl: avatarUrl,
-      bio: String(rawProfile.value?.intro || pageData.value?.profile?.bio || '').trim(),
-      company: String(rawProfile.value?.company_name || '').trim(),
-      jobTitle: String(rawProfile.value?.job_title || '').trim(),
-      industry: String(rawProfile.value?.industry_label || '').trim(),
-      isVerified: Boolean(rawProfile.value?.is_verified)
-    }
-
-    console.log('生成分享图数据:', userData)
-
-    const imagePath = await generateProfileShareImage(userData)
-    shareImageUrl.value = imagePath
-
-    return {
-      title: `${nickname}的个人名片`,
-      path: `/pages/me/card/index?userId=${encodeURIComponent(target)}`,
-      imageUrl: imagePath
-    }
-  } catch (err) {
-    console.error('生成分享图失败:', err)
-    // 降级方案：使用头像
-    return {
-      title: `${nickname}的个人名片`,
-      path: `/pages/me/card/index?userId=${encodeURIComponent(target)}`,
-      imageUrl: avatarUrl || undefined
-    }
-  }
-})
 
 onPullDownRefresh(async () => {
   await loadAllData()
@@ -1288,4 +1281,11 @@ onReachBottom(() => {
 .share-menu-item-hover {
   background: #f8fafc;
 }
+
+.profile-home-page{background:#f3f5f8;color:#111925;font-family:'PingFang SC','Microsoft YaHei',sans-serif}
+.page-shell{max-width:750rpx;box-sizing:border-box;background:#f3f5f8;padding:8rpx 8rpx 28rpx;box-shadow:none}
+.activity-section{margin-top:20rpx;padding:14rpx 34rpx 10rpx;border-radius:0;background:#fff;box-shadow:0 8rpx 24rpx rgba(27,44,70,.04)}
+.activity-heading{font-size:28rpx;line-height:40rpx;font-weight:600}.activity-heading text{display:inline-block;padding-bottom:6rpx;border-bottom:3rpx solid #172133}
+.content-list-wrap{padding:1rpx 0 0;gap:1rpx;background:#fff}
+:deep(.bio-wrap){margin-top:20rpx}
 </style>

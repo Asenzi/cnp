@@ -38,6 +38,7 @@ async def _reverse_geocode_impl(latitude: float, longitude: float):
 
             # 提取城市信息
             city = data.get("result", {}).get("address_component", {}).get("city", "")
+            district = data.get("result", {}).get("address_component", {}).get("district", "")
             if not city:
                 raise HTTPException(status_code=404, detail="未找到城市信息")
 
@@ -46,6 +47,7 @@ async def _reverse_geocode_impl(latitude: float, longitude: float):
 
             return success_response(data={
                 "city": city,
+                "district": district,
                 "raw": data  # 返回完整数据供调试
             })
 

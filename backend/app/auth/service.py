@@ -16,6 +16,7 @@ from app.core.exceptions import BusinessException
 from app.core.logger import logger
 from app.core.redis import get_redis
 from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.wechat_access_token import get_wechat_access_token, invalidate_wechat_access_token
 from app.crud import (
     bind_wechat_identity,
     create_user,
@@ -27,6 +28,7 @@ from app.crud import (
 )
 from app.points import grant_invite_friend_points, resolve_inviter_user_pk
 from app.schemas.auth import (
+    AccountCloseData,
     LoginData,
     PasswordChangeData,
     PhoneBindData,
@@ -41,7 +43,6 @@ _PHONE_BIND_CODE_KEY_PREFIX = "auth:bind_phone_user:"
 _PHONE_BIND_CODE_EXPIRE_SECONDS = 300
 _PASSWORD_CHANGE_CODE_KEY_PREFIX = "auth:change_password_user:"
 _PASSWORD_CHANGE_CODE_EXPIRE_SECONDS = 300
-_WECHAT_ACCESS_TOKEN_CACHE: dict[str, str | float] = {"token": "", "expires_at": 0.0}
 
 # Redis unavailable fallback: {phone: (code, expire_at)}
 _local_code_store: dict[str, tuple[str, datetime]] = {}
@@ -64,24 +65,6 @@ def _password_change_key(user_pk: int) -> str:
 
 def _generate_sms_code() -> str:
     return f"{randint(0, 999999):06d}"
-
-
-def _default_nickname(phone: str) -> str:
-    # First login nickname strategy: "用户" + phone last 4 digits.
-    return f"用户{phone[-4:]}"
-
-
-def _default_wechat_nickname(openid: str) -> str:
-    return f"微信用户{openid[-4:]}"
-
-
-def _default_avatar_url(seed: str) -> str:
-    # Single stable default avatar for new users, configurable by env.
-    # Supports "{seed}" placeholder if needed in future.
-    template = _normalize_optional_text(settings.DEFAULT_AVATAR_URL, 255) or "/static/logo.png"
-    if "{seed}" in template:
-        return template.replace("{seed}", seed)
-    return template
 
 
 def _normalize_optional_text(value: str | None, max_len: int) -> str | None:
@@ -164,7 +147,7 @@ def _build_login_data(user, is_new_user: bool, db: Session) -> LoginData:
         user_id=user.user_id,
         phone=user.phone,
         nickname=display_nickname,
-        avatar_url=display_avatar or settings.DEFAULT_AVATAR_URL,
+        avatar_url=display_avatar or None,
         wechat_bound=bool(user.wechat_openid),
         is_verified=bool(user.is_verified),
         intro=user.intro if intro_status == "approved" else None,
@@ -330,37 +313,6 @@ def _resolve_wechat_openid(
     return openid, None, None
 
 
-def _get_wechat_access_token() -> str:
-    cached_token = str(_WECHAT_ACCESS_TOKEN_CACHE.get("token") or "")
-    cached_expires_at = float(_WECHAT_ACCESS_TOKEN_CACHE.get("expires_at") or 0)
-    now = datetime.now(timezone.utc).timestamp()
-    if cached_token and cached_expires_at > now:
-        return cached_token
-
-    query = urlencode(
-        {
-            "grant_type": "client_credential",
-            "appid": settings.WECHAT_MINI_APP_ID,
-            "secret": settings.WECHAT_MINI_APP_SECRET,
-        }
-    )
-    try:
-        with urlopen(f"https://api.weixin.qq.com/cgi-bin/token?{query}", timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        logger.exception(f"Failed to get WeChat access token: {exc}")
-        raise BusinessException(message="微信手机号授权失败，请稍后重试", code=4110, status_code=502)
-
-    token = str(payload.get("access_token") or "").strip()
-    if not token:
-        logger.warning(f"WeChat access token missing, errcode={payload.get('errcode')}, errmsg={payload.get('errmsg')}")
-        raise BusinessException(message="微信手机号授权失败，请稍后重试", code=4110, status_code=502)
-
-    _WECHAT_ACCESS_TOKEN_CACHE["token"] = token
-    _WECHAT_ACCESS_TOKEN_CACHE["expires_at"] = now + max(int(payload.get("expires_in") or 7200) - 120, 300)
-    return token
-
-
 def _resolve_wechat_phone(phone_code: str | None) -> str | None:
     normalized_code = _normalize_optional_text(phone_code, 128)
     if not normalized_code:
@@ -368,17 +320,26 @@ def _resolve_wechat_phone(phone_code: str | None) -> str | None:
             return None
         raise BusinessException(message="请先授权手机号后再注册", code=4109, status_code=400)
 
-    token = _get_wechat_access_token()
     body = json.dumps({"code": normalized_code}).encode("utf-8")
-    request = UrlRequest(
-        f"https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token={token}",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    payload: dict = {}
     try:
-        with urlopen(request, timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        for attempt in range(2):
+            token = get_wechat_access_token(force_refresh=attempt > 0)
+            if not token:
+                raise RuntimeError("WeChat access token is unavailable")
+            request = UrlRequest(
+                f"https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token={token}",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request, timeout=8) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            errcode = int(payload.get("errcode") or 0)
+            if errcode not in {40001, 40014, 42001}:
+                break
+            invalidate_wechat_access_token()
+            logger.warning(f"WeChat phone token expired, errcode={errcode}; refreshing once")
     except Exception as exc:  # noqa: BLE001
         logger.exception(f"Failed to get WeChat phone number: {exc}")
         raise BusinessException(message="微信手机号授权失败，请稍后重试", code=4110, status_code=502)
@@ -405,6 +366,13 @@ def _sync_authorized_phone_to_wechat_user(
 
     current_phone = str(user.phone or "").strip()
     if current_phone == phone:
+        return user
+
+    # Existing accounts may have changed their bound phone in account management.
+    # A later WeChat login should not overwrite that user-managed phone with the
+    # phone returned by WeChat authorization. Only legacy virtual phones are
+    # backfilled from WeChat authorization.
+    if _is_mainland_phone(current_phone):
         return user
 
     existing_user = get_user_by_phone(db=db, phone=phone)
@@ -539,8 +507,6 @@ async def login_with_sms_code(
             user = create_user(
                 db=db,
                 phone=phone,
-                nickname=_default_nickname(phone),
-                avatar_url=_default_avatar_url(phone),
                 city_name=normalized_city_name,
                 inviter_user_pk=inviter_user_pk,
             )
@@ -560,9 +526,6 @@ async def login_with_sms_code(
         except SQLAlchemyError as exc:
             db.rollback()
             logger.warning(f"Failed to grant invite points for new phone user user_pk={user.id}: {exc}")
-    elif not _normalize_optional_text(user.avatar_url, 255):
-        # Backfill historical data that may have null/empty avatar.
-        user.avatar_url = _default_avatar_url(phone)
     if user is not None and normalized_city_name and not _normalize_optional_text(user.city_name, 32):
         user.city_name = normalized_city_name
 
@@ -786,6 +749,61 @@ async def change_password_with_sms_code(
     return PasswordChangeData(updated=True, force_relogin=True)
 
 
+def close_account_for_user(
+    db: Session,
+    current_user_pk: int,
+    confirm_text: str,
+) -> AccountCloseData:
+    normalized_confirm = str(confirm_text or "").strip()
+    if normalized_confirm != "注销账号":
+        raise BusinessException(message="请确认注销账号", code=4401, status_code=400)
+
+    user = get_user_by_id(db=db, user_id=current_user_pk)
+    if user is None:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+
+    if not bool(user.is_active):
+        return AccountCloseData(closed=True, force_relogin=True)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    release_suffix = f"closed_{user.id}_{int(now.timestamp())}"
+
+    user.is_active = False
+    user.token_version = int(user.token_version or 0) + 1
+    user.phone = release_suffix[:20]
+    user.password_hash = None
+    user.wechat_openid = None
+    user.wechat_unionid = None
+    user.wechat_session_key = None
+    user.wechat_bound_at = None
+    user.display_phone = None
+    user.display_wechat = None
+    user.email = None
+    user.show_contact = False
+    db.add(user)
+
+    try:
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        user.phone = f"closed_{uuid4().hex[:12]}"[:20]
+        db.add(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except SQLAlchemyError as exc:
+            db.rollback()
+            logger.exception(f"Failed to close account after phone conflict user_pk={user.id}: {exc}")
+            raise BusinessException(message="注销账号失败，请稍后重试", code=5009, status_code=500)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception(f"Failed to close account user_pk={user.id}: {exc}")
+        raise BusinessException(message="注销账号失败，请稍后重试", code=5009, status_code=500)
+
+    return AccountCloseData(closed=True, force_relogin=True)
+
+
 async def login_with_wechat_code(
     code: str,
     phone_code: str | None,
@@ -797,6 +815,11 @@ async def login_with_wechat_code(
     invite_code: str | None = None,
     city_name: str | None = None,
 ) -> LoginData:
+    if not _normalize_optional_text(phone_code, 128):
+        raise BusinessException(message="请先授权手机号后再登录", code=4109, status_code=400)
+
+    authorized_phone = _resolve_wechat_phone(phone_code)
+
     openid, unionid, session_key = _resolve_wechat_openid(
         code=code,
         device_id=device_id,
@@ -805,7 +828,6 @@ async def login_with_wechat_code(
     identity_phone = _wechat_virtual_phone(openid)
 
     normalized_city_name = _normalize_optional_text(city_name, 32)
-    authorized_phone = _resolve_wechat_phone(phone_code) if _normalize_optional_text(phone_code, 128) else None
 
     is_new_user = False
 
@@ -828,7 +850,7 @@ async def login_with_wechat_code(
         raise BusinessException(message="数据库连接异常，请稍后重试", code=5002, status_code=500)
 
     if user is None:
-        identity_phone = authorized_phone or _resolve_wechat_phone(phone_code) or identity_phone
+        identity_phone = authorized_phone or identity_phone
         existing_phone_user = get_user_by_phone(db, identity_phone)
         if existing_phone_user is not None:
             if existing_phone_user.wechat_openid and existing_phone_user.wechat_openid != openid:
@@ -842,16 +864,12 @@ async def login_with_wechat_code(
             )
         else:
             is_new_user = True
-            initial_nickname = _default_wechat_nickname(openid)
-            initial_avatar_url = _normalize_avatar_input(avatar_url) or _default_avatar_url(openid)
             inviter_user_pk = resolve_inviter_user_pk(db=db, invite_code=invite_code)
 
             try:
                 user = create_user(
                     db=db,
                     phone=identity_phone,
-                    nickname=initial_nickname,
-                    avatar_url=initial_avatar_url,
                     wechat_openid=openid,
                     wechat_unionid=unionid,
                     wechat_session_key=session_key,
@@ -884,9 +902,6 @@ async def login_with_wechat_code(
             user=user,
             authorized_phone=authorized_phone,
         )
-        if not _normalize_optional_text(user.avatar_url, 255):
-            # Backfill historical data that may have null/empty avatar.
-            user.avatar_url = _default_avatar_url(openid)
         if normalized_city_name and not _normalize_optional_text(user.city_name, 32):
             user.city_name = normalized_city_name
         if session_key:

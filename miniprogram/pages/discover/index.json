@@ -1,0 +1,13 @@
+{
+  "navigationStyle": "custom",
+  "backgroundColor": "#f6f6f8",
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "top-search-filter-header": "/components/top-search-filter-header/index",
+    "network-member-card": "/components/network-member-card/index",
+    "network-end-hint": "/components/network-end-hint/index",
+    "empty-state": "/components/empty-state/index",
+    "skeleton-card": "/components/skeleton-card/index",
+    "network-filter-panel": "/components/network-filter-panel/index"
+  }
+}

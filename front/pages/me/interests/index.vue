@@ -57,11 +57,7 @@
         </view>
 
         <template v-else>
-          <view v-if="showEmpty" class="empty-state">
-            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-            <text class="empty-title">{{ emptyTitle }}</text>
-            <text class="empty-desc">{{ emptyDescription }}</text>
-          </view>
+          <AppEmptyState v-if="showEmpty"><template #title>{{ emptyTitle }}</template><template #description>{{ emptyDescription }}</template></AppEmptyState>
 
           <template v-if="activeTab === 'contacts'">
             <view
@@ -138,6 +134,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onPullDownRefresh } from '@dcloudio/uni-app'
 import ProfilePostCard from '../card/components/ProfilePostCard.vue'

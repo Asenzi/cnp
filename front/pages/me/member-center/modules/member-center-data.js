@@ -12,23 +12,22 @@ export const DEFAULT_BENEFITS = [
     iconPath: 'https://cos.cnptec.site/static/icon/2.png'
   },
   {
-    key: 'circle_discount',
-    title: '社群加入优惠',
-    desc: '低成本高效入圈',
+    key: 'weight_hint',
+    title: '展示权重提示',
+    desc: '提升优质人脉曝光机会',
     iconPath: 'https://cos.cnptec.site/static/icon/3.png'
   },
   {
-    key: 'boost',
-    title: '展示权重提升',
-    desc: '曝光率大幅翻倍',
+    key: 'salon_discount',
+    title: '每周沙龙优惠',
+    desc: '每周沙龙专属优惠',
     iconPath: 'https://cos.cnptec.site/static/icon/4.png'
   },
   {
-    key: 'support',
-    title: '优先技术支持',
-    desc: '专属客服，极速响应您的需求',
-    iconPath: 'https://cos.cnptec.site/static/icon/5.png',
-    wide: true
+    key: 'summit_discount',
+    title: '每月峰会折扣',
+    desc: '每月峰会专属折扣',
+    iconPath: '/static/icon/summit-discount.svg',
   }
 ]
 

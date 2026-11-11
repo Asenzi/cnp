@@ -1,20 +1,9 @@
 <template>
   <view class="my-circles-page">
     <view class="page-shell">
-      <MyCirclesSearchBar :model-value="keyword" @search="onSearch" />
+      <view class="search-area"><MyCirclesSearchBar :model-value="keyword" :placeholder="activeCategory === 'owned' ? '搜索我创建的圈子' : '搜索我加入的圈子'" @search="onSearch" /></view>
 
-      <view class="section-header">
-        <text class="section-header-title">{{ sectionTitle }}</text>
-        <view
-          v-if="hasAny"
-          class="view-all-link"
-          hover-class="view-all-link-active"
-          @tap="onViewAll"
-        >
-          <text class="view-all-link-text">{{ viewAllText }}</text>
-        </view>
-      </view>
-
+      <view class="category-tabs"><view v-for="tab in circleTabs" :key="tab.key" :class="['category-tab', {active:activeCategory===tab.key}]" @tap="switchCategory(tab.key)">{{tab.label}}</view></view>
       <view v-if="loading && !hasAny" class="status-wrap">
         <text class="status-text">加载中...</text>
       </view>
@@ -27,7 +16,7 @@
       </view>
 
       <view v-else class="cards-wrap">
-        <DiscoverListCard
+        <CircleDirectoryCard
           v-for="item in circles"
           :key="item.id"
           :circle="item"
@@ -48,14 +37,17 @@
 <script setup>
 import { computed, onUnmounted, ref } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
-import { getMyCircles } from '../../../api/circle'
-import DiscoverListCard from '../../tab/circles/components/DiscoverListCard.vue'
+import { getMyCircles, getOwnedCircles } from '../../../api/circle'
+import CircleDirectoryCard from '../../tab/circles/components/CircleDirectoryCard.vue'
 import MyCirclesEmpty from '../../tab/circles/components/MyCirclesEmpty.vue'
 import MyCirclesFooter from '../../tab/circles/components/MyCirclesFooter.vue'
 import MyCirclesSearchBar from '../../tab/circles/components/MyCirclesSearchBar.vue'
 
 const PAGE_SIZE = 20
 
+const circleTabs=[{key:'joined',label:'加入的圈子'},{key:'owned',label:'创建的圈子'}]
+const activeCategory=ref('joined')
+const switchCategory=async key=>{if(activeCategory.value===key || loading.value || loadingMore.value)return;activeCategory.value=key;circles.value=[];total.value=0;loaded.value=false;await fetchMyCircles(true)}
 const keyword = ref('')
 const circles = ref([])
 const total = ref(0)
@@ -71,13 +63,6 @@ const hasAny = computed(() => circles.value.length > 0)
 const hasMore = computed(() => circles.value.length < total.value)
 const showEmpty = computed(() => loaded.value && !loading.value && !hasAny.value && !loadError.value)
 const normalizedKeyword = computed(() => String(keyword.value || '').trim())
-const sectionTitle = computed(() => {
-  if (normalizedKeyword.value) {
-    return `搜索结果 (${total.value})`
-  }
-  return '最近加入'
-})
-const viewAllText = computed(() => (hasMore.value ? '加载更多' : '已全部'))
 
 const showToast = (title) => {
   uni.showToast({
@@ -179,7 +164,7 @@ const fetchMyCircles = async (reset = false) => {
   }
 
   try {
-    const data = await getMyCircles({
+    const data = await (activeCategory.value === 'owned' ? getOwnedCircles : getMyCircles)({
       offset: nextOffset,
       limit: PAGE_SIZE,
       keyword: normalizedKeyword.value
@@ -242,13 +227,6 @@ const onRetry = () => {
   fetchMyCircles(true)
 }
 
-const onViewAll = () => {
-  if (!hasMore.value) {
-    showToast('已加载全部圈子')
-    return
-  }
-  fetchMyCircles(false)
-}
 
 const onDiscoverMore = () => {
   uni.switchTab({
@@ -286,7 +264,7 @@ onUnmounted(() => {
 
 .page-shell {
   min-height: 100vh;
-  padding: 24rpx 32rpx calc(40rpx + env(safe-area-inset-bottom));
+  padding: 0 0 calc(40rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
@@ -393,4 +371,6 @@ onUnmounted(() => {
     color: #64748b;
   }
 }
+.category-tabs{display:flex;gap:32rpx;padding:20rpx 24rpx;background:#f6f6f8}.category-tab{font-size:28rpx;line-height:48rpx;color:#747b8b}.category-tab.active{color:#1a57db;border-bottom:4rpx solid #1a57db}.cards-wrap{display:flex;flex-direction:column;gap:18rpx;background:#f6f6f8;padding:18rpx 24rpx}
+.search-area{padding:18rpx 24rpx;background:#f6f6f8}.category-tabs{background:#f6f6f8}.my-circles-page,.page-shell,.cards-wrap{background:#f6f6f8}
 </style>

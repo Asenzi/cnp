@@ -1,9 +1,11 @@
 <template>
   <view class="bottom-bar">
     <view class="price-wrap">
-      <view class="price-row">
+      <view v-if="Number(price.current || 0) > 0" class="price-row">
         <text class="price-main">¥{{ price.current }}</text>
-        <text class="price-unit">/年</text>
+      </view>
+      <view v-else class="price-row">
+        <text class="price-main price-free">免费</text>
       </view>
       <text class="price-note">{{ Number(price.current || 0) > 0 ? '拒绝申请将退回费用' : '无需支付费用' }}</text>
     </view>
@@ -89,11 +91,8 @@ const emit = defineEmits(['interest', 'apply'])
   font-weight: 700;
 }
 
-.price-unit {
-  padding-bottom: 2rpx;
-  color: #64748b;
-  font-size: 21rpx;
-  line-height: 30rpx;
+.price-free {
+  color: #16a34a;
 }
 
 .price-note {

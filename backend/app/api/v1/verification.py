@@ -237,6 +237,7 @@ def start_tencent_real_name_flow(
         real_name=payload.real_name,
         id_number=payload.id_number,
         wechat_id=payload.wechat_id,
+        invite_code=payload.invite_code,
         email=payload.email,
         phone_number=payload.phone_number,
     )
@@ -254,6 +255,7 @@ def finish_tencent_real_name_flow(
         db=db,
         user=user,
         provider_biz_token=payload.provider_biz_token,
+        invite_code=payload.invite_code,
     )
     return success_response(data=data.model_dump(mode='json'), message='实名认证结果已更新')
 

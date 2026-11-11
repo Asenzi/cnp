@@ -40,7 +40,7 @@ defineEmits(['change'])
   flex: 1;
   padding: 24rpx 0 20rpx;
   border-bottom: 3rpx solid transparent;
-  text-align: center;
+  text-align: left;
   transition: border-color 0.2s ease;
 }
 
@@ -72,4 +72,6 @@ defineEmits(['change'])
     color: #7aa2ff;
   }
 }
+
+.tabs-wrap{padding:0;background:#fff;border:0}.tab-item{padding:18rpx 0 20rpx}.tab-text{color:#596274;font-size:28rpx;line-height:40rpx;font-weight:500}.tab-text-active{color:#164eaf}.tab-item-active .tab-text{padding-bottom:11rpx;border-bottom:3rpx solid #164eaf}
 </style>

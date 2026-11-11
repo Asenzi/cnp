@@ -225,9 +225,9 @@ export function resolveProfileHomeData(profile = {}, options = {}) {
       circleCount: options.circleCount
     }),
     tabs: [
-      { key: 'created-circles', label: '创建的圈子' },
+      { key: 'feed', label: '发布的资源' },
       { key: 'joined-circles', label: '加入的圈子' },
-      { key: 'feed', label: '发布的资源' }
+      { key: 'created-circles', label: '创建的圈子' }
     ],
     posts,
     circles

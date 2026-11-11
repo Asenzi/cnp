@@ -1,58 +1,51 @@
-export const serviceList = [
-  {
-    key: 'auth',
-    iconPath: 'https://cos.cnptec.site/static/icon/certification.png',
-    label: '实名认证',
-    colorClass: 'service-blue',
-    url: '/pages/me/auth/realname/index'
-  },
-  // {
-  //   key: 'create_circle',
-  //   iconPath: 'https://cos.cnptec.site/static/icon/create.png',
-  //   label: '创建圈子',
-  //   colorClass: 'service-blue',
-  //   url: '/pages/circles/create/index'
-  // },
-  // {
-  //   key: 'member_center',
-  //   iconPath: 'https://cos.cnptec.site/static/icon/huiyuan.png',
-  //   label: '会员中心',
-  //   colorClass: 'service-blue',
-  //   url: '/pages/me/member-center/index'
-  // },
-  // {
-  //   key: 'income',
-  //   iconPath: 'https://cos.cnptec.site/static/icon/Profit.png',
-  //   label: '我的收益',
-  //   colorClass: 'service-blue',
-  //   url: '/pages/me/income/index'
-  // }
-  // {
-  //   key: 'messages',
-  //   iconPath: 'https://cos.cnptec.site/static/icon/chat.png',
-  //   label: '消息通知',
-  //   colorClass: 'service-blue',
-  //   url: '/pages/me/messages/index'
-  // },
-  // {
-  //   key: 'interests',
-  //   iconPath: 'https://cos.cnptec.site/static/icon/interested.png',
-  //   label: '感兴趣',
-  //   colorClass: 'service-blue',
-  //   url: '/pages/me/interests/index'
-  // },
-  // {
-  //   key: 'card',
-  //   iconPath: 'https://cos.cnptec.site/static/icon/card.png',
-  //   label: '我的名片',
-  //   colorClass: 'service-purple',
-  //   url: '/pages/me/card/index'
-  // }
-]
-
 export const settingList = [
-  { key: 'account-security', iconPath: 'https://cos.cnptec.site/static/icon/safe.png', label: '账号管理' },
-  { key: 'profile-card', iconPath: 'https://cos.cnptec.site/static/icon/card.png', label: '个人名片' },
-  { key: 'help', iconPath: 'https://cos.cnptec.site/static/icon/help.png', label: '帮助与反馈' },
-  { key: 'about', iconPath: 'https://cos.cnptec.site/static/icon/about.png', label: '关于我们' }
+  {
+    "key": "account-security",
+    "label": "账号管理",
+    "iconPath": "/static/me-reference/account.png",
+    "iconWidth": 43.58,
+    "iconHeight": 46.62
+  },
+  {
+    "key": "resources",
+    "label": "资源管理",
+    "iconPath": "/static/me-reference/resources.png",
+    "iconWidth": 43.58,
+    "iconHeight": 44.6
+  },
+  {
+    "key": "circles",
+    "label": "圈子管理",
+    "iconPath": "/static/me-reference/circles.png",
+    "iconWidth": 45.61,
+    "iconHeight": 42.57
+  },
+  {
+    "key": "distribution",
+    "label": "分销管理",
+    "iconPath": "/static/me-icons/distribution-report.svg",
+    "iconWidth": 44,
+    "iconHeight": 44
+  },
+  {
+    "key": "help",
+    "label": "帮助与反馈",
+    "iconPath": "/static/me-reference/help.png",
+    "iconWidth": 44.6,
+    "iconHeight": 44.6
+  },
+  {
+    "key": "about",
+    "label": "关于我们",
+    "iconPath": "/static/me-reference/about.png",
+    "iconWidth": 44.6,
+    "iconHeight": 44.6
+  },
+  {
+    "key": "logout",
+    "label": "退出登录",
+    "iconPath": "/static/me-reference/logout.png",
+    "iconWidth": 44.6,
+    "iconHeight": 43.58
+  }
 ]

@@ -1,0 +1,44 @@
+<view class="header-wrap" style="padding-top:{{topPaddingPx}}px;">
+  <view class="search-wrap" style="padding:0 {{paddingRight}}px 8px 16px;">
+    <view class="search-bar" style="height:{{searchBarHeight}}px;">
+      <image class="search-icon" src="/assets/icons/search.png" mode="aspectFit" />
+      <input
+        value="{{keyword}}"
+        class="search-input"
+        type="text"
+        placeholder="{{searchPlaceholder}}"
+        placeholder-class="search-placeholder"
+        bindinput="onInput"
+      />
+    </view>
+  </view>
+
+  <view class="switch-wrap">
+    <view class="switch-left">
+      <view
+        wx:for="{{leftItems}}"
+        wx:key="key"
+        class="tab-item {{activeLeftKey === item.key ? 'tab-item-active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="onTapLeft"
+      >
+        <text class="tab-text {{activeLeftKey === item.key ? 'tab-text-active' : ''}}">{{item.label}}</text>
+      </view>
+    </view>
+
+    <view class="switch-right">
+      <view
+        wx:for="{{rightItemsView}}"
+        wx:key="key"
+        class="ctrl-btn {{item._active ? 'ctrl-btn-active-filter' : ''}}"
+        hover-class="ctrl-btn-active"
+        data-key="{{item.key}}"
+        bindtap="onTapRight"
+      >
+        <text class="ctrl-text {{item._active ? 'ctrl-text-active' : ''}}">{{item.label}}</text>
+        <view wx:if="{{item.showArrow !== false}}" class="arrow {{item._active ? 'arrow-active' : ''}}"></view>
+        <view wx:if="{{item.dot}}" class="dot"></view>
+      </view>
+    </view>
+  </view>
+</view>

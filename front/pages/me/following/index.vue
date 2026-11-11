@@ -26,9 +26,9 @@
     </view>
 
     <scroll-view class="content-scroll" scroll-y :show-scrollbar="false" :refresher-enabled="true"
-      :refresher-triggered="refreshing" :lower-threshold="120" refresher-background="#f8f9fa"
+      :refresher-triggered="refreshing" :lower-threshold="120" refresher-background="#f6f6f8"
       @refresherrefresh="onRefresh" @refresherrestore="onRefreshRestore" @scrolltolower="onLoadMore">
-      <view class="following-list">
+      <view class="following-list" :class="`collection-list-${activeTab}`">
         <template v-if="activeTab === 'contacts'">
           <!-- Loading skeleton -->
           <view v-if="loading && !hasAny" class="skeleton-list">
@@ -52,36 +52,16 @@
           </view>
 
           <!-- Empty state -->
-          <view v-else-if="loaded && !hasAny" class="empty-wrap">
-            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-            <text class="empty-title">{{ searchKeyword ? '未找到相关人脉' : '暂无收藏的人脉' }}</text>
-            <text class="empty-subtitle">{{ searchKeyword ? '换个关键词试试吧' : '去人脉库发现更多优质人脉' }}</text>
-            <view class="empty-action" hover-class="empty-action-active" @tap="onExplore">
+          <AppEmptyState v-else-if="loaded && !hasAny"><template #title>{{ searchKeyword ? '未找到相关人脉' : '暂无收藏的人脉' }}</template><template #description>{{ searchKeyword ? '换个关键词试试吧' : '去人脉库发现更多优质人脉' }}</template><view class="empty-action" hover-class="empty-action-active" @tap="onExplore">
               <text class="empty-action-text">去发现</text>
-            </view>
-          </view>
+            </view></AppEmptyState>
 
           <!-- Following list -->
           <template v-else>
-            <view v-for="item in followingList" :key="item.id" class="following-card"
-              hover-class="following-card-active" @tap="onViewProfile(item)">
-              <view class="card-main">
-                <image class="user-avatar" mode="aspectFill" :src="item.avatar" />
-                <view class="user-info">
-                  <view class="name-row">
-                    <text class="user-name">{{ item.name }}</text>
-                    <image v-if="item.isVerified" class="verified-badge"
-                      src="https://cos.cnptec.site/static/icon/certification.png" mode="aspectFit" />
-                  </view>
-                  <text v-if="item.detail" class="user-detail">{{ item.detail }}</text>
-                  <text v-if="item.bio" class="user-bio">{{ item.bio }}</text>
-                </view>
-              </view>
-              <view class="follow-status" :class="{ 'follow-status-pending': isUnfollowPending(item.id) }"
-                hover-class="follow-status-hover" @tap.stop="onUnfollow(item)">
-                <text class="follow-status-icon">✓</text>
-                <text class="follow-status-text">已收藏</text>
-              </view>
+            <view v-for="item in followingList" :key="item.id" class="collection-entry">
+              <NetworkMemberCard :member="item" :show-follow="false" @view="onViewProfile">
+                <template #collection-action><button class="cancel-collection" :disabled="isUnfollowPending(item.id)" @tap.stop="onUnfollow(item)">取消收藏</button></template>
+              </NetworkMemberCard>
             </view>
 
             <!-- Load more -->
@@ -118,15 +98,13 @@
             </view>
           </view>
 
-          <view v-else-if="resourcesLoaded && !currentHasAny" class="empty-wrap">
-            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-            <text class="empty-title">{{ searchKeyword ? '未找到相关资源' : '暂无收藏的资源' }}</text>
-            <text class="empty-subtitle">{{ searchKeyword ? '换个关键词试试吧' : '去资源页面发现更多优质内容' }}</text>
-          </view>
+          <AppEmptyState v-else-if="resourcesLoaded && !currentHasAny"><template #title>{{ searchKeyword ? '未找到相关资源' : '暂无收藏的资源' }}</template><template #description>{{ searchKeyword ? '换个关键词试试吧' : '去资源页面发现更多优质内容' }}</template></AppEmptyState>
 
           <template v-else>
-            <ProfilePostCard v-for="item in filteredResourcesItems" :key="item.id" :item="item" :show-interest="true"
-              @detail="onTapPostDetail" @interest="onTogglePostInterest" />
+            <ResourceFeedCard v-for="item in filteredResourcesItems" :key="item.id" :item="item" 
+              @detail="onTapPostDetail" @interest="onTogglePostInterest">
+              <template #collection-action><button class="cancel-collection" @tap.stop="onTogglePostInterest(item)">取消收藏</button></template>
+            </ResourceFeedCard>
 
             <view v-if="resourcesLoadingMore" class="load-more-wrap">
               <text class="load-more-text">加载中...</text>
@@ -161,15 +139,14 @@
             </view>
           </view>
 
-          <view v-else-if="circlesLoaded && !currentHasAny" class="empty-wrap">
-            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-            <text class="empty-title">{{ searchKeyword ? '未找到相关圈子' : '暂无收藏的圈子' }}</text>
-            <text class="empty-subtitle">{{ searchKeyword ? '换个关键词试试吧' : '去圈子页面发现更多优质圈子' }}</text>
-          </view>
+          <AppEmptyState v-else-if="circlesLoaded && !currentHasAny"><template #title>{{ searchKeyword ? '未找到相关圈子' : '暂无收藏的圈子' }}</template><template #description>{{ searchKeyword ? '换个关键词试试吧' : '去圈子页面发现更多优质圈子' }}</template></AppEmptyState>
 
           <template v-else>
-            <DiscoverListCard v-for="item in filteredCirclesItems" :key="item.id" :circle="item"
-              @interest="onToggleCircleInterest" />
+            <view v-for="item in filteredCirclesItems" :key="item.id" class="collection-entry">
+              <CircleDirectoryCard :circle="item">
+                <template #collection-action><button class="cancel-collection" @tap.stop="onToggleCircleInterest(item)">取消收藏</button></template>
+              </CircleDirectoryCard>
+            </view>
 
             <view v-if="circlesLoadingMore" class="load-more-wrap">
               <text class="load-more-text">加载中...</text>
@@ -207,13 +184,17 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getInterestedUsers, toggleUserInterest } from '../../../api/network'
 import { getInterestedResources, toggleResourceInterest } from '../../../api/post'
 import { getCollectedCircles, toggleCircleCollection } from '../../../api/circle'
-import ProfilePostCard from '../card/components/ProfilePostCard.vue'
-import DiscoverListCard from '../../tab/circles/components/DiscoverListCard.vue'
+import ResourceFeedCard from '../../tab/resources/components/ResourceFeedCard.vue'
+import NetworkMemberCard from '../../tab/discover/components/NetworkMemberCard.vue'
+import { mapCollectedCircle, mapCollectedContact } from './modules/collection-card-model'
+import CircleDirectoryCard from '../../tab/circles/components/CircleDirectoryCard.vue'
 import { mapProfilePostItem } from '../card/modules/profile-home-view-model'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
@@ -365,28 +346,7 @@ const showToast = (title) => {
   uni.showToast({ title, icon: 'none' })
 }
 
-const mapFollowingItem = (item) => {
-  const userId = String(item?.user_id || item?.userId || '').trim()
-  const name = String(item?.nickname || '').trim() || '未命名用户'
-  const avatar = String(item?.avatar_url || '').trim() || 'https://cos.cnptec.site/static/logo.png'
-  const industryLabel = String(item?.industry_label || '').trim()
-  const companyName = String(item?.company_name || '').trim()
-  const jobTitle = String(item?.job_title || '').trim()
-  const cityName = String(item?.city_name || '').trim()
-
-  const detailParts = [jobTitle, companyName].filter(Boolean)
-  const detail = detailParts.length > 0 ? detailParts.join(' · ') : (industryLabel || cityName || '')
-
-  return {
-    id: userId,
-    userId,
-    name,
-    avatar,
-    detail,
-    bio: String(item?.intro || '').trim(),
-    isVerified: Boolean(item?.is_verified)
-  }
-}
+const mapFollowingItem = mapCollectedContact
 
 const onBack = () => {
   uni.navigateBack()
@@ -469,7 +429,7 @@ const loadResources = async (reset = false) => {
       limit: PAGE_SIZE
     })
 
-    const incoming = Array.isArray(data?.items) ? data.items.map(mapProfilePostItem) : []
+    const incoming = Array.isArray(data?.items) ? data.items.map(item => ({ ...mapProfilePostItem(item), rawPost: item, collected: true })) : []
 
     if (reset) {
       resourcesItems.value = incoming
@@ -513,7 +473,7 @@ const loadCircles = async (reset = false) => {
       limit: PAGE_SIZE
     })
 
-    const incoming = Array.isArray(data?.items) ? data.items : []
+    const incoming = Array.isArray(data?.items) ? data.items.map(mapCollectedCircle) : []
 
     if (reset) {
       circlesItems.value = incoming
@@ -653,7 +613,7 @@ const onTogglePostInterest = async (post) => {
 
     try {
       await toggleResourceInterest(postCode, false)
-      showToast('已取消感兴趣')
+      showToast('已取消收藏')
     } catch (err) {
       resourcesItems.value.splice(targetIndex, 0, removedItem)
       const message = err?.message || '操作失败，请稍后重试'
@@ -1333,4 +1293,5 @@ onShow(() => {
     background: #3b82f6;
   }
 }
+.following-page,.content-scroll{background:#f6f6f8}.following-list{padding:18rpx 24rpx calc(24rpx + env(safe-area-inset-bottom))}.collection-entry{margin-bottom:18rpx}.cancel-collection{flex-shrink:0;align-self:flex-start;margin:0 0 0 auto;padding:0 0 0 12rpx;background:transparent;color:#73758c;font-size:26rpx;line-height:36rpx;text-align:right}.cancel-collection::after{border:0}.collection-list-resources{display:flex;flex-direction:column;gap:12rpx;padding-left:14rpx;padding-right:7rpx}
 </style>

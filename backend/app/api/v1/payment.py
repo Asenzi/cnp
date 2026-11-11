@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import db_session, get_current_user_id
 from app.core.exceptions import BusinessException
+from app.core.logger import logger
 from app.core.response import success_response
 from app.payment import (
     CIRCLE_OWNER_PLAN_ID,
@@ -14,14 +15,51 @@ from app.payment import (
     list_member_orders,
     subscribe_member_plan,
 )
+from app.payment.service import PARTNER_PLANS, get_partner_overview
 from app.payment.statistics import get_payment_statistics, get_user_payment_summary
 from app.schemas.payment import (
     CircleOwnerPurchaseRequest,
+    MemberPaymentClientErrorRequest,
     MemberOrderConfirmRequest,
     MemberSubscribeRequest,
+    PartnerPurchaseRequest,
 )
 
 router = APIRouter(prefix="/payment", tags=["Payment"])
+
+
+@router.get("/partner/{partner_type}/overview", summary="Get partner identity and commission overview")
+def get_partner_product(
+    partner_type: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    return success_response(data=get_partner_overview(db=db, user_pk=user_id, partner_type=partner_type))
+
+
+@router.post("/partner/{partner_type}/purchase", summary="Purchase partner identity")
+def post_partner_purchase(
+    partner_type: str,
+    request: Request,
+    payload: PartnerPurchaseRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    if partner_type not in PARTNER_PLANS:
+        raise BusinessException(message="合作身份类型无效", code=4538, status_code=400)
+    data = subscribe_member_plan(
+        db=db,
+        user_pk=user_id,
+        plan_id=partner_type,
+        pay_channel=payload.pay_channel,
+        use_points_discount=False,
+        client_platform=payload.client_platform,
+        request_client_ip=request.client.host if request.client else None,
+        request_base_url=str(request.base_url).rstrip("/"),
+    )
+    if str(data.get("action") or "").strip() == "virtualpay_required":
+        return success_response(data=data, message="请完成小程序虚拟支付")
+    return success_response(data=data, message="合作身份已开通")
 
 
 @router.get("/ping", summary="Payment health check")
@@ -59,6 +97,7 @@ def post_circle_owner_purchase(
         plan_id=CIRCLE_OWNER_PLAN_ID,
         pay_channel=payload.pay_channel,
         use_points_discount=False,
+        client_platform=payload.client_platform,
         request_client_ip=request.client.host if request.client else None,
         request_base_url=str(request.base_url).rstrip("/"),
     )
@@ -80,8 +119,10 @@ def post_member_subscribe(
         plan_id=payload.plan_id,
         pay_channel=payload.pay_channel,
         use_points_discount=payload.use_points_discount,
+        client_platform=payload.client_platform,
         request_client_ip=request.client.host if request.client else None,
         request_base_url=str(request.base_url).rstrip("/"),
+        referral_invite_code=payload.referral_invite_code,
     )
     action = str(data.get("action") or "").strip()
     if action == "virtualpay_required":
@@ -104,6 +145,45 @@ def post_member_order_confirm(
         ext_payload=payload.ext,
     )
     return success_response(data=data, message="支付确认成功")
+
+
+@router.post("/member/payment-client-error", summary="Report member payment client error")
+def report_member_payment_client_error(
+    payload: MemberPaymentClientErrorRequest,
+    request: Request,
+    user_id: int = Depends(get_current_user_id),
+):
+    ext = payload.ext if isinstance(payload.ext, dict) else {}
+    sign_data = ext.get("signData") if isinstance(ext.get("signData"), dict) else {}
+    safe_ext = {
+        "platform": ext.get("platform"),
+        "system": ext.get("system"),
+        "brand": ext.get("brand"),
+        "model": ext.get("model"),
+        "wechat_version": ext.get("wechatVersion") or ext.get("version"),
+        "sdk_version": ext.get("SDKVersion"),
+        "env_version": ext.get("envVersion"),
+        "payment_mode": ext.get("mode"),
+        "sign_data": {
+            "offerId": sign_data.get("offerId"),
+            "productId": sign_data.get("productId"),
+            "goodsPrice": sign_data.get("goodsPrice"),
+            "outTradeNo": sign_data.get("outTradeNo"),
+            "env": sign_data.get("env"),
+            "currencyType": sign_data.get("currencyType"),
+        },
+    }
+    logger.warning(
+        "Member payment client error. user_pk={}, order_no={}, scene={}, err_code={}, err_msg={}, ip={}, ext={}",
+        user_id,
+        payload.order_no,
+        payload.scene,
+        payload.err_code,
+        payload.err_msg,
+        request.client.host if request.client else None,
+        safe_ext,
+    )
+    return success_response(data={"reported": True}, message="支付失败原因已记录")
 
 
 @router.get("/member/orders/{order_no}", summary="Get member order status")

@@ -16,7 +16,7 @@
                 <view class="row-icon-box">
                   <image class="row-icon" mode="aspectFit" :src="item.iconPath" />
                 </view>
-                <text class="row-label">{{ item.label }}</text>
+                <text class="row-label" :class="item.labelClass">{{ item.label }}</text>
               </view>
 
               <view class="row-right">
@@ -26,18 +26,7 @@
             </view>
           </view>
 
-          <view class="tip-wrap">
-            <text class="tip-title">安全提示</text>
-            <text class="tip-text">为了保障您的账号安全，请定期更换密码，并确保实名信息真实有效。</text>
-          </view>
         </view>
-      </view>
-
-      <view class="footer-wrap">
-        <view class="close-btn" hover-class="close-btn-active" @tap="onCloseAccount">
-          <text class="close-text">注销账号</text>
-        </view>
-        <text class="brand-text">Professional Networking Security Services</text>
       </view>
     </view>
   </view>
@@ -46,49 +35,25 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getCurrentUserProfile } from '../../../api/user'
-import { getMyVerificationOverview } from '../../../api/verification'
-import { bindWechatMiniapp, getWechatBindStatus } from '../../../api/auth'
-import { getMiniappLoginCode, getWechatDeviceId } from '../../../utils/wechat-auth'
+import { closeAccount } from '../../../api/auth'
+import { getCurrentUserProfile as fetchCurrentUserProfile } from '../../../api/user'
+import { disconnectRealtimeSocket } from '../../../utils/realtime'
 
 const phoneMasked = ref('未绑定')
-const phoneBound = ref(false)
-const wechatBound = ref(false)
-const wechatBinding = ref(false)
-const wechatBindText = computed(() => {
-  if (wechatBinding.value) {
-    return '绑定中'
-  }
-  return wechatBound.value ? '已绑定' : '未绑定'
-})
-const realnameStatusText = ref('未认证')
-const realnameApproved = ref(false)
-const realnameStatus = ref('not_submitted')
+const closingAccount = ref(false)
 
 const securityItems = computed(() => [
   {
     key: 'phone',
-    label: '手机号',
+    label: '更换手机号',
     iconPath: 'https://cos.cnptec.site/static/icon/phone.png',
     valueText: phoneMasked.value
   },
   {
-    key: 'password',
-    label: '修改密码',
-    iconPath: 'https://cos.cnptec.site/static/icon/chage-pws.png'
-  },
-  {
-    key: 'wechat',
-    label: '微信绑定',
-    iconPath: 'https://cos.cnptec.site/static/icon/wechat-link.png',
-    valueText: wechatBindText.value
-  },
-  {
-    key: 'realname',
-    label: '实名认证',
-    iconPath: 'https://cos.cnptec.site/static/icon/certification.png',
-    valueText: realnameStatusText.value,
-    valueClass: realnameApproved.value ? 'row-value-primary' : ''
+    key: 'close-account',
+    label: '注销账号',
+    iconPath: 'https://cos.cnptec.site/static/me-icons/cancel-slate.png',
+    labelClass: 'row-label-danger'
   }
 ])
 
@@ -107,21 +72,10 @@ const maskPhone = (phone) => {
   return `${raw.slice(0, 3)}****${raw.slice(7)}`
 }
 
-const loadWechatBindStatus = async () => {
-  try {
-    const statusData = await getWechatBindStatus()
-    wechatBound.value = Boolean(statusData?.wechat_bound)
-  } catch (err) {
-    // fallback: keep status from profile
-  }
-}
-
 const loadSecurityData = async () => {
   try {
-    const profile = await getCurrentUserProfile()
+    const profile = await fetchCurrentUserProfile()
     phoneMasked.value = maskPhone(profile?.phone)
-    phoneBound.value = /^\d{11}$/.test(String(profile?.phone || '').replace(/\s+/g, ''))
-    wechatBound.value = Boolean(profile?.wechat_bound)
   } catch (err) {
     if (err?.statusCode === 401) {
       uni.navigateTo({
@@ -129,138 +83,11 @@ const loadSecurityData = async () => {
       })
       return
     }
-  }
-
-  await loadWechatBindStatus()
-
-  try {
-    const overview = await getMyVerificationOverview()
-    const realname = (overview?.items || []).find((item) => item?.type === 'real_name')
-    const status = String(realname?.status || 'not_submitted')
-    realnameStatus.value = status
-
-    if (status === 'approved') {
-      realnameStatusText.value = '已认证'
-      realnameApproved.value = true
-      return
-    }
-
-    if (status === 'pending') {
-      realnameStatusText.value = '审核中'
-      realnameApproved.value = false
-      return
-    }
-
-    if (status === 'rejected') {
-      realnameStatusText.value = '已驳回'
-      realnameApproved.value = false
-      return
-    }
-
-    realnameStatusText.value = '未认证'
-    realnameApproved.value = false
-  } catch (err) {
-    realnameStatus.value = 'not_submitted'
-    realnameStatusText.value = '未认证'
-    realnameApproved.value = false
-  }
-}
-
-const confirmBindWechat = () => {
-  uni.showModal({
-    title: '绑定微信',
-    content: '绑定微信后，您可以使用微信一键登录，无需输入手机号和密码。确定要绑定当前微信账号吗？',
-    confirmText: '确定绑定',
-    cancelText: '取消',
-    success: (res) => {
-      if (res?.confirm) {
-        bindWechat()
-      }
-    }
-  })
-}
-
-const bindWechat = async () => {
-  if (wechatBinding.value) {
-    return
-  }
-
-  wechatBinding.value = true
-
-  uni.showLoading({
-    title: '绑定中...',
-    mask: true
-  })
-
-  try {
-    let code = ''
-    // #ifdef MP-WEIXIN
-    code = await getMiniappLoginCode()
-    // #endif
-    // #ifndef MP-WEIXIN
-    code = `dev_wechat_bind_${Date.now()}`
-    // #endif
-
-    await bindWechatMiniapp({
-      code,
-      device_id: getWechatDeviceId()
-    })
-
-    wechatBound.value = true
-    uni.hideLoading()
-
-    uni.showModal({
-      title: '绑定成功',
-      content: '微信账号已成功绑定，下次可以使用微信一键登录',
-      showCancel: false,
-      confirmText: '知道了'
-    })
-  } catch (err) {
-    uni.hideLoading()
-
-    if (err?.statusCode === 401) {
-      uni.navigateTo({
-        url: '/pages/auth/login/index'
-      })
-      return
-    }
-
-    // 处理已绑定其他账号的情况
-    if (err?.message?.includes('已绑定') || err?.message?.includes('already bound')) {
-      uni.showModal({
-        title: '绑定失败',
-        content: '该微信账号已绑定其他手机号，一个微信账号只能绑定一个手机号',
-        showCancel: false,
-        confirmText: '知道了'
-      })
-      return
-    }
-
-    showToast(err?.message || '微信绑定失败，请稍后重试')
-  } finally {
-    wechatBinding.value = false
   }
 }
 
 const onRowTap = (item) => {
   if (!item?.key) {
-    return
-  }
-
-  if (item.key === 'realname') {
-    if (realnameStatus.value === 'approved') {
-      showToast('已完成实名认证')
-      return
-    }
-
-    if (realnameStatus.value === 'pending') {
-      showToast('实名认证审核中')
-      return
-    }
-
-    uni.navigateTo({
-      url: '/pages/me/auth/realname/index'
-    })
     return
   }
 
@@ -271,45 +98,78 @@ const onRowTap = (item) => {
     return
   }
 
-  if (item.key === 'password') {
-    if (!phoneBound.value) {
-      uni.showModal({
-        title: '无法修改密码',
-        content: '请先绑定手机号，才能设置或修改密码',
-        confirmText: '去绑定',
-        cancelText: '取消',
-        success: (res) => {
-          if (res?.confirm) {
-            uni.navigateTo({
-              url: '/pages/me/security/phone/index'
-            })
-          }
-        }
-      })
-      return
-    }
-    uni.navigateTo({
-      url: '/pages/me/security/password/index'
-    })
-    return
-  }
-
-  if (item.key === 'wechat') {
-    if (wechatBound.value) {
-      uni.showModal({
-        title: '微信已绑定',
-        content: '您的账号已绑定微信，可以使用微信一键登录',
-        showCancel: false,
-        confirmText: '知道了'
-      })
-      return
-    }
-    confirmBindWechat()
+  if (item.key === 'close-account') {
+    onCloseAccount()
   }
 }
 
 const onCloseAccount = () => {
-  showToast('注销账号功能开发中')
+  if (closingAccount.value) {
+    return
+  }
+
+  uni.showModal({
+    title: '注销账号',
+    content: '注销后当前账号将停用，手机号和微信将解绑，历史数据将不再作为有效账号展示。',
+    confirmText: '继续注销',
+    cancelText: '取消',
+    confirmColor: '#ef4444',
+    success: (res) => {
+      if (res?.confirm) {
+        confirmCloseAccountAgain()
+      }
+    }
+  })
+}
+
+const confirmCloseAccountAgain = () => {
+  uni.showModal({
+    title: '再次确认',
+    content: '请再次确认是否注销账号。注销完成后需要重新注册或登录新账号。',
+    confirmText: '确认注销',
+    cancelText: '我再想想',
+    confirmColor: '#ef4444',
+    success: (res) => {
+      if (res?.confirm) {
+        submitCloseAccount()
+      }
+    }
+  })
+}
+
+const clearLoginState = () => {
+  disconnectRealtimeSocket()
+  uni.removeStorageSync('token')
+  uni.removeStorageSync('isLoggedIn')
+  uni.removeStorageSync('userInfo')
+}
+
+const submitCloseAccount = async () => {
+  closingAccount.value = true
+  uni.showLoading({
+    title: '注销中...',
+    mask: true
+  })
+
+  try {
+    await closeAccount('注销账号')
+    uni.hideLoading()
+    clearLoginState()
+    uni.showToast({
+      title: '账号已注销',
+      icon: 'none'
+    })
+    setTimeout(() => {
+      uni.switchTab({
+        url: '/pages/tab/me/index'
+      })
+    }, 300)
+  } catch (err) {
+    uni.hideLoading()
+    showToast(err?.message || '注销账号失败，请稍后重试')
+  } finally {
+    closingAccount.value = false
+  }
 }
 
 onShow(() => {
@@ -398,6 +258,10 @@ onShow(() => {
   font-size: 28rpx;
   font-weight: 600;
   color: #0f172a;
+}
+
+.row-label-danger {
+  color: #ef4444;
 }
 
 .row-right {

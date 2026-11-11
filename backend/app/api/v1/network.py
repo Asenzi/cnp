@@ -47,6 +47,25 @@ def _public_avatar_url(avatar_url: str | None, request: Request) -> str:
     return f"{str(request.base_url).rstrip('/')}{normalized}"
 
 
+def _is_default_avatar_url(avatar_url: str | None) -> bool:
+    normalized = str(avatar_url or "").strip()
+    if not normalized:
+        return True
+    lower = normalized.lower()
+    return (
+        normalized in {"/static/logo.png", settings.DEFAULT_AVATAR_URL}
+        or lower.endswith("/static/logo.png")
+        or "/static/logo.png?" in lower
+    )
+
+
+def _is_incomplete_public_network_profile(user: User) -> bool:
+    nickname = public_nickname(user).strip()
+    if nickname.startswith("微信用户"):
+        return True
+    return _is_default_avatar_url(public_avatar_url(user))
+
+
 def _join_non_empty(*values: str | None) -> str:
     return " / ".join(str(item or "").strip() for item in values if str(item or "").strip())
 
@@ -194,24 +213,51 @@ def _list_public_network_recommendations(
         )
         conditions.append(keyword_condition)
         base_conditions.append(keyword_condition)
-    def _fetch_rows(active_conditions: list) -> list[User]:
+    def _fetch_rows(active_conditions: list, batch_offset: int, batch_limit: int) -> list[User]:
         return db.execute(
             select(User)
             .where(*active_conditions)
             .order_by(User.is_verified.desc(), User.updated_at.desc(), User.created_at.desc(), User.id.desc())
-            .offset(offset)
-            .limit(safe_limit + 1)
+            .offset(batch_offset)
+            .limit(batch_limit)
         ).scalars().all()
 
-    rows = _fetch_rows(conditions)
-    if not rows and safe_city and safe_city != "全国":
-        rows = _fetch_rows(base_conditions)
-    page_rows = rows[:safe_limit]
-    has_more = len(rows) > safe_limit
+    def _collect_page_rows(active_conditions: list) -> tuple[list[User], bool, int]:
+        page_rows: list[User] = []
+        scan_offset = offset
+        next_offset = offset
+        has_more_visible = False
+        batch_limit = max(safe_limit * 3, 30)
+
+        while True:
+            rows = _fetch_rows(active_conditions, scan_offset, batch_limit)
+            if not rows:
+                break
+
+            for index, user in enumerate(rows, start=1):
+                current_raw_offset = scan_offset + index
+                if _is_incomplete_public_network_profile(user):
+                    continue
+                if len(page_rows) < safe_limit:
+                    page_rows.append(user)
+                    next_offset = current_raw_offset
+                    continue
+                has_more_visible = True
+                return page_rows, has_more_visible, next_offset
+
+            if len(rows) < batch_limit:
+                break
+            scan_offset += len(rows)
+
+        return page_rows, has_more_visible, next_offset
+
+    page_rows, has_more, next_offset = _collect_page_rows(conditions)
+    if not page_rows and safe_city and safe_city != "全国":
+        page_rows, has_more, next_offset = _collect_page_rows(base_conditions)
     return {
         "request_id": "",
         "items": [_serialize_public_network_user(user, request, db, viewer_user_pk) for user in page_rows],
-        "next_cursor": _encode_public_cursor(offset + len(page_rows)) if has_more else "",
+        "next_cursor": _encode_public_cursor(next_offset) if has_more else "",
         "has_more": has_more,
     }
 

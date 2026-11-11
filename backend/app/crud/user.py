@@ -5,7 +5,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.logger import logger
 from app.models.user import User
 
@@ -39,7 +38,7 @@ def _generate_business_user_id() -> str:
 def create_user(
     db: Session,
     phone: str,
-    nickname: str,
+    nickname: str | None = None,
     avatar_url: str | None = None,
     intro: str | None = None,
     industry_code: str | None = None,
@@ -55,9 +54,8 @@ def create_user(
     wechat_bound_at: datetime | None = None,
     inviter_user_pk: int | None = None,
 ) -> User:
-    resolved_avatar_url = avatar_url.strip() if isinstance(avatar_url, str) else ""
-    if not resolved_avatar_url:
-        resolved_avatar_url = settings.DEFAULT_AVATAR_URL
+    resolved_nickname = nickname.strip() if isinstance(nickname, str) and nickname.strip() else None
+    resolved_avatar_url = avatar_url.strip() if isinstance(avatar_url, str) and avatar_url.strip() else None
 
     provided_business_user_id = (
         business_user_id.strip() if isinstance(business_user_id, str) else ""
@@ -74,7 +72,7 @@ def create_user(
             wechat_unionid=wechat_unionid,
             wechat_session_key=wechat_session_key,
             wechat_bound_at=wechat_bound_at,
-            nickname=nickname,
+            nickname=resolved_nickname,
             avatar_url=resolved_avatar_url,
             avatar_review_status="approved",
             avatar_reviewed_at=datetime.now(timezone.utc).replace(tzinfo=None),

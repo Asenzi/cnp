@@ -1,0 +1,42 @@
+<view class="member-card" hover-class="member-card-active" bindtap="onTap">
+  <view class="card-header">
+    <view class="avatar-wrap">
+      <image class="avatar-image" mode="aspectFill" src="{{displayAvatarUrl}}" />
+    </view>
+
+    <view class="header-info">
+      <view class="name-row">
+        <text class="name">{{member.name}}</text>
+        <image wx:if="{{member.verifyType}}" class="identity-badge" src="{{badgeCertification}}" mode="aspectFit" />
+        <image wx:if="{{member.memberEnabled}}" class="identity-badge" src="{{badgeMember}}" mode="aspectFit" />
+        <image wx:if="{{member.circleOwner}}" class="identity-badge" src="{{badgeCircleOwner}}" mode="aspectFit" />
+      </view>
+      <text class="detail-text">{{member.detailLine}}</text>
+      <text wx:if="{{member.distanceText}}" class="distance-text">{{member.distanceText}}</text>
+    </view>
+  </view>
+
+  <view class="card-body">
+    <view class="tag-row">
+      <view wx:if="{{!hasTags}}" class="tag-chip tag-chip-placeholder">
+        该用户很低调，暂未进行个人介绍
+      </view>
+      <block wx:else>
+        <view wx:for="{{member.circleTags}}" wx:key="*this" class="tag-chip">
+          {{item}}
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view wx:if="{{member.privacyHint}}" class="privacy-footer">
+    <view class="privacy-left">
+      <view class="privacy-lock-icon">
+        <view class="lock-head"></view>
+        <view class="lock-body"></view>
+      </view>
+      <text class="privacy-text">{{member.privacyHint}}</text>
+    </view>
+    <button class="verify-btn" hover-class="verify-btn-active" catchtap="onTapVerify">去认证</button>
+  </view>
+</view>

@@ -1,3 +1,4 @@
+import { reportActivity } from '../utils/activity-notification'
 import { getApiBaseUrl, request } from '../utils/request'
 
 function buildQuery(params = {}) {
@@ -162,7 +163,7 @@ export function getResourceDetail(postCode) {
   return request({
     url: `/api/v1/post/${safeCode}`,
     method: 'GET'
-  })
+  }).then(data => { reportActivity('resource', postCode, 'view'); return data })
 }
 
 export function reportResourceView(postCode) {

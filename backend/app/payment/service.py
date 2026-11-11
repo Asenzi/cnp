@@ -16,11 +16,18 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.models.user import User
 from app.core.exceptions import BusinessException
 from app.crud import ensure_user_points_account, ensure_user_wallet, get_sys_config_values, get_user_by_id, create_wallet_transaction
 from app.models.member_order import MemberOrder
 from app.models.sys_config import SysConfig
 from app.models.user_membership import UserMembership
+from app.partners import (
+    ensure_partner_invite_code,
+    find_city_partner_for_user,
+    partner_city_key,
+    resolve_partner_invite_code,
+)
 from app.points import (
     POINTS_STATUS_NONE,
     POINTS_STATUS_RELEASED,
@@ -58,6 +65,25 @@ PAY_CHANNEL_VIRTUAL = "virtualpay"
 
 CIRCLE_OWNER_PRODUCT_TYPE = "circle_owner"
 CIRCLE_OWNER_PLAN_ID = "circle_owner_lifetime"
+PARTNER_PRODUCT_TYPE = "partner"
+PARTNER_PLANS = {
+    "salon_owner": {
+        "id": "salon_owner",
+        "name": "沙龙主理人",
+        "subtitle": "发起沙龙并享受会员推荐分佣",
+        "price": Decimal("2980"),
+        "original_price": Decimal("2980"),
+        "commission_rate": Decimal("0.40"),
+    },
+    "city_partner": {
+        "id": "city_partner",
+        "name": "城市合伙人",
+        "subtitle": "共建城市网络并享受会员推荐分佣",
+        "price": Decimal("10000"),
+        "original_price": Decimal("10000"),
+        "commission_rate": Decimal("0.60"),
+    },
+}
 DEFAULT_CIRCLE_OWNER_PLAN = {
     "id": CIRCLE_OWNER_PLAN_ID,
     "name": "永久圈主",
@@ -158,6 +184,13 @@ def ensure_default_payment_configs() -> None:
         ("circle_owner.price", str(DEFAULT_CIRCLE_OWNER_PLAN["price"]), "永久圈主售价"),
         ("circle_owner.original_price", str(DEFAULT_CIRCLE_OWNER_PLAN["original_price"]), "永久圈主原价"),
     ]
+    for partner_type, plan in PARTNER_PLANS.items():
+        default_rows.extend(
+            [
+                (f"{partner_type}.enabled", "1", f"{plan['name']}商品是否启用"),
+                (f"{partner_type}.price", str(plan["price"]), f"{plan['name']}开通费用"),
+            ]
+        )
     for plan in DEFAULT_MEMBER_PLANS:
         plan_id = str(plan["id"])
         prefix = f"member.plan.{plan_id}."
@@ -227,6 +260,23 @@ def _to_bool(value: object, default: bool) -> bool:
         if normalized in {"0", "false", "no", "off", "inactive"}:
             return False
     return default
+
+
+def _normalize_client_platform(value: object) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"ios", "iphone", "ipad", "ipados"}:
+        return "ios"
+    if normalized in {"android", "adr"}:
+        return "android"
+    if normalized in {"devtools", "devtool"}:
+        return "devtools"
+    if normalized in {"windows", "win32"}:
+        return "windows"
+    if normalized in {"mac", "macos", "darwin"}:
+        return "macos"
+    if normalized in {"harmony", "harmonyos"}:
+        return "harmonyos"
+    return normalized[:16] if normalized else "unknown"
 
 
 def _to_int(value: object, default: int, min_value: int = 1, max_value: int = 3650) -> int:
@@ -361,9 +411,16 @@ def _serialize_plan(plan: dict, *, points_offer: dict | None = None) -> dict:
 def _resolve_order_product_type(order: MemberOrder) -> str:
     if str(order.plan_id or "").strip() == CIRCLE_OWNER_PLAN_ID:
         return CIRCLE_OWNER_PRODUCT_TYPE
+    if str(order.plan_id or "").strip() in PARTNER_PLANS:
+        return PARTNER_PRODUCT_TYPE
     if is_contact_package_plan_id(str(order.plan_id or "").strip()):
         return CONTACT_PACKAGE_PRODUCT_TYPE
     return "member"
+
+
+def _partner_type_for_plan(plan_id: str) -> str | None:
+    normalized = str(plan_id or "").strip()
+    return normalized if normalized in PARTNER_PLANS else None
 
 
 def _resolve_circle_owner_plan(db: Session, *, include_disabled: bool = False) -> dict | None:
@@ -409,17 +466,113 @@ def _grant_circle_owner(db: Session, *, user_pk: int) -> bool:
     return already_owned
 
 
-def _require_yearly_member_for_circle_owner(db: Session, *, user_pk: int) -> None:
-    snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
-    plan_id = str(snapshot.get("plan_id") or snapshot.get("member_plan_id") or "").strip().lower()
-    if bool(snapshot.get("opened") or snapshot.get("is_member") or snapshot.get("member_opened")) and plan_id == "yearly":
-        return
+def _grant_partner(db: Session, *, user_pk: int, partner_type: str) -> None:
+    user = get_user_by_id(db=db, user_id=user_pk)
+    if user is None:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+    existing_type = str(getattr(user, "partner_type", "") or "").strip()
+    if existing_type and existing_type != partner_type:
+        raise BusinessException(message="账号已开通其他合作身份", code=4535, status_code=409)
+    if partner_type == "city_partner":
+        city_key = partner_city_key(user)
+        if not city_key:
+            raise BusinessException(message="请先完善所在城市，再开通城市合伙人", code=4540, status_code=400)
+        existing_city_partner = find_city_partner_for_user(db, user, exclude_user_pk=int(user.id))
+        if existing_city_partner is not None:
+            raise BusinessException(message="该城市已开通城市合伙人", code=4541, status_code=409)
+        user.partner_city_key = city_key
 
-    raise BusinessException(
-        message="开通年度会员后才可购买圈主身份",
-        code=4520,
-        status_code=403,
+    if partner_type == "salon_owner":
+        city_partner = find_city_partner_for_user(db, user)
+        if city_partner is None:
+            raise BusinessException(message="该城市暂未开通城市合伙人，暂不能开通沙龙主理人", code=4542, status_code=409)
+        user.city_partner_user_pk = int(city_partner.id)
+
+    user.partner_type = partner_type
+    db.add(user)
+    ensure_partner_invite_code(db, user)
+
+    if partner_type == "city_partner":
+        salons = db.scalars(
+            select(User).where(
+                User.partner_type == "salon_owner",
+                User.city_partner_user_pk.is_(None),
+            )
+        ).all()
+        for salon in salons:
+            matching_city_partner = find_city_partner_for_user(db, salon)
+            if matching_city_partner is not None and int(matching_city_partner.id) == int(user.id):
+                salon.city_partner_user_pk = int(user.id)
+                db.add(salon)
+
+
+def _resolve_order_referral_partner(
+    db: Session,
+    *,
+    user: User,
+    invite_code: str | None,
+) -> int | None:
+    if user.member_referral_snapshot is not None:
+        return json.loads(user.member_referral_snapshot).get("partner_id")
+    if invite_code is not None:
+        normalized_code = str(invite_code or "").strip()
+        if not normalized_code:
+            return None
+        partner = resolve_partner_invite_code(db=db, invite_code=normalized_code)
+        if partner is None or int(partner.id) == int(user.id):
+            return None
+        if str(partner.partner_type or "") == "salon_owner":
+            city_partner = None
+            if partner.city_partner_user_pk:
+                city_partner = db.scalar(
+                    select(User).where(
+                        User.id == int(partner.city_partner_user_pk),
+                        User.partner_type == "city_partner",
+                        User.is_active.is_(True),
+                    ).limit(1)
+                )
+            if city_partner is None:
+                city_partner = find_city_partner_for_user(db, partner)
+            if city_partner is None:
+                raise BusinessException(message="该沙龙主理人尚未关联城市合伙人，暂不能使用此邀请码", code=4543, status_code=409)
+            partner.city_partner_user_pk = int(city_partner.id)
+            db.add(partner)
+        return int(partner.id)
+
+    return None
+
+
+def _resolve_partner_plan(db: Session, *, partner_type: str) -> dict | None:
+    base = PARTNER_PLANS.get(str(partner_type or "").strip())
+    if not base:
+        return None
+    values = _load_member_config_values(db=db)
+    payment = _resolve_payment_options(db=db)
+    virtualpay_enabled = any(
+        item.get("key") == PAY_CHANNEL_VIRTUAL and bool(item.get("enabled"))
+        for item in payment.get("channels", [])
     )
+    app_env = str(settings.APP_ENV or "").strip().lower()
+    mock_enabled = bool(settings.DEBUG or app_env in {"dev", "local", "test", "testing"}) and any(
+        item.get("key") == PAY_CHANNEL_MOCK and bool(item.get("enabled"))
+        for item in payment.get("channels", [])
+    )
+    has_virtual_product = bool(
+        settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_SALON_OWNER
+        if partner_type == "salon_owner"
+        else settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_CITY_PARTNER
+    )
+    enabled = _to_bool(values.get(f"{partner_type}.enabled"), True) and (
+        (virtualpay_enabled and has_virtual_product) or mock_enabled
+    )
+    price = _to_decimal(values.get(f"{partner_type}.price"), base["price"])
+    return {
+        **base,
+        "price": price,
+        "original_price": price,
+        "enabled": enabled,
+        "product_type": PARTNER_PRODUCT_TYPE,
+    }
 
 
 def _extract_contact_package_view_count(db: Session, *, order: MemberOrder) -> int:
@@ -488,6 +641,8 @@ def _virtual_pay_product_id(plan_id: str) -> str:
         "quarterly": settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_QUARTERLY,
         "monthly": settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_MONTHLY,
         CIRCLE_OWNER_PLAN_ID: settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_OWNER,
+        "salon_owner": settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_SALON_OWNER,
+        "city_partner": settings.WECHAT_VIRTUAL_PAY_PRODUCT_ID_CITY_PARTNER,
     }
     product_id = str(mapping.get(normalized) or "").strip()
     if not product_id:
@@ -523,7 +678,7 @@ def build_virtual_payment_payload(
         "outTradeNo": str(order_no or "").strip(),
         "productId": str(product_id or "").strip(),
     }
-    sign_data_json = json.dumps(sign_data, ensure_ascii=False, separators=(",", ":"))
+    sign_data_json = json.dumps(sign_data, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     app_key = str(settings.WECHAT_VIRTUAL_PAY_APP_KEY or "").strip()
     pay_sig = hmac.new(
         key=app_key.encode("utf-8"),
@@ -594,7 +749,7 @@ def _get_membership(db: Session, *, user_pk: int) -> UserMembership | None:
 
 
 def _get_order_by_order_no(db: Session, *, order_no: str) -> MemberOrder | None:
-    stmt = select(MemberOrder).where(MemberOrder.order_no == order_no)
+    stmt = select(MemberOrder).where(MemberOrder.order_no == order_no).with_for_update()
     return db.execute(stmt).scalar_one_or_none()
 
 
@@ -643,6 +798,12 @@ def _upsert_membership_paid_order(
         membership.expire_at = new_expire_at
         membership.last_order_no = order_no
         db.add(membership)
+    db.flush()
+    paid_order = db.scalar(select(MemberOrder).where(MemberOrder.order_no == str(order_no)).limit(1))
+    if paid_order is not None and str(paid_order.status or "").strip().lower() == ORDER_STATUS_PAID:
+        from app.settlement.service import settle_member_referral_commission
+
+        settle_member_referral_commission(db, order=paid_order)
     return membership
 
 
@@ -752,6 +913,15 @@ def _confirm_paid_member_order(
     user_pk = int(order.user_pk)
     product_type = _resolve_order_product_type(order)
     if str(order.status or "").strip().lower() == ORDER_STATUS_PAID:
+        if product_type == PARTNER_PRODUCT_TYPE:
+            user = get_user_by_id(db=db, user_id=user_pk)
+            return {
+                "order_no": str(order.order_no),
+                "already_paid": True,
+                "product_type": PARTNER_PRODUCT_TYPE,
+                "partner_type": _partner_type_for_plan(str(order.plan_id)),
+                "is_partner": bool(user and user.partner_type),
+            }
         if product_type == CIRCLE_OWNER_PRODUCT_TYPE:
             user = get_user_by_id(db=db, user_id=user_pk)
             return {
@@ -819,6 +989,21 @@ def _confirm_paid_member_order(
             "lifetime": True,
         }
 
+    if product_type == PARTNER_PRODUCT_TYPE:
+        partner_type = _partner_type_for_plan(str(order.plan_id))
+        if partner_type is None:
+            raise BusinessException(message="合作身份订单无效", code=4537, status_code=400)
+        _grant_partner(db=db, user_pk=user_pk, partner_type=partner_type)
+        db.commit()
+        db.refresh(order)
+        return {
+            "order_no": str(order.order_no),
+            "already_paid": False,
+            "product_type": PARTNER_PRODUCT_TYPE,
+            "partner_type": partner_type,
+            "is_partner": True,
+        }
+
     if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
         granted_view_count = _extract_contact_package_view_count(db=db, order=order)
         package_snapshot = grant_contact_package_views(
@@ -848,7 +1033,6 @@ def _confirm_paid_member_order(
         order_no=str(order.order_no),
         now=now,
     )
-
     db.commit()
     db.refresh(order)
     snapshot = resolve_member_snapshot(db=db, user_pk=user_pk)
@@ -950,6 +1134,87 @@ def get_circle_owner_overview(db: Session, *, user_pk: int) -> dict:
     }
 
 
+def get_partner_overview(db: Session, *, user_pk: int, partner_type: str) -> dict:
+    normalized_type = str(partner_type or "").strip()
+    if normalized_type not in PARTNER_PLANS:
+        raise BusinessException(message="合作身份类型无效", code=4538, status_code=400)
+    user = get_user_by_id(db=db, user_id=user_pk)
+    if user is None:
+        raise BusinessException(message="用户不存在", code=4041, status_code=404)
+    plan = _resolve_partner_plan(db=db, partner_type=normalized_type) or {
+        **PARTNER_PLANS[normalized_type],
+        "enabled": False,
+        "product_type": PARTNER_PRODUCT_TYPE,
+    }
+    paid_order = db.scalar(
+        select(MemberOrder)
+        .where(
+            MemberOrder.user_pk == int(user_pk),
+            MemberOrder.plan_id == normalized_type,
+            MemberOrder.status == ORDER_STATUS_PAID,
+        )
+        .order_by(MemberOrder.paid_at.desc(), MemberOrder.id.desc())
+        .limit(1)
+    )
+    active_partner_type = str(getattr(user, "partner_type", "") or "")
+    is_partner = active_partner_type == normalized_type
+    city_partner = None
+    if normalized_type == "salon_owner" and user.city_partner_user_pk:
+        city_partner = db.scalar(
+            select(User).where(
+                User.id == int(user.city_partner_user_pk),
+                User.partner_type == "city_partner",
+                User.is_active.is_(True),
+            ).limit(1)
+        )
+    if city_partner is None:
+        city_partner = find_city_partner_for_user(db, user)
+    availability_message = ""
+    city_available = True
+    if normalized_type == "city_partner":
+        city_available = bool(partner_city_key(user)) and (
+            is_partner or city_partner is None
+        )
+        if not partner_city_key(user):
+            availability_message = "请先完善所在城市"
+        elif not is_partner and city_partner is not None:
+            availability_message = "该城市已开通城市合伙人"
+    elif normalized_type == "salon_owner":
+        city_available = city_partner is not None
+        if city_partner is None:
+            availability_message = "该城市暂未开通城市合伙人"
+
+    invite_code = ""
+    if is_partner:
+        if normalized_type == "city_partner":
+            user.partner_city_key = user.partner_city_key or partner_city_key(user)
+            invite_code = ensure_partner_invite_code(db, user) if city_available else ""
+        elif city_partner is not None:
+            user.city_partner_user_pk = int(city_partner.id)
+            invite_code = ensure_partner_invite_code(db, user)
+        db.commit()
+
+    return {
+        "partner_type": normalized_type,
+        "active_partner_type": active_partner_type,
+        "is_partner": is_partner,
+        "opened_at": paid_order.paid_at.isoformat() if paid_order and paid_order.paid_at else None,
+        "plan": {
+            "id": normalized_type,
+            "name": str(plan["name"]),
+            "subtitle": str(plan["subtitle"]),
+            "price": float(plan["price"]),
+            "commission_rate": float(plan["commission_rate"]),
+            "enabled": bool(plan["enabled"] and (not active_partner_type or is_partner) and city_available),
+            "product_type": PARTNER_PRODUCT_TYPE,
+            "availability_message": availability_message,
+        },
+        "payment": _resolve_payment_options(db=db),
+        "invite_code": invite_code,
+        "city_partner_name": str(city_partner.nickname or city_partner.user_id) if city_partner else "",
+    }
+
+
 def get_member_center_overview(db: Session, *, user_pk: int) -> dict:
     user = get_user_by_id(db=db, user_id=user_pk)
     if user is None:
@@ -1025,8 +1290,10 @@ def subscribe_member_plan(
     plan_id: str,
     pay_channel: str | None = None,
     use_points_discount: bool | None = None,
+    client_platform: str | None = None,
     request_client_ip: str | None = None,
     request_base_url: str | None = None,
+    referral_invite_code: str | None = None,
 ) -> dict:
     user = get_user_by_id(db=db, user_id=user_pk)
     if user is None:
@@ -1035,6 +1302,7 @@ def subscribe_member_plan(
     normalized_plan_id = str(plan_id or "").strip()
     if not normalized_plan_id:
         raise BusinessException(message="订阅方案不能为空", code=4511, status_code=400)
+    normalized_client_platform = _normalize_client_platform(client_platform)
 
     try:
         cleanup_expired_member_points_orders(db=db, user_pk=user_pk)
@@ -1120,6 +1388,7 @@ def subscribe_member_plan(
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_WALLET,
+                client_platform=normalized_client_platform,
                 status=ORDER_STATUS_PAID,
                 remark="member subscribe by wallet",
                 paid_at=now,
@@ -1182,6 +1451,7 @@ def subscribe_member_plan(
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_MOCK,
+                client_platform=normalized_client_platform,
                 status=ORDER_STATUS_PAID,
                 remark="member subscribe by mock",
                 paid_at=now,
@@ -1250,6 +1520,7 @@ def subscribe_member_plan(
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_VIRTUAL,
+                client_platform=normalized_client_platform,
                 status=ORDER_STATUS_PENDING,
                 remark="member subscribe by virtual payment pending",
                 paid_at=None,
@@ -1289,8 +1560,10 @@ def subscribe_member_plan(
     plan_id: str,
     pay_channel: str | None = None,
     use_points_discount: bool | None = None,
+    client_platform: str | None = None,
     request_client_ip: str | None = None,
     request_base_url: str | None = None,
+    referral_invite_code: str | None = None,
 ) -> dict:
     user = get_user_by_id(db=db, user_id=user_pk)
     if user is None:
@@ -1299,6 +1572,7 @@ def subscribe_member_plan(
     normalized_plan_id = str(plan_id or "").strip()
     if not normalized_plan_id:
         raise BusinessException(message="订阅方案不能为空", code=4511, status_code=400)
+    normalized_client_platform = _normalize_client_platform(client_platform)
 
     try:
         cleanup_expired_member_points_orders(db=db, user_pk=user_pk)
@@ -1312,30 +1586,72 @@ def subscribe_member_plan(
             if circle_owner_plan is not None and normalized_plan_id == CIRCLE_OWNER_PLAN_ID
             else None
         )
+        partner_type = _partner_type_for_plan(normalized_plan_id)
+        selected_partner_plan = _resolve_partner_plan(db=db, partner_type=partner_type) if partner_type else None
+        if selected_partner_plan is not None and not selected_partner_plan["enabled"]:
+            selected_partner_plan = None
         if (
             selected_member_plan is None
             and selected_contact_package_plan is None
             and selected_circle_owner_plan is None
+            and selected_partner_plan is None
         ):
             raise BusinessException(message="订阅方案不存在或已下线", code=4512, status_code=400)
 
-        if selected_circle_owner_plan is not None:
+        if selected_partner_plan is not None:
+            product_type = PARTNER_PRODUCT_TYPE
+        elif selected_circle_owner_plan is not None:
             product_type = CIRCLE_OWNER_PRODUCT_TYPE
         elif selected_contact_package_plan is not None:
             product_type = CONTACT_PACKAGE_PRODUCT_TYPE
         else:
             product_type = "member"
-        selected_plan = selected_circle_owner_plan or selected_contact_package_plan or selected_member_plan or {}
+        selected_plan = selected_partner_plan or selected_circle_owner_plan or selected_contact_package_plan or selected_member_plan or {}
+
+        if partner_type == "city_partner":
+            city_key = partner_city_key(user)
+            if not city_key:
+                raise BusinessException(message="请先完善所在城市，再开通城市合伙人", code=4540, status_code=400)
+            if find_city_partner_for_user(db, user, exclude_user_pk=int(user.id)) is not None:
+                raise BusinessException(message="该城市已开通城市合伙人", code=4541, status_code=409)
+        if partner_type == "salon_owner" and find_city_partner_for_user(db, user) is None:
+            raise BusinessException(message="该城市暂未开通城市合伙人，暂不能开通沙龙主理人", code=4542, status_code=409)
+
+        referral_partner_user_pk = (
+            _resolve_order_referral_partner(
+                db,
+                user=user,
+                invite_code=referral_invite_code,
+            )
+            if product_type == "member"
+            else None
+        )
 
         if product_type == CIRCLE_OWNER_PRODUCT_TYPE and bool(user.is_circle_owner):
             raise BusinessException(message="您已经是永久圈主，无需重复购买", code=4529, status_code=409)
-
-        if product_type == CIRCLE_OWNER_PRODUCT_TYPE:
-            _require_yearly_member_for_circle_owner(db=db, user_pk=user_pk)
+        if product_type == PARTNER_PRODUCT_TYPE:
+            current_partner_type = str(getattr(user, "partner_type", "") or "").strip()
+            if current_partner_type:
+                if current_partner_type == partner_type:
+                    raise BusinessException(message="该合作身份已开通", code=4534, status_code=409)
+                raise BusinessException(message="账号已开通其他合作身份", code=4535, status_code=409)
+            pending_partner_order = db.scalar(
+                select(MemberOrder.id).where(
+                    MemberOrder.user_pk == int(user_pk),
+                    MemberOrder.plan_id.in_(list(PARTNER_PLANS)),
+                    MemberOrder.status == ORDER_STATUS_PENDING,
+                ).limit(1)
+            )
+            if pending_partner_order is not None:
+                raise BusinessException(message="已有合作身份订单待支付，请先完成或等待订单过期", code=4536, status_code=409)
 
         payment_options = _resolve_payment_options(db=db)
         enabled_channels = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
         normalized_pay_channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
+        if product_type == PARTNER_PRODUCT_TYPE and normalized_pay_channel == PAY_CHANNEL_MOCK:
+            app_env = str(settings.APP_ENV or "").strip().lower()
+            if not (settings.DEBUG or app_env in {"dev", "local", "test", "testing"}):
+                raise BusinessException(message="合作身份仅支持正式支付", code=4539, status_code=400)
         if normalized_pay_channel == PAY_CHANNEL_WALLET:
             raise BusinessException(message="钱包余额支付已下线，请使用小程序虚拟支付", code=4513, status_code=410)
         if normalized_pay_channel not in enabled_channels or not enabled_channels[normalized_pay_channel]:
@@ -1432,6 +1748,8 @@ def subscribe_member_plan(
             order = MemberOrder(
                 order_no=order_no,
                 user_pk=user_pk,
+                referral_partner_user_pk=referral_partner_user_pk,
+                referral_captured=product_type == "member",
                 plan_id=str(selected_plan["id"]),
                 plan_name=str(selected_plan["name"]),
                 duration_days=duration_days,
@@ -1442,6 +1760,7 @@ def subscribe_member_plan(
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_WALLET,
+                client_platform=normalized_client_platform,
                 status=ORDER_STATUS_PAID,
                 remark=package_remark if product_type != "member" else "member subscribe by wallet",
                 paid_at=now,
@@ -1488,6 +1807,20 @@ def subscribe_member_plan(
                     "wallet_balance": float(Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))),
                     "is_circle_owner": True,
                     "lifetime": True,
+                }
+
+            if product_type == PARTNER_PRODUCT_TYPE:
+                _grant_partner(db=db, user_pk=user_pk, partner_type=str(partner_type))
+                db.commit()
+                db.refresh(order)
+                db.refresh(wallet)
+                return {
+                    "action": "wallet_paid",
+                    "product_type": PARTNER_PRODUCT_TYPE,
+                    "partner_type": str(partner_type),
+                    "order_no": str(order.order_no),
+                    "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                    "is_partner": True,
                 }
 
             if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
@@ -1568,6 +1901,8 @@ def subscribe_member_plan(
             order = MemberOrder(
                 order_no=order_no,
                 user_pk=user_pk,
+                referral_partner_user_pk=referral_partner_user_pk,
+                referral_captured=product_type == "member",
                 plan_id=str(selected_plan["id"]),
                 plan_name=str(selected_plan["name"]),
                 duration_days=duration_days,
@@ -1578,6 +1913,7 @@ def subscribe_member_plan(
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_MOCK,
+                client_platform=normalized_client_platform,
                 status=ORDER_STATUS_PAID,
                 remark=package_remark if product_type != "member" else "member subscribe by mock",
                 paid_at=now,
@@ -1602,6 +1938,19 @@ def subscribe_member_plan(
                     "pay_channel": str(order.pay_channel),
                     "is_circle_owner": True,
                     "lifetime": True,
+                }
+
+            if product_type == PARTNER_PRODUCT_TYPE:
+                _grant_partner(db=db, user_pk=user_pk, partner_type=str(partner_type))
+                db.commit()
+                db.refresh(order)
+                return {
+                    "action": "mock_paid",
+                    "product_type": PARTNER_PRODUCT_TYPE,
+                    "partner_type": str(partner_type),
+                    "order_no": str(order.order_no),
+                    "paid_amount": float(Decimal(str(order.amount or 0)).quantize(Decimal("0.01"))),
+                    "is_partner": True,
                 }
 
             if product_type == CONTACT_PACKAGE_PRODUCT_TYPE:
@@ -1686,6 +2035,8 @@ def subscribe_member_plan(
             order = MemberOrder(
                 order_no=order_no,
                 user_pk=user_pk,
+                referral_partner_user_pk=referral_partner_user_pk,
+                referral_captured=product_type == "member",
                 plan_id=str(selected_plan["id"]),
                 plan_name=str(selected_plan["name"]),
                 duration_days=duration_days,
@@ -1696,6 +2047,7 @@ def subscribe_member_plan(
                 used_points_discount=wants_points_discount,
                 points_status=points_status,
                 pay_channel=PAY_CHANNEL_VIRTUAL,
+                client_platform=normalized_client_platform,
                 status=ORDER_STATUS_PENDING,
                 remark=package_remark if product_type != "member" else "member subscribe by virtual payment pending",
                 paid_at=None,
@@ -1783,6 +2135,7 @@ def get_member_order_status(
         "product_type": _resolve_order_product_type(order),
         "status": status_text or ORDER_STATUS_PENDING,
         "pay_channel": str(order.pay_channel or ""),
+        "client_platform": str(order.client_platform or ""),
         "paid": paid,
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,
         "plan_id": str(order.plan_id or ""),
@@ -1924,6 +2277,7 @@ def list_member_orders(
             "paid_amount": float(Decimal(str(item.amount or 0)).quantize(Decimal("0.01"))),
             "original_amount": float(Decimal(str(item.original_amount or 0)).quantize(Decimal("0.01"))),
             "pay_channel": str(item.pay_channel or ""),
+            "client_platform": str(item.client_platform or ""),
             "status": str(item.status or ""),
             "points_cost": int(item.points_cost or 0),
             "points_discount_rate": float(Decimal(str(item.points_discount_rate or 1)).quantize(Decimal("0.0001"))),

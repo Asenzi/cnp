@@ -17,17 +17,21 @@ from app.core.config import settings
 from app.core.exceptions import BusinessException
 from app.models.circle import Circle
 from app.models.circle_join_request import CircleJoinRequest
+from app.models.member_order import MemberOrder
 from app.models.split_rule import SplitRule
 from app.models.split_transaction import SplitTransaction
 from app.models.settlement_ledger import SettlementLedger
 from app.models.sys_config import SysConfig
 from app.models.user import User
 from app.models.user_settlement import UserSettlement
+from app.partners import find_city_partner_for_user
 from app.models.withdrawal_order import WithdrawalOrder
 from app.payment.service import PAY_CHANNEL_WXPAY, _dict_to_xml, _sign_wechat_v2, _xml_to_dict
 
 BIZ_CIRCLE_JOIN = "circle_join"
+BIZ_MEMBER_REFERRAL = "distribution"
 ROLE_CIRCLE_OWNER = "circle_owner"
+PARTNER_TYPE_LABELS = {"salon_owner": "沙龙主理人", "city_partner": "城市合伙人"}
 STATUS_PENDING = "pending"
 STATUS_SUCCESS = "success"
 STATUS_CANCELLED = "cancelled"
@@ -160,8 +164,8 @@ def update_admin_split_config(
     wechat_profit_sharing_enabled: bool | None = None,
 ) -> dict[str, Any]:
     rate = _to_decimal(service_fee_rate, DEFAULT_SERVICE_FEE_RATE).quantize(Decimal("0.0001"))
-    if rate < Decimal("0") or rate >= Decimal("1"):
-        raise BusinessException(message="技术服务费比例必须在 0 到 1 之间", code=4621, status_code=400)
+    if rate != DEFAULT_SERVICE_FEE_RATE:
+        raise BusinessException(message="付费入圈技术服务费固定为 10%", code=4621, status_code=400)
 
     service_fee = _get_or_create_config(
         db,
@@ -199,13 +203,7 @@ def update_admin_split_config(
 
 
 def _resolve_service_fee_rate(db: Session) -> Decimal:
-    row = db.scalar(
-        select(SysConfig).where(SysConfig.config_key == "settlement.circle_join.service_fee_rate").limit(1)
-    )
-    rate = _to_decimal(row.config_value if row is not None else None, DEFAULT_SERVICE_FEE_RATE).quantize(Decimal("0.0001"))
-    if rate < Decimal("0") or rate >= Decimal("1"):
-        return DEFAULT_SERVICE_FEE_RATE
-    return rate
+    return DEFAULT_SERVICE_FEE_RATE
 
 
 def _resolve_auto_settle_enabled(db: Session) -> bool:
@@ -305,6 +303,149 @@ def _record_ledger(
         db.rollback()
         raise BusinessException(message="结算流水已存在，请勿重复操作", code=4650, status_code=409)
     return row
+
+
+def settle_member_referral_commission(db: Session, *, order: MemberOrder) -> SplitTransaction | None:
+    """Distribute a paid member order to its city and salon referral partners."""
+    order_no = _normalize_text(order.order_no)
+    buyer = db.scalar(select(User).where(User.id == int(order.user_pk)).with_for_update().execution_options(populate_existing=True).limit(1))
+    if buyer is None:
+        return None
+    amount = _money(order.amount)
+    if amount <= Decimal("0.00") or not order_no:
+        return None
+
+    if str(order.status) != "paid":
+        return None
+    if buyer.member_referral_snapshot is None:
+        from app.verification.referral import has_real_name_verification
+        if not has_real_name_verification(db, buyer):
+            return None
+    snapshot = json.loads(buyer.member_referral_snapshot) if buyer.member_referral_snapshot is not None else None
+    referrer_pk = snapshot.get("partner_id") if snapshot is not None else order.referral_partner_user_pk
+    if snapshot is None:
+        first_paid = db.scalar(
+            select(MemberOrder).where(
+                MemberOrder.user_pk == buyer.id,
+                MemberOrder.status == "paid",
+                MemberOrder.amount > 0,
+                MemberOrder.plan_id.in_(("yearly", "quarterly", "monthly")),
+            ).order_by(MemberOrder.paid_at, MemberOrder.id).limit(1)
+        )
+        if first_paid is not None and first_paid.id != order.id:
+            # Historical orders without a captured source cannot be assigned
+            # using the registration inviter or a new renewal invitation.
+            referrer_pk = first_paid.referral_partner_user_pk if first_paid.referral_captured else None
+    # Lock platform conversions too: later invitations must never claim them.
+    if snapshot is None:
+        buyer.member_referral_snapshot = "{}"
+        db.add(buyer)
+    order.referral_partner_user_pk = referrer_pk
+    order.referral_captured = True
+    if not referrer_pk or int(referrer_pk) == int(buyer.id):
+        return None
+
+    partner = db.scalar(
+        select(User).where(User.id == int(referrer_pk), User.is_active.is_(True)).with_for_update().limit(1)
+    )
+    partner_type = snapshot.get("role", "") if snapshot is not None else _normalize_lower(getattr(partner, "partner_type", "") if partner else "")
+    if partner is None or partner.partner_type not in PARTNER_TYPE_LABELS:
+        return None
+
+    if partner_type == "city_partner":
+        recipients = [(partner, Decimal("0.60"))]
+    elif partner_type == "salon_owner":
+        city_partner = None
+        city_partner_pk = snapshot.get("city_partner_id") if snapshot is not None else partner.city_partner_user_pk
+        if city_partner_pk:
+            city_partner = db.scalar(
+                select(User).where(
+                    User.id == int(city_partner_pk),
+                    User.partner_type == "city_partner",
+                    User.is_active.is_(True),
+                ).limit(1)
+            )
+        if city_partner is None and snapshot is None:
+            city_partner = find_city_partner_for_user(db, partner)
+        if city_partner is None or int(city_partner.id) == int(buyer.id):
+            return None
+        if snapshot is None:
+            partner.city_partner_user_pk = int(city_partner.id)
+        recipients = [(city_partner, Decimal("0.30")), (partner, Decimal("0.40"))]
+    else:
+        return None
+
+    if snapshot is None:
+        buyer.member_referral_snapshot = json.dumps({
+            "partner_id": int(partner.id), "role": partner_type,
+            "city_partner_id": int(city_partner.id) if partner_type == "salon_owner" else None,
+        })
+        db.add(buyer)
+
+    if any(int(recipient.id) == int(buyer.id) for recipient, _ in recipients):
+        return None
+
+    partner_total = sum((_money(amount * rate) for _, rate in recipients), Decimal("0.00"))
+    platform_amount = _money(amount - partner_total)
+    settled_rows: list[SplitTransaction] = []
+    for index, (recipient, commission_rate) in enumerate(recipients):
+        role_type = "city_partner" if partner_type == "city_partner" or index == 0 else "salon_owner"
+        commission_amount = _money(amount * commission_rate)
+        row = db.scalar(
+            select(SplitTransaction)
+            .where(
+                SplitTransaction.order_no == order_no,
+                SplitTransaction.biz_type == BIZ_MEMBER_REFERRAL,
+                SplitTransaction.split_to_user_pk == int(recipient.id),
+            )
+            .with_for_update()
+            .limit(1)
+        )
+        if row is not None and row.split_status in {STATUS_SUCCESS, STATUS_CANCELLED, STATUS_RETURNED}:
+            settled_rows.append(row)
+            continue
+        if row is None:
+            row = SplitTransaction(
+                order_no=order_no,
+                biz_type=BIZ_MEMBER_REFERRAL,
+                split_from_user_pk=int(buyer.id),
+                split_to_user_pk=int(recipient.id),
+                role_type=role_type,
+                total_amount=amount,
+                split_amount=commission_amount,
+                platform_fee=platform_amount if index == len(recipients) - 1 else Decimal("0.00"),
+                split_status=STATUS_PENDING,
+                channel="internal",
+                remark=f"{PARTNER_TYPE_LABELS[role_type]}推荐会员分佣 {commission_rate * 100}%",
+            )
+            db.add(row)
+            db.flush()
+        else:
+            row.split_from_user_pk = int(buyer.id)
+            row.role_type = role_type
+            row.total_amount = amount
+            row.split_amount = commission_amount
+            row.platform_fee = platform_amount if index == len(recipients) - 1 else Decimal("0.00")
+
+        account = _ensure_settlement(db, user_pk=int(recipient.id))
+        account.available_balance = _money(account.available_balance) + commission_amount
+        account.total_income = _money(account.total_income) + commission_amount
+        row.split_status = STATUS_SUCCESS
+        row.executed_at = _now()
+        _record_ledger(
+            db,
+            user_pk=int(recipient.id),
+            change_amount=commission_amount,
+            account=account,
+            biz_type=BIZ_MEMBER_REFERRAL,
+            biz_key=order_no,
+            title=f"{PARTNER_TYPE_LABELS[role_type]}会员推荐分佣",
+            remark=f"会员订单实付 ¥{amount:.2f}，分佣比例 {commission_rate * 100}%",
+        )
+        settled_rows.append(row)
+
+    db.flush()
+    return settled_rows[-1] if settled_rows else None
 
 
 def _generate_withdrawal_order_no() -> str:
@@ -595,10 +736,9 @@ def cancel_circle_join_split(
     if row.split_status == STATUS_SUCCESS:
         settlement = _ensure_settlement(db, user_pk=int(row.split_to_user_pk))
         split_amount = _money(row.split_amount)
-        settlement.available_balance = max(
-            Decimal("0.00"),
-            _money(settlement.available_balance) - split_amount,
-        )
+        if _money(settlement.available_balance) < split_amount:
+            raise BusinessException(message="该笔收益已提现或余额不足，请联系平台处理退费", code=4661, status_code=409)
+        settlement.available_balance = _money(settlement.available_balance) - split_amount
         settlement.total_income = max(
             Decimal("0.00"),
             _money(settlement.total_income) - split_amount,
@@ -627,6 +767,8 @@ def get_user_income_overview(
     *,
     user_pk: int,
     limit: int = 20,
+    biz_type: str | None = None,
+    before_id: int | None = None,
 ) -> dict[str, Any]:
     safe_limit = min(max(int(limit or 20), 1), 50)
     account = db.scalar(select(UserSettlement).where(UserSettlement.user_pk == int(user_pk)).limit(1))
@@ -635,12 +777,18 @@ def get_user_income_overview(
         db.add(account)
         db.flush()
 
+    row_query = select(SplitTransaction).where(SplitTransaction.split_to_user_pk == int(user_pk))
+    if _normalize_text(biz_type):
+        row_query = row_query.where(SplitTransaction.biz_type == _normalize_text(biz_type))
+    if before_id is not None:
+        row_query = row_query.where(SplitTransaction.id < int(before_id))
     rows = db.scalars(
-        select(SplitTransaction)
-        .where(SplitTransaction.split_to_user_pk == int(user_pk))
-        .order_by(SplitTransaction.created_at.desc(), SplitTransaction.id.desc())
-        .limit(safe_limit)
+        row_query
+        .order_by(SplitTransaction.id.desc())
+        .limit(safe_limit + 1)
     ).all()
+    has_more = len(rows) > safe_limit
+    rows = rows[:safe_limit]
     pending_amount = db.scalar(
         select(func.coalesce(func.sum(SplitTransaction.split_amount), 0))
         .where(
@@ -648,8 +796,42 @@ def get_user_income_overview(
             SplitTransaction.split_status.in_([STATUS_PENDING, STATUS_READY, STATUS_EXTERNAL_FAILED]),
         )
     )
+    source_types = db.scalars(
+        select(SplitTransaction.biz_type)
+        .where(SplitTransaction.split_to_user_pk == int(user_pk))
+        .distinct()
+    ).all()
+    service_fee_rate = _resolve_service_fee_rate(db)
+    receiver_rate = (Decimal("1.00") - service_fee_rate).quantize(Decimal("0.0001"))
+    user = db.scalar(select(User).where(User.id == int(user_pk)).limit(1))
+    partner_type = _normalize_lower(getattr(user, "partner_type", "") if user else "")
+    partner_rate = {
+        "salon_owner": Decimal("0.40"),
+        "city_partner": Decimal("0.60"),
+    }.get(partner_type)
+    role_name = PARTNER_TYPE_LABELS.get(partner_type, "")
+    if partner_rate is not None:
+        receiver_rate = partner_rate
+        service_fee_rate = Decimal("1.00") - partner_rate
 
     return {
+        "payout": {
+            "wechat_bound": bool(user and user.wechat_openid),
+            "real_name_verified": bool(user and user.is_verified),
+            "minimum_amount": "1.00",
+            "method": "wechat",
+        },
+        "rules": {
+            "receiver_rate": float(receiver_rate),
+            "service_fee_rate": float(service_fee_rate),
+            "auto_settle_enabled": _resolve_auto_settle_enabled(db),
+            "partner_type": partner_type,
+            "role_name": role_name,
+            "commission_rate": float(partner_rate) if partner_rate is not None else None,
+        },
+        "has_more": has_more,
+        "next_before_id": int(rows[-1].id) if has_more and rows else None,
+        "source_types": sorted({_normalize_text(value) for value in source_types if _normalize_text(value)}),
         "account": {
             "available_balance": _serialize_decimal(account.available_balance),
             "frozen_balance": _serialize_decimal(account.frozen_balance),
@@ -717,12 +899,27 @@ def create_user_withdrawal(
     withdraw_type: str = "wechat",
     withdraw_account: str | None = None,
 ) -> dict[str, Any]:
+    user = db.scalar(select(User).where(User.id == int(user_pk)).limit(1))
+    if user is None or not user.is_active or not user.is_verified or not _normalize_text(user.wechat_openid):
+        raise BusinessException(message="请先完成实名认证并绑定微信", code=4658, status_code=403)
+    if _normalize_lower(withdraw_type) != "wechat" or _normalize_text(withdraw_account):
+        raise BusinessException(message="当前仅支持提现至登录微信账户", code=4659, status_code=400)
     withdraw_amount = _money(amount)
     if withdraw_amount <= Decimal("0.00"):
         raise BusinessException(message="提现金额必须大于 0", code=4651, status_code=400)
     if withdraw_amount < Decimal("1.00"):
         raise BusinessException(message="单次提现金额不能低于 1 元", code=4652, status_code=400)
-    account = _ensure_settlement(db, user_pk=user_pk)
+    account = db.scalar(select(UserSettlement).where(UserSettlement.user_pk == int(user_pk)).with_for_update().limit(1))
+    if account is None:
+        account = _ensure_settlement(db, user_pk=user_pk)
+    pending_order = db.scalar(
+        select(WithdrawalOrder.id).where(
+            WithdrawalOrder.user_pk == int(user_pk),
+            WithdrawalOrder.status == WITHDRAWAL_PENDING,
+        ).limit(1)
+    )
+    if pending_order is not None:
+        raise BusinessException(message="已有提现申请正在处理，请等待处理完成", code=4660, status_code=409)
     if _money(account.available_balance) < withdraw_amount:
         raise BusinessException(message="可提现余额不足", code=4653, status_code=409)
 
@@ -734,8 +931,8 @@ def create_user_withdrawal(
         amount=withdraw_amount,
         fee=Decimal("0.00"),
         actual_amount=withdraw_amount,
-        withdraw_type=_normalize_lower(withdraw_type) or "wechat",
-        withdraw_account=_normalize_text(withdraw_account) or None,
+        withdraw_type="wechat",
+        withdraw_account=None,
         status=WITHDRAWAL_PENDING,
         remark="用户申请提现，等待后台人工打款确认",
     )
@@ -784,15 +981,23 @@ def _serialize_withdrawal(order: WithdrawalOrder, user: User | None = None) -> d
     return payload
 
 
-def list_user_withdrawals(db: Session, *, user_pk: int, limit: int = 30) -> dict[str, Any]:
+def list_user_withdrawals(db: Session, *, user_pk: int, limit: int = 30, before_id: int | None = None, status: str | None = None) -> dict[str, Any]:
     safe_limit = min(max(int(limit or 30), 1), 100)
+    query = select(WithdrawalOrder).where(WithdrawalOrder.user_pk == int(user_pk))
+    if before_id is not None:
+        query = query.where(WithdrawalOrder.id < int(before_id))
+    if _normalize_text(status):
+        query = query.where(WithdrawalOrder.status == _normalize_lower(status))
     rows = db.scalars(
-        select(WithdrawalOrder)
-        .where(WithdrawalOrder.user_pk == int(user_pk))
-        .order_by(WithdrawalOrder.created_at.desc(), WithdrawalOrder.id.desc())
-        .limit(safe_limit)
+        query.order_by(WithdrawalOrder.id.desc()).limit(safe_limit + 1)
     ).all()
-    return {"items": [_serialize_withdrawal(item) for item in rows]}
+    has_more = len(rows) > safe_limit
+    rows = rows[:safe_limit]
+    return {
+        "items": [_serialize_withdrawal(item) for item in rows],
+        "has_more": has_more,
+        "next_before_id": int(rows[-1].id) if has_more and rows else None,
+    }
 
 
 def list_admin_split_transactions(
@@ -811,7 +1016,7 @@ def list_admin_split_transactions(
     payer = aliased(User)
     receiver = aliased(User)
 
-    where_conditions = [SplitTransaction.biz_type == BIZ_CIRCLE_JOIN]
+    where_conditions = [SplitTransaction.biz_type.in_([BIZ_CIRCLE_JOIN, BIZ_MEMBER_REFERRAL])]
     if normalized_status:
         where_conditions.append(SplitTransaction.split_status == normalized_status)
     if normalized_keyword:

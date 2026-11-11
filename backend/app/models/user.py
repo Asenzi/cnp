@@ -10,6 +10,10 @@ from app.models.base import Base
 class User(Base):
     __tablename__ = "users"
 
+    member_referral_snapshot: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="首次会员成交归属；NULL未锁定，{}平台来源"
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(8), unique=True, index=True, nullable=False)
     phone: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
@@ -24,12 +28,8 @@ class User(Base):
     wechat_unionid: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     wechat_session_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     wechat_bound_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    nickname: Mapped[str] = mapped_column(String(64), nullable=False)
-    avatar_url: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        server_default=text("'/static/logo.png'"),
-    )
+    nickname: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_candidate_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_review_status: Mapped[str] = mapped_column(
         String(16),
@@ -73,6 +73,7 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(100), nullable=True)
     city_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     city_name: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    district_name: Mapped[str | None] = mapped_column(String(32), nullable=True)
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
     card_files_json: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -142,6 +143,24 @@ class User(Base):
         default=False,
         server_default=text("0"),
         index=True,
+    )
+    partner_type: Mapped[str | None] = mapped_column(
+        String(24), nullable=True, index=True,
+        comment="合作身份: salon_owner / city_partner",
+    )
+    partner_invite_code: Mapped[str | None] = mapped_column(
+        String(4), nullable=True, unique=True, index=True,
+        comment="合作身份专属四位邀请码",
+    )
+    partner_city_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True,
+        comment="城市合伙人唯一城市键，仅城市合伙人使用",
+    )
+    city_partner_user_pk: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="沙龙主理人所属城市合伙人",
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean,

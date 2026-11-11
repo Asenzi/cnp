@@ -1,3 +1,4 @@
+import { reportActivity } from '../utils/activity-notification'
 import { getApiBaseUrl, request } from '../utils/request'
 
 export function createCircle(payload) {
@@ -22,7 +23,7 @@ export function getCircleDetail(circleCode) {
   return request({
     url: `/api/v1/circle/${safeCode}`,
     method: 'GET'
-  })
+  }).then(data => { reportActivity('circle', circleCode, 'view'); return data })
 }
 
 export function getCirclePosts(circleCode, params = {}) {
@@ -48,6 +49,27 @@ export function getCircleMembers(circleCode, params = {}) {
     url: `/api/v1/circle/${safeCode}/members?${query.join('&')}`,
     method: 'GET'
   })
+}
+
+export function getManagedCircleMembers(circleCode, params = {}) {
+  const code = encodeURIComponent(String(circleCode || '').trim())
+  const offset = Math.max(Number(params.offset || 0), 0)
+  return request({
+    url: `/api/v1/circle/${code}/manage-members?offset=${offset}&limit=20`,
+    method: 'GET'
+  })
+}
+
+export function removeCircleMember(circleCode, userId) {
+  const code = encodeURIComponent(String(circleCode || '').trim())
+  const member = encodeURIComponent(String(userId || '').trim())
+  return request({ url: `/api/v1/circle/${code}/manage-members/${member}/remove`, method: 'POST' })
+}
+
+export function refundCircleMember(circleCode, userId) {
+  const code = encodeURIComponent(String(circleCode || '').trim())
+  const member = encodeURIComponent(String(userId || '').trim())
+  return request({ url: `/api/v1/circle/${code}/manage-members/${member}/refund`, method: 'POST' })
 }
 
 export function getDiscoverCircles(params = {}) {
@@ -196,6 +218,10 @@ export function uploadCircleCover(filePath, fileName = 'circle-cover') {
 }
 
 export function uploadCircleAvatar(filePath, fileName = 'circle-avatar') {
+  return uploadCircleImage(filePath, fileName)
+}
+
+export function uploadCircleShareImage(filePath, fileName = 'circle-share') {
   return uploadCircleImage(filePath, fileName)
 }
 

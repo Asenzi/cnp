@@ -1,0 +1,62 @@
+{
+  "pages": [
+    "pages/discover/index",
+    "pages/discover/city/index",
+    "pages/resources/index",
+    "pages/circles/index",
+    "pages/mine/index",
+    "pages/auth/login/index",
+    "pages/card/index",
+    "pages/circle-detail/index"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#f6f6f8",
+    "navigationBarTitleText": "圈脉链",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f6f6f8"
+  },
+  "tabBar": {
+    "color": "#666666",
+    "selectedColor": "#1a57db",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/discover/index",
+        "text": "人脉",
+        "iconPath": "assets/tabbar/renmai.png",
+        "selectedIconPath": "assets/tabbar/renmai-s.png"
+      },
+      {
+        "pagePath": "pages/resources/index",
+        "text": "资源",
+        "iconPath": "assets/tabbar/zyuan.png",
+        "selectedIconPath": "assets/tabbar/ziyuan-s.png"
+      },
+      {
+        "pagePath": "pages/circles/index",
+        "text": "圈子",
+        "iconPath": "assets/tabbar/quan.png",
+        "selectedIconPath": "assets/tabbar/quan-s.png"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的",
+        "iconPath": "assets/tabbar/my.png",
+        "selectedIconPath": "assets/tabbar/my-s.png"
+      }
+    ]
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于展示您所在城市与附近人脉"
+    }
+  },
+  "requiredPrivateInfos": [
+    "getLocation",
+    "chooseLocation"
+  ],
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

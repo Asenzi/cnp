@@ -1,0 +1,16 @@
+<view wx:for="{{items}}" wx:key="*this" class="skeleton-card">
+  <view class="skeleton-header">
+    <view class="skeleton-avatar"></view>
+    <view class="skeleton-info">
+      <view class="skeleton-line skeleton-name"></view>
+      <view class="skeleton-line skeleton-detail"></view>
+    </view>
+  </view>
+  <view class="skeleton-tags">
+    <view class="skeleton-tag"></view>
+    <view class="skeleton-tag"></view>
+  </view>
+  <view class="skeleton-footer">
+    <view class="skeleton-line skeleton-active"></view>
+  </view>
+</view>

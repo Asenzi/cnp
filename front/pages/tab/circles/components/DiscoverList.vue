@@ -1,6 +1,6 @@
 <template>
   <view class="list-wrap">
-    <DiscoverListCard
+    <CircleDirectoryCard
       v-for="item in items"
       :key="item.id"
       :circle="item"
@@ -10,7 +10,7 @@
 </template>
 
 <script setup>
-import DiscoverListCard from './DiscoverListCard.vue'
+import CircleDirectoryCard from './CircleDirectoryCard.vue'
 
 defineProps({
   items: {
@@ -24,7 +24,8 @@ defineEmits(['interest'])
 
 <style scoped>
 .list-wrap {
-  padding: 0 32rpx 24rpx;
+  padding: 18rpx 24rpx 24rpx;
+  background: #f6f6f8;
   display: flex;
   flex-direction: column;
   gap: 18rpx;

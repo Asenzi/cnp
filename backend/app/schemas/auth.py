@@ -77,12 +77,21 @@ class PasswordChangeData(BaseModel):
     force_relogin: bool = True
 
 
+class AccountCloseRequest(BaseModel):
+    confirm_text: str = Field(..., min_length=4, max_length=16, description="Account closure confirmation text")
+
+
+class AccountCloseData(BaseModel):
+    closed: bool = True
+    force_relogin: bool = True
+
+
 class UserBrief(BaseModel):
     userId: str
     user_id: str
     phone: str
-    nickname: str
-    avatar_url: str
+    nickname: str | None = None
+    avatar_url: str | None = None
     wechat_bound: bool = False
     is_verified: bool = False
     intro: str | None = None

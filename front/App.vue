@@ -2,13 +2,15 @@
 	import { clearLocationSessionCache, getQqMapKeyInfo } from './pages/tab/discover/modules/location'
 	import { connectRealtimeSocket, disconnectRealtimeSocket } from './utils/realtime'
 	import { syncUserLocation } from './utils/location-sync'
+	import { capturePartnerReferralLaunch } from './utils/partner-referral'
 
 	let lastSyncTime = 0
 	const SYNC_THROTTLE_MS = 5 * 60 * 1000 // 5分钟节流
 
 	export default {
-		onLaunch: function() {
+		onLaunch: function(options) {
 			console.log('App Launch')
+			capturePartnerReferralLaunch(options)
       const mapKeyInfo = getQqMapKeyInfo()
       if (mapKeyInfo?.key && mapKeyInfo?.source === 'env' && !uni.getStorageSync('__QQ_MAP_KEY__')) {
         uni.setStorageSync('__QQ_MAP_KEY__', mapKeyInfo.key)
@@ -29,8 +31,9 @@
 				})
 			}
 		},
-		onShow: function() {
+		onShow: function(options) {
 			console.log('App Show')
+			capturePartnerReferralLaunch(options)
 			connectRealtimeSocket()
 
 			// 应用显示时，如果距离上次同步超过5分钟则同步

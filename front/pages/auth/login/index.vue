@@ -70,6 +70,7 @@ import { loginByWechatMiniapp } from '../../../api/auth'
 import { connectRealtimeSocket } from '../../../utils/realtime'
 import { getMiniappLoginCode, getWechatDeviceId } from '../../../utils/wechat-auth'
 import { syncUserLocation } from '../../../utils/location-sync'
+import { savePartnerReferralInviteCode } from '../../../utils/partner-referral'
 import {
   loadLocationFilterCache,
   resolveCurrentCityByGps,
@@ -85,6 +86,7 @@ const inviteCode = ref('')
 
 const INVITE_CODE_STORAGE_KEY = '__INVITE_CODE__'
 const LOGIN_DISCOVER_REFRESH_STORAGE_KEY = 'discover_login_refresh_v1'
+const LOGIN_PROFILE_REQUIRED_STORAGE_KEY = 'login_profile_required_v1'
 const DEFAULT_CITY_NAME = '深圳'
 
 const showToast = (title) => {
@@ -210,18 +212,30 @@ const handleWechatLogin = async (event) => {
     uni.removeStorageSync(INVITE_CODE_STORAGE_KEY)
     connectRealtimeSocket()
 
-    // 登录成功后立即同步用户位置
+    if (result?.is_new_user) {
+      uni.setStorageSync(LOGIN_PROFILE_REQUIRED_STORAGE_KEY, true)
+      // Android WeChat may keep the native getPhoneNumber interaction layer
+      // attached when redirecting immediately to a page that contains another
+      // native open-type button/input. Re-launching after the current native
+      // interaction settles rebuilds those controls so chooseAvatar/nickname
+      // can receive taps and focus normally on first entry.
+      setTimeout(() => {
+        uni.hideToast()
+        uni.reLaunch({ url: '/pages/me/editInfo/index?from=login' })
+      }, 600)
+      return
+    }
+
+    // Existing users can sync immediately. New users must finish the native
+    // chooseAvatar/nickname onboarding first: running getLocation in parallel
+    // occupies Android WeChat's native interaction layer and makes both
+    // controls appear visible but unresponsive until the page is reopened.
     syncUserLocation(true).catch(err => {
       console.error('登录后位置同步失败:', err)
     })
 
     showToast('登录成功')
-
     setTimeout(() => {
-      if (result?.is_new_user) {
-        uni.redirectTo({ url: '/pages/me/editInfo/index?from=login' })
-        return
-      }
       uni.setStorageSync(LOGIN_DISCOVER_REFRESH_STORAGE_KEY, Date.now())
       uni.switchTab({ url: '/pages/tab/discover/index' })
     }, 300)
@@ -245,6 +259,16 @@ onLoad((options) => {
   if (finalInviteCode) {
     inviteCode.value = finalInviteCode
     uni.setStorageSync(INVITE_CODE_STORAGE_KEY, finalInviteCode)
+    if (queryInviteCode) {
+      savePartnerReferralInviteCode(queryInviteCode)
+    }
+  }
+
+  if (queryInviteCode && String(uni.getStorageSync('token') || '').trim()) {
+    uni.removeStorageSync(INVITE_CODE_STORAGE_KEY)
+    setTimeout(() => {
+      uni.switchTab({ url: '/pages/tab/discover/index' })
+    }, 0)
   }
 })
 </script>

@@ -23,6 +23,7 @@ from app.models.sys_config import SysConfig
 from app.models.user import User
 from app.models.user_points_account import UserPointsAccount
 from app.models.user_points_transaction import UserPointsTransaction
+from app.partners import resolve_partner_invite_code
 from app.verification.constants import VerificationStatus, VerificationType
 
 POINTS_STATUS_NONE = "none"
@@ -940,7 +941,9 @@ def resolve_inviter_user_pk(db: Session, *, invite_code: str | None, current_use
     normalized_invite_code = _normalize_text(invite_code)
     if not normalized_invite_code:
         return None
-    inviter = get_user_by_business_user_id(db=db, business_user_id=normalized_invite_code)
+    inviter = resolve_partner_invite_code(db=db, invite_code=normalized_invite_code)
+    if inviter is None:
+        inviter = get_user_by_business_user_id(db=db, business_user_id=normalized_invite_code)
     if inviter is None:
         return None
     if current_user_pk and int(inviter.id) == int(current_user_pk):

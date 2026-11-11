@@ -27,6 +27,8 @@ class RealNameVerificationSubmitRequest(BaseModel):
 
 
 class RealNameVerificationDetailData(BaseModel):
+    invite_code: str = ""
+    referral_locked: bool = False
     status: VerificationStatus = VerificationStatus.NOT_SUBMITTED
     reject_reason: str | None = None
     submitted_at: datetime | None = None
@@ -42,6 +44,7 @@ class RealNameVerificationDetailData(BaseModel):
 
 
 class TencentRealNameStartRequest(BaseModel):
+    invite_code: str | None = Field(default=None, max_length=4, pattern=r"^(?:[1-9A-Z]{4})?$")
     real_name: str = Field(..., min_length=2, max_length=32)
     id_number: str = Field(..., min_length=15, max_length=18)
     wechat_id: str | None = Field(default=None, max_length=64)
@@ -60,6 +63,7 @@ class TencentRealNameStartData(BaseModel):
 
 
 class TencentRealNameFinishRequest(BaseModel):
+    invite_code: str | None = Field(default=None, max_length=4, pattern=r"^(?:[1-9A-Z]{4})?$")
     provider_biz_token: str = Field(..., min_length=8, max_length=128)
 
 

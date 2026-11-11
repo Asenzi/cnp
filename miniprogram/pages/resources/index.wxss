@@ -1,0 +1,67 @@
+/* 资源库列表页样式，沿用 uni 版 pages/tab/resources/index.vue */
+
+.resource-page {
+  height: 100vh;
+  overflow: hidden;
+  background: #f6f6f8;
+}
+
+.feed-scroll {
+  height: calc(100vh - 248rpx);
+  background: #f6f6f8;
+}
+
+.feed-wrap {
+  padding: 24rpx 32rpx calc(120rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.status-wrap {
+  min-height: 320rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  padding: 120rpx 32rpx 80rpx;
+}
+
+.status-text {
+  color: #64748b;
+  font-size: 26rpx;
+  line-height: 36rpx;
+}
+
+.retry-btn {
+  height: 72rpx;
+  border-radius: 36rpx;
+  padding: 0 40rpx;
+  font-size: 28rpx;
+  line-height: 72rpx;
+  color: #ffffff;
+  background: linear-gradient(135deg, #1a57db 0%, #1e40af 100%);
+  box-shadow: 0 8rpx 16rpx rgba(26, 87, 219, 0.2);
+  margin-top: 8rpx;
+}
+
+.retry-btn-active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.load-more-wrap {
+  padding: 20rpx 0 12rpx;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+}
+
+.load-more-text {
+  color: #94a3b8;
+  font-size: 24rpx;
+  line-height: 32rpx;
+}

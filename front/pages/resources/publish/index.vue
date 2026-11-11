@@ -43,33 +43,6 @@
             @input="onInputDescription"
           />
 
-          <view class="media-section">
-            <text class="media-label">上传图片 (最多9张)</text>
-
-            <view class="media-grid">
-              <view
-                v-for="(item, index) in imageList"
-                :key="`${item}-${index}`"
-                class="media-item"
-              >
-                <image class="media-image" mode="aspectFill" :src="item" @tap="onPreviewImage(index)" />
-                <button class="remove-btn" hover-class="remove-btn-active" @tap.stop="onRemoveImage(index)">
-                  ×
-                </button>
-              </view>
-
-              <button
-                v-if="imageList.length < 9"
-                class="upload-tile"
-                hover-class="upload-tile-hover"
-                :disabled="uploading || loadingDetail"
-                @tap="onChooseImages"
-              >
-                <text class="upload-icon">+</text>
-                <text class="upload-text">{{ uploading ? uploadProgressText : '添加图片' }}</text>
-              </button>
-            </view>
-          </view>
         </view>
 
         <view v-if="form.mode === 'venue'" class="card venue-card">
@@ -260,8 +233,7 @@ import { getCurrentUserProfile } from '../../../api/user'
 import {
   createResourcePost,
   getResourceDetail,
-  updateResourcePost,
-  uploadResourceImage
+  updateResourcePost
 } from '../../../api/post'
 import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
 
@@ -294,7 +266,6 @@ const form = ref({
   title: '',
   industry_label: '',
   description: '',
-  images: [],
   sync_circle_codes: []
 })
 
@@ -329,19 +300,12 @@ const modeOptions = computed(() => {
 })
 
 const editingPostCode = ref('')
-const uploading = ref(false)
 const submitting = ref(false)
 const loadingDetail = ref(false)
-const uploadProgress = ref({
-  done: 0,
-  total: 0
-})
 
 let openerEventChannel = null
-const CROPPER_RESULT_EVENT = 'resource-publish-image-cropped'
 
 const isEditMode = computed(() => Boolean(editingPostCode.value))
-const imageList = computed(() => (Array.isArray(form.value.images) ? form.value.images : []))
 const selectedCircleCodes = computed(() => (Array.isArray(form.value.sync_circle_codes) ? form.value.sync_circle_codes : []))
 const normalizedTitle = computed(() => String(form.value.title || '').trim())
 const normalizedIndustry = computed(() => String(form.value.industry_label || '').trim())
@@ -373,8 +337,7 @@ const descriptionPlaceholder = computed(() => {
 
 const submitDisabled = computed(() => {
   return (
-    uploading.value
-    || submitting.value
+    submitting.value
     || loadingDetail.value
     || normalizedTitle.value.length < 2
     || normalizedDescription.value.length < 5
@@ -388,13 +351,6 @@ const submitButtonText = computed(() => {
   return isEditMode.value ? '保存修改' : '立即发布'
 })
 
-const uploadProgressText = computed(() => {
-  if (!uploading.value || !uploadProgress.value.total) {
-    return '添加图片'
-  }
-  return `上传中 ${uploadProgress.value.done}/${uploadProgress.value.total}`
-})
-
 const industryOptions = computed(() => {
   return INDUSTRY_OPTIONS
 })
@@ -404,20 +360,6 @@ const showToast = (title) => {
     title,
     icon: 'none'
   })
-}
-
-const isLocalTempImagePath = (value) => {
-  const normalized = String(value || '').trim()
-  if (!normalized) {
-    return false
-  }
-  if (/^(https?:\/\/tmp\/|wxfile:\/\/|file:\/\/|blob:|data:image\/)/i.test(normalized)) {
-    return true
-  }
-  if (/^https?:\/\//i.test(normalized) || normalized.startsWith('/static/')) {
-    return false
-  }
-  return true
 }
 
 const ensureLocationPermission = async () => {
@@ -576,113 +518,6 @@ const onChooseLocation = async () => {
   }
 }
 
-const onRemoveImage = (index) => {
-  const safeIndex = Number(index || 0)
-  form.value.images = imageList.value.filter((_, itemIndex) => itemIndex !== safeIndex)
-}
-
-const onPreviewImage = (index) => {
-  if (!imageList.value.length) {
-    return
-  }
-  uni.previewImage({
-    urls: imageList.value,
-    current: imageList.value[Math.max(Number(index || 0), 0)] || imageList.value[0]
-  })
-}
-
-const onChooseImages = async () => {
-  if (uploading.value || loadingDetail.value) {
-    return
-  }
-
-  const remain = 9 - imageList.value.length
-  if (remain <= 0) {
-    showToast('最多上传 9 张图片')
-    return
-  }
-
-  try {
-    // 选择图片
-    const res = await new Promise((resolve, reject) => {
-      uni.chooseImage({
-        count: 1,
-        sizeType: ['original', 'compressed'],
-        sourceType: ['album', 'camera'],
-        success: resolve,
-        fail: reject
-      })
-    })
-
-    if (res.tempFilePaths && res.tempFilePaths[0]) {
-      uni.$once(CROPPER_RESULT_EVENT, onCropperConfirm)
-      uni.navigateTo({
-        url: `/pages/cropper/index?src=${encodeURIComponent(res.tempFilePaths[0])}&event=${encodeURIComponent(CROPPER_RESULT_EVENT)}`,
-        fail: () => {
-          uni.$off(CROPPER_RESULT_EVENT, onCropperConfirm)
-          showToast('打开图片裁切失败')
-        }
-      })
-    }
-  } catch (err) {
-    console.log('用户取消选择图片', err)
-  }
-}
-
-// 裁切页面回调
-const onCropperConfirm = (croppedPath) => {
-  if (croppedPath) {
-    form.value.images = [...imageList.value, croppedPath].slice(0, 9)
-  }
-}
-
-const uploadPendingImages = async () => {
-  const sourceImages = imageList.value.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 9)
-  const pendingImages = sourceImages.filter((item) => isLocalTempImagePath(item))
-  if (!pendingImages.length) {
-    return sourceImages
-  }
-
-  const uploadedMap = new Map()
-  uploading.value = true
-  uploadProgress.value = {
-    done: 0,
-    total: pendingImages.length
-  }
-
-  try {
-    for (let index = 0; index < pendingImages.length; index += 1) {
-      const path = pendingImages[index]
-      uni.showLoading({
-        title: `上传中 ${index + 1}/${pendingImages.length}`,
-        mask: true
-      })
-
-      const data = await uploadResourceImage(path, `resource-image-${index + 1}.jpg`)
-      const url = String(data?.url || data?.path || '').trim()
-      if (!url || isLocalTempImagePath(url)) {
-        throw new Error('图片上传失败，请重试')
-      }
-      uploadedMap.set(path, url)
-      uploadProgress.value = {
-        done: index + 1,
-        total: pendingImages.length
-      }
-    }
-
-    const finalImages = sourceImages.map((item) => uploadedMap.get(item) || item)
-    form.value.images = finalImages
-    return finalImages
-  } finally {
-    uploading.value = false
-    uploadProgress.value = {
-      done: 0,
-      total: 0
-    }
-    uni.hideLoading()
-  }
-}
-
 const loadMyCircles = async () => {
   if (!isCircleOwner.value) {
     myCircles.value = []
@@ -810,9 +645,6 @@ const loadEditingDetail = async () => {
         ? data.circle_syncs
           .map((item) => String(item?.circle_code || '').trim().toUpperCase())
           .filter(Boolean)
-        : [],
-      images: Array.isArray(data?.images)
-        ? data.images.map((item) => String(item || '').trim()).filter(Boolean)
         : []
     }
 
@@ -857,13 +689,12 @@ const onSubmit = async () => {
 
   submitting.value = true
   try {
-    const finalImages = await uploadPendingImages()
     const payload = {
       mode: form.value.mode,
       title,
       industry_label: normalizedIndustry.value,
       description,
-      images: finalImages,
+      images: [],
       sync_circle_codes: form.value.mode === 'venue' ? selectedCircleCodes.value : []
     }
 
@@ -939,8 +770,6 @@ onLoad((query = {}) => {
 }
 
 .mode-tab,
-.upload-tile,
-.remove-btn,
 .settings-option,
 .visibility-option,
 .submit-btn,
@@ -952,8 +781,6 @@ onLoad((query = {}) => {
 }
 
 .mode-tab::after,
-.upload-tile::after,
-.remove-btn::after,
 .settings-option::after,
 .visibility-option::after,
 .submit-btn::after,
@@ -976,8 +803,6 @@ onLoad((query = {}) => {
 }
 
 .mode-tab-hover,
-.upload-tile-hover,
-.remove-btn-active,
 .settings-option-hover,
 .visibility-option-hover,
 .submit-btn-hover,
@@ -1067,80 +892,12 @@ onLoad((query = {}) => {
   line-height: 40rpx;
 }
 
-.media-section {
-  margin-top: 20rpx;
-}
-
-.media-label,
 .settings-label {
   display: block;
   color: #94a3b8;
   font-size: 22rpx;
   line-height: 28rpx;
   font-weight: 700;
-}
-
-.media-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-top: 20rpx;
-}
-
-.media-item,
-.upload-tile {
-  width: 180rpx;
-  height: 180rpx;
-  border-radius: 20rpx;
-}
-
-.media-item {
-  position: relative;
-  overflow: hidden;
-  background: #e2e8f0;
-}
-
-.media-image {
-  width: 100%;
-  height: 100%;
-}
-
-.remove-btn {
-  position: absolute;
-  top: 6rpx;
-  right: 6rpx;
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 999rpx;
-  background: rgba(15, 23, 42, 0.66);
-  color: #ffffff;
-  font-size: 26rpx;
-  line-height: 36rpx;
-  text-align: center;
-  padding: 0;
-}
-
-.upload-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6rpx;
-  margin: 0;
-  background: #f8fafc;
-  border: 2rpx dashed #e2e8f0;
-  color: #94a3b8;
-}
-
-.upload-icon {
-  font-size: 38rpx;
-  line-height: 38rpx;
-  font-weight: 300;
-}
-
-.upload-text {
-  font-size: 20rpx;
-  line-height: 26rpx;
 }
 
 .venue-panel {

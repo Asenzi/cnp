@@ -1,18 +1,13 @@
 <template>
-  <view class="empty-wrap">
-    <view class="empty-icon-shell">
-      <view class="icon-head"></view>
-      <view class="icon-body"></view>
-      <view class="icon-plus-h"></view>
-      <view class="icon-plus-v"></view>
-    </view>
-    <text class="empty-title">暂无待处理申请</text>
-    <text class="empty-desc">当有人向你发起好友申请时，会显示在这里</text>
-    <button class="action-btn" hover-class="action-btn-active" @tap="$emit('discover')">去发现新朋友</button>
-  </view>
+  <AppEmptyState><template #title>暂无待处理申请</template><template #description>当有人向你发起好友申请时，会显示在这里</template>
+    
+    
+    <button class="action-btn" hover-class="action-btn-active" @tap="$emit('discover')">去发现新朋友</button></AppEmptyState>
 </template>
 
 <script setup>
+import AppEmptyState from '../../../../components/AppEmptyState/AppEmptyState.vue'
+
 defineEmits(['discover'])
 </script>
 

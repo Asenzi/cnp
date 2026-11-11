@@ -1,0 +1,19 @@
+<view class="member-card" hover-class="member-card-active" bindtap="onTap">
+  <image
+    class="member-avatar"
+    src="{{displayAvatar}}"
+    mode="aspectFill"
+    binderror="onAvatarError"
+  />
+
+  <view class="member-main">
+    <view class="name-row">
+      <text class="member-name">{{member.name}}</text>
+      <text wx:if="{{member.isOwner}}" class="badge badge-owner">圈主</text>
+      <text wx:elif="{{member.verified}}" class="badge badge-verified">已认证</text>
+    </view>
+
+    <text wx:if="{{member.metaText}}" class="member-meta">{{member.metaText}}</text>
+    <text wx:if="{{member.intro}}" class="member-intro">{{member.intro}}</text>
+  </view>
+</view>

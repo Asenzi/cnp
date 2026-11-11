@@ -2,29 +2,22 @@
   <view class="detail-page">
     <view class="content-wrap">
       <CircleDetailHero :detail="detail" />
-      <CircleOwnerCard :owner="detail.owner" />
+      <CircleDetailActions :detail="detail" :interested="isInterested" :disabled="!isOwner && (joinActionDisabled || isJoined)" :action-text="isOwner ? '管理圈子' : isJoined ? '已加入' : joinActionText" @interest="isLoggedIn() ? onToggleInterest() : onInterestBeforeLogin()" @join="isOwner ? onEditCircle() : onApplyJoin()" @owner="onMemberDetail({user_id:detail.owner.userId})"/>
 
-      <view v-if="isOwner" class="owner-action-wrap">
-        <button class="owner-edit-btn" hover-class="owner-edit-btn-active" @tap="onEditCircle">
-          编辑圈子资料
-        </button>
-      </view>
 
       <CircleContentTabs :tabs="tabs" :active-index="activeTabIndex" @change="onTabChange" />
 
       <view class="list-wrap">
-        <template v-if="activeTabKey === 'event'">
+        <template v-if="activeTabKey === 'resource'">
           <view class="event-list">
-            <VenueEventCard
+            <CircleResourceCard
               v-for="post in posts"
               :key="post.id"
-              :item="post"
+              :post="post"
               @detail="onPostDetail"
             />
           </view>
-          <view v-if="!posts.length" class="empty-wrap">
-            <text class="empty-text">暂无圈子活动</text>
-          </view>
+          <AppEmptyState v-if="!posts.length"><template #title>暂无圈子资源</template></AppEmptyState>
         </template>
         <template v-else-if="activeTabKey === 'member'">
           <view class="member-list">
@@ -35,36 +28,20 @@
               @detail="onMemberDetail"
             />
           </view>
-          <view v-if="!members.length" class="empty-wrap">
-            <text class="empty-text">暂无圈子成员</text>
-          </view>
+          <AppEmptyState v-if="!members.length"><template #title>暂无圈子成员</template></AppEmptyState>
         </template>
-        <view v-else class="empty-wrap">
-          <text class="empty-text">{{ activeTabLabel }}模块开发中</text>
-        </view>
+        <AppEmptyState v-else><template #title>{{ activeTabLabel }}模块开发中</template></AppEmptyState>
       </view>
     </view>
 
-    <!-- 未登录时显示固定的收藏按钮 -->
-    <view v-if="!isLoggedIn()" class="login-action-bar">
-      <button class="login-interest-btn" hover-class="login-interest-btn-active" @tap="onInterestBeforeLogin">
-        去收藏
-      </button>
-    </view>
 
-    <CircleBottomBar
-      v-else-if="!isOwner && !isJoined"
-      :price="detail.price"
-      :interested="isInterested"
-      :action-text="joinActionText"
-      :disabled="joinActionDisabled"
-      @interest="onToggleInterest"
-      @apply="onApplyJoin"
-    />
   </view>
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
+import { reportActivity } from '../../../utils/activity-notification'
 import { computed, ref } from 'vue'
 import { onLoad, onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import {
@@ -76,18 +53,18 @@ import {
   submitCircleJoinRequest,
   toggleCircleCollection
 } from '../../../api/circle'
-import CircleBottomBar from './components/CircleBottomBar.vue'
+import CircleDetailActions from './components/CircleDetailActions.vue'
 import CircleContentTabs from './components/CircleContentTabs.vue'
 import CircleDetailHero from './components/CircleDetailHero.vue'
-import CircleOwnerCard from './components/CircleOwnerCard.vue'
 import CircleMemberCard from './components/CircleMemberCard.vue'
-import VenueEventCard from '../../tab/resources/components/VenueEventCard.vue'
-import { mapProfilePostItem } from '../../me/card/modules/profile-home-view-model'
+import CircleResourceCard from './components/CircleResourceCard.vue'
 import { circleDetailData, detailTabs } from './modules/detail-data'
+import { reportMemberPaymentClientError } from '../../../api/payment'
 import { publishCircleInterestChange } from '../../../utils/circle-interest'
+import { refreshWechatSessionForPayment } from '../../../utils/payment-session'
 
 const detail = ref(circleDetailData)
-const tabs = detailTabs
+const tabs = computed(() => detailTabs.map(tab => ({...tab,label: `${tab.label}（${tab.key === 'member' ? detail.value.memberCount || 0 : detail.value.resourceCount || 0}）`})))
 const allPosts = ref([])
 const members = ref([])
 const circleCode = ref('')
@@ -98,19 +75,9 @@ const interestSubmitting = ref(false)
 
 const activeTabIndex = ref(0)
 
-const posts = computed(() => {
-  if (activeTabKey.value === 'event') {
-    return allPosts.value
-      .filter((post) => {
-        const mode = String(post?.mode || '').trim()
-        return mode === 'venue'
-      })
-      .map((post) => mapProfilePostItem(post))
-  }
-  return []
-})
+const posts = computed(() => activeTabKey.value === 'resource' ? allPosts.value : [])
 
-const activeTab = computed(() => tabs[activeTabIndex.value] || tabs[0] || { key: 'event', label: '活动' })
+const activeTab = computed(() => tabs.value[activeTabIndex.value] || tabs.value[0] || { key: 'resource', label: '资源' })
 const activeTabKey = computed(() => activeTab.value.key)
 const activeTabLabel = computed(() => activeTab.value.label)
 const isOwner = computed(() => {
@@ -170,16 +137,9 @@ const onTabChange = (index) => {
   activeTabIndex.value = index
 }
 
-const formatCountText = (value) => {
-  const count = Number(value || 0)
-  if (count >= 10000) {
-    return `${(count / 10000).toFixed(1)}w`
-  }
-  return `${Math.max(0, Math.floor(count))}`
-}
 
-const mapJoinTypeTag = (joinType) => {
-  if (joinType === 'paid') {
+const mapJoinTypeTag = (joinType, joinPrice = 0) => {
+  if (joinType === 'paid' && Number(joinPrice || 0) > 0) {
     return '付费圈'
   }
   if (joinType === 'review') {
@@ -208,15 +168,15 @@ const sanitizeCircleImage = (value) => {
 }
 
 const resolveShareImageUrl = () => {
-  return String(detail.value?.logoImage || detail.value?.bannerImage || '').trim()
+  return String(detail.value?.shareImage || '').trim()
 }
 
 const applyServerDetail = (serverDetail) => {
   if (!serverDetail || typeof serverDetail !== 'object') {
     return
   }
-  const memberCountText = `${formatCountText(serverDetail.member_count)} 位成员`
-  const postCountText = `${formatCountText(serverDetail.post_count)} 条动态`
+  const memberCountText = `${serverDetail.member_count || 0} 成员`
+  const postCountText = `${serverDetail.post_count || 0} 资源`
   const priceNumber = Number(serverDetail.join_price || 0)
 
   detail.value = {
@@ -224,8 +184,13 @@ const applyServerDetail = (serverDetail) => {
     id: serverDetail.circle_code || detail.value.id,
     bannerImage: sanitizeCircleImage(serverDetail.cover_url || detail.value.bannerImage),
     logoImage: sanitizeCircleImage(serverDetail.avatar_url || serverDetail.cover_url || detail.value.logoImage),
+    shareImage: String(serverDetail.share_image_url || '').trim(),
     title: serverDetail.name || detail.value.title,
-    levelTag: mapJoinTypeTag(serverDetail.join_type),
+    category: serverDetail.industry_label || serverDetail.category_name || '',
+    createdDate: String(serverDetail.created_at || '').slice(0,10),
+    memberCount: Number(serverDetail.member_count || 0),
+    resourceCount: Number(serverDetail.post_count || 0),
+    levelTag: mapJoinTypeTag(serverDetail.join_type, priceNumber),
     membersText: memberCountText,
     postsText: postCountText,
     description: serverDetail.description || detail.value.description,
@@ -234,12 +199,13 @@ const applyServerDetail = (serverDetail) => {
       userId: serverDetail?.owner?.user_id || detail.value.owner?.userId || '',
       name: serverDetail?.owner?.nickname || detail.value.owner?.name,
       role: '圈主',
+      verified: Boolean(serverDetail?.owner?.is_verified),
       intro: `用户ID：${serverDetail?.owner?.user_id || ''}`,
       avatar: serverDetail?.owner?.avatar_url || detail.value.owner?.avatar
     },
     price: {
       current: priceNumber > 0 ? priceNumber.toFixed(2) : '0.00',
-      original: detail.value?.price?.original || '299'
+      original: detail.value?.price?.original || ''
     },
     isInterested: Boolean(
       serverDetail.is_collected
@@ -345,9 +311,9 @@ const performPendingInterest = async () => {
 }
 
 onShareAppMessage(() => {
+  reportActivity('circle', circleCode.value, 'share')
   const title = String(detail.value?.title || '圈子详情').trim()
   const memberCount = detail.value?.membersText || ''
-  // 优先使用封面图（更大更美观），其次使用logo
   const imageUrl = resolveShareImageUrl()
 
   // 构建分享标题：圈子名称 + 成员数
@@ -384,7 +350,7 @@ onShareTimeline(() => {
 const onPostDetail = (post) => {
   const postCode = String(post?.post_code || post?.postCode || '').trim()
   if (!postCode) {
-    showToast('活动编号缺失')
+    showToast('资源编号缺失')
     return
   }
   uni.navigateTo({
@@ -450,6 +416,39 @@ const onInterestBeforeLogin = () => {
   })
 }
 
+const getPaymentDebugInfo = (extra = {}) => {
+  let systemInfo = {}
+  try {
+    systemInfo = uni.getSystemInfoSync() || {}
+  } catch {
+    systemInfo = {}
+  }
+
+  return {
+    platform: systemInfo.platform,
+    system: systemInfo.system,
+    brand: systemInfo.brand,
+    model: systemInfo.model,
+    wechatVersion: systemInfo.version,
+    SDKVersion: systemInfo.SDKVersion,
+    envVersion: typeof __wxConfig !== 'undefined' ? __wxConfig?.envVersion : '',
+    ...extra
+  }
+}
+
+const getVirtualPaymentErrorMessage = (err, fallback = '支付失败，请稍后重试') => {
+  const message = String(err?.errMsg || err?.message || '')
+  const code = String(err?.errCode || err?.errno || '')
+  const normalized = message.toLowerCase()
+  if (code === '-15005' || normalized.includes('signature_invalid')) {
+    return '微信登录态已失效，请重新登录后再支付'
+  }
+  if (code === '-15001' || message.includes('尚未开启iOS支付')) {
+    return '当前小程序尚未开启 iOS 支付，请先在微信后台开启苹果 IAP 支付'
+  }
+  return message || fallback
+}
+
 const invokeJoinPayment = async (result) => {
   const orderNo = String(result?.order_no || '').trim()
   const virtualPayment = result?.virtual_payment || {}
@@ -463,7 +462,19 @@ const invokeJoinPayment = async (result) => {
       paySig: String(virtualPayment.paySig),
       signature: String(virtualPayment.signature),
       success: (res) => resolve(res || {}),
-      fail: (err) => reject({ ...(err || {}), order_no: orderNo })
+      fail: (err) => {
+        reportMemberPaymentClientError({
+          order_no: orderNo,
+          scene: 'circle_join',
+          err_msg: err?.errMsg,
+          err_code: err?.errCode || err?.errno,
+          ext: getPaymentDebugInfo({
+            mode: virtualPayment.mode,
+            signData: virtualPayment.signData || {}
+          })
+        }).catch(() => {})
+        reject({ ...(err || {}), order_no: orderNo })
+      }
     })
   })
   await confirmCircleJoinPayment(orderNo, {
@@ -496,6 +507,9 @@ const onApplyJoin = async () => {
   joinSubmitting.value = true
   uni.showLoading({ title: amount > 0 ? '发起支付...' : '提交中...' })
   try {
+    if (amount > 0) {
+      await refreshWechatSessionForPayment()
+    }
     const result = await submitCircleJoinRequest(circleCode.value, {
       pay_channel: amount > 0 ? 'virtualpay' : undefined
     })
@@ -522,7 +536,7 @@ const onApplyJoin = async () => {
       }
       showToast('已取消支付')
     } else {
-      showToast(err?.message || '申请加入失败')
+      showToast(getVirtualPaymentErrorMessage(err, '申请加入失败'))
     }
   } finally {
     joinSubmitting.value = false
@@ -541,129 +555,4 @@ const onEditCircle = () => {
 }
 </script>
 
-<style scoped>
-.detail-page {
-  min-height: 100vh;
-  background: #ffffff;
-}
-
-.content-wrap {
-  padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
-}
-
-.owner-action-wrap {
-  padding: 20rpx 32rpx;
-  border-bottom: 1rpx solid #f3f4f6;
-}
-
-.owner-edit-btn {
-  width: 100%;
-  height: 80rpx;
-  border-radius: 6rpx;
-  border: 0;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 28rpx;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.owner-edit-btn-active {
-  opacity: 0.8;
-}
-
-.list-wrap {
-  background: #ffffff;
-}
-
-.event-list {
-  padding: 0 32rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-}
-
-.member-list {
-  padding: 0 32rpx;
-}
-
-.empty-wrap {
-  padding: 120rpx 32rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.empty-text {
-  color: #9ca3af;
-  font-size: 26rpx;
-  line-height: 36rpx;
-}
-
-.login-action-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 100;
-  padding: 16rpx 32rpx;
-  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 20%, #ffffff 100%);
-  backdrop-filter: blur(10rpx);
-}
-
-.login-interest-btn {
-  width: 100%;
-  height: 88rpx;
-  background: linear-gradient(135deg, #1a57db 0%, #2563eb 100%);
-  border-radius: 44rpx;
-  border: 0;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 600;
-  box-shadow: 0 4rpx 12rpx rgba(26, 87, 219, 0.2);
-}
-
-.login-interest-btn::after {
-  border: 0;
-}
-
-.login-interest-btn-active {
-  opacity: 0.85;
-  transform: scale(0.98);
-}
-
-@media (prefers-color-scheme: dark) {
-  .detail-page {
-    background: #111827;
-  }
-
-  .owner-action-wrap {
-    border-bottom-color: #1f2937;
-  }
-
-  .list-wrap {
-    background: #111827;
-  }
-
-  .empty-text {
-    color: #6b7280;
-  }
-
-  .login-action-bar {
-    background: linear-gradient(180deg, rgba(17, 22, 33, 0) 0%, rgba(17, 22, 33, 0.95) 20%, #111621 100%);
-  }
-
-  .login-interest-btn {
-    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-    box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
-  }
-}
-</style>
+<style scoped>.detail-page{min-height:100vh;background:#f5f7ff;padding:0 10rpx 24rpx}.content-wrap{padding:0}.list-wrap{background:#fff;border-radius:0 0 24rpx 24rpx;padding:0 26rpx}.empty-wrap{padding:48rpx 20rpx;text-align:center}.empty-text{font-size:28rpx;color:#777}.owner-action-wrap{padding:16rpx}.owner-edit-btn{font-size:28rpx}</style>

@@ -94,9 +94,7 @@
             </view>
           </view>
 
-          <view v-if="keyword && !groupedCities.length && !visibleHotCities.length" class="empty-wrap">
-            <text class="empty-text">{{ uiText.empty }}</text>
-          </view>
+          <AppEmptyState v-if="keyword && !groupedCities.length && !visibleHotCities.length"><template #title>{{ uiText.empty }}</template></AppEmptyState>
         </scroll-view>
 
         <view v-if="indexedLetters.length" class="letter-index">
@@ -116,6 +114,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { PROVINCE_CITY_OPTIONS } from '../../../me/editInfo/modules/city-picker-data'

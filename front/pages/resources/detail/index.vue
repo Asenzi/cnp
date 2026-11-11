@@ -1,185 +1,15 @@
 <template>
-  <view class="detail-page">
-    <scroll-view class="detail-scroll" :class="{ 'detail-scroll-self': isSelfPost }" scroll-y :show-scrollbar="false">
-      <view class="detail-main">
-        <view v-if="loading && !post.post_code" class="status-wrap">
-          <text class="status-text">加载中...</text>
-        </view>
-
-        <view v-else-if="loadError && !post.post_code" class="status-wrap">
-          <text class="status-text">{{ loadError }}</text>
-          <button class="retry-btn" hover-class="retry-btn-active" @tap="fetchDetail">重新加载</button>
-        </view>
-
-        <template v-else>
-          <view class="content-card">
-            <view class="content-head">
-              <view class="tag-row">
-                <text class="tag tag-primary">{{ modeText }}</text>
-                <text v-if="post.industry_label" class="tag">{{ post.industry_label }}</text>
-                <text class="tag">{{ sceneTag }}</text>
-              </view>
-
-              <text class="detail-title">{{ post.title || '' }}</text>
-
-              <view class="detail-body">
-                <text v-for="(line, index) in descLines" :key="`line-${index}`" class="detail-line">{{ line }}</text>
-              </view>
-            </view>
-
-            <view v-if="imageList.length" class="gallery">
-              <image class="gallery-image gallery-image-main" mode="aspectFill" :src="imageList[0]"
-                @tap="previewImage(0)" />
-              <image v-for="(url, index) in subImages" :key="`img-${index}`" class="gallery-image gallery-image-sub"
-                mode="aspectFill" :src="url" @tap="previewImage(index + 1)" />
-            </view>
-
-            <view class="stats-wrap">
-              <view class="stats-top">
-                <view class="stats-left">
-                  <view class="stat-item">
-                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/see.png" mode="aspectFit" />
-                    <text class="stat-text">{{ formatNumber(post.view_count) }}</text>
-                  </view>
-                  <view class="stat-item">
-                    <image class="stat-icon" src="https://cos.cnptec.site/static/icon/interested.png" mode="aspectFit" />
-                    <text class="stat-text">{{ formatNumber(resourceCollectCount) }}</text>
-                  </view>
-                </view>
-                <text class="publish-time">发布于 {{ publishDateText }}</text>
-              </view>
-
-              <view class="expire-card">
-                <view class="expire-row">
-                  <view class="stat-icon-clock">
-                    <view class="clock-face"></view>
-                    <view class="clock-hand-hour"></view>
-                    <view class="clock-hand-minute"></view>
-                  </view>
-                  <text class="expire-text">有效期至：{{ expireDateText }} (剩余{{ remainDays }}天)</text>
-                </view>
-              </view>
-            </view>
-          </view>
-
-          <!-- 相关资源推荐 - 待后端接口实现 -->
-          <!-- <view class="recommend-wrap">
-            <text class="recommend-title">相关资源推荐</text>
-            <view class="recommend-card">
-              <view class="recommend-icon">AI</view>
-              <view class="recommend-main">
-                <text class="recommend-name">寻求智能视觉识别方案</text>
-                <text class="recommend-from">来自：平台推荐</text>
-              </view>
-              <text class="recommend-arrow">›</text>
-            </view>
-          </view> -->
-        </template>
-      </view>
-    </scroll-view>
-
-    <view v-if="!isSelfPost && post.post_code" class="bottom-nav">
-      <view class="publisher-card-bottom">
-        <view class="publisher-left">
-          <view class="avatar-wrap">
-            <image class="avatar" :src="authorAvatar" mode="aspectFill" />
-          </view>
-          <view class="publisher-main">
-            <view class="name-row">
-              <text class="publisher-name">{{ authorName }}</text>
-              <view v-if="authorBadges.length" class="badge-row">
-                <image
-                  v-for="badge in authorBadges"
-                  :key="badge.key"
-                  class="identity-badge"
-                  :src="badge.icon"
-                  mode="aspectFit"
-                />
-              </view>
-            </view>
-            <text class="publisher-role">{{ authorRole }}</text>
-          </view>
-        </view>
-        <button class="profile-btn" hover-class="profile-btn-active" @tap="onTapProfile">查看主页</button>
-      </view>
-
-      <view class="bottom-buttons">
-        <!-- 未登录时只显示收藏按钮 -->
-        <template v-if="!isLoggedIn()">
-          <button class="bottom-btn bottom-btn-single" hover-class="bottom-btn-hover" @tap="onCollectBeforeLogin">
-            <text class="btn-label-primary">去收藏</text>
-          </button>
-        </template>
-        <!-- 已登录时显示分享和收藏按钮 -->
-        <template v-else>
-          <button class="bottom-btn bottom-btn-plain" open-type="share" hover-class="bottom-btn-hover" @tap="onShare">
-            <text class="btn-label">分享</text>
-          </button>
-          <button class="bottom-btn bottom-btn-plain" hover-class="bottom-btn-hover" @tap="onToggleResourceCollect">
-            <text class="btn-label">{{ isPostInterested ? '已收藏' : '去收藏' }}</text>
-          </button>
-        </template>
-      </view>
-    </view>
-
-    <view v-if="cardPopupVisible" class="card-popup-mask" @tap="closeCardPopup">
-      <view class="card-popup-sheet" @tap.stop>
-        <view class="card-popup-handle"></view>
-        <view class="card-popup-head">
-          <text class="card-popup-title">用户名片</text>
-          <text class="card-popup-close" @tap="closeCardPopup">关闭</text>
-        </view>
-
-        <view v-if="cardLoading" class="card-loading-wrap">
-          <text class="card-loading-text">名片加载中...</text>
-        </view>
-
-        <template v-else>
-          <view class="business-card">
-            <view class="business-card-top">
-              <image class="business-card-avatar" :src="cardAvatar" mode="aspectFill" />
-              <view class="business-card-main">
-                <view class="business-card-name-row">
-                  <text class="business-card-name">{{ cardName }}</text>
-                  <text v-if="cardVerified" class="business-card-verified">已认证</text>
-                </view>
-                <text class="business-card-role">{{ cardRole }}</text>
-                <text v-if="cardIntro" class="business-card-intro">{{ cardIntro }}</text>
-              </view>
-            </view>
-
-            <view class="contact-list">
-              <view v-if="visibleContactRows.length" class="contact-list-inner">
-                <view v-for="row in visibleContactRows" :key="row.key" class="contact-row"
-                  hover-class="contact-row-hover" @tap="copyContact(row.value, row.copyText)">
-                  <text class="contact-label">{{ row.label }}</text>
-                  <text class="contact-value">{{ row.value }}</text>
-                  <text class="contact-copy">复制</text>
-                </view>
-              </view>
-              <view v-else class="contact-locked">
-                <text class="contact-locked-title">{{ cardLockedTitle }}</text>
-                <text class="contact-locked-desc">{{ cardLockedDesc }}</text>
-              </view>
-            </view>
-          </view>
-
-          <view class="card-popup-actions">
-            <button class="card-action-btn card-action-secondary" hover-class="card-action-hover" @tap="onTapProfile">
-              查看主页
-            </button>
-            <button class="card-action-btn card-action-primary" hover-class="card-action-hover" @tap="goChatFromCard">
-              发消息
-            </button>
-          </view>
-        </template>
-      </view>
-    </view>
+  <view class="detail-page redesign-detail-page">
+    <view v-if="loading && !post.post_code" class="status-wrap"><text class="status-text">加载中...</text></view>
+    <view v-else-if="loadError && !post.post_code" class="status-wrap"><text class="status-text">{{ loadError }}</text><button class="retry-btn" @tap="fetchDetail">重新加载</button></view>
+    <ResourceDetailView v-else-if="post.post_code" :post="post" :collected="isPostInterested" @profile="onTapProfile" @share="onShare" @collect="isLoggedIn() ? onToggleResourceCollect() : onCollectBeforeLogin()" />
   </view>
 </template>
 
 <script setup>
+import { reportActivity } from '../../../utils/activity-notification'
 import { computed, ref } from 'vue'
+import ResourceDetailView from './ResourceDetailView.vue'
 import { onLoad, onPullDownRefresh, onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { getResourceDetail, reportResourceFeedback, reportResourceView, toggleResourceCollection } from '../../../api/post'
 import { getUserProfileById } from '../../../api/user'
@@ -259,13 +89,6 @@ const resolveIdentityBadges = (profile = {}) => {
   return badges
 }
 
-const imageList = computed(() => {
-  return Array.isArray(post.value?.images)
-    ? post.value.images.map((item) => String(item || '').trim()).filter(Boolean)
-    : []
-})
-
-const subImages = computed(() => imageList.value.slice(1, 3))
 const authorName = computed(() => String(post.value?.author?.nickname || '未命名用户').trim())
 const authorAvatar = computed(() => String(post.value?.author?.avatar_url || 'https://cos.cnptec.site/static/logo.png').trim() || 'https://cos.cnptec.site/static/logo.png')
 const authorRole = computed(() => {
@@ -526,16 +349,6 @@ const checkAndPerformPendingInterest = () => {
   }
 }
 
-const previewImage = (index) => {
-  if (!imageList.value.length) {
-    return
-  }
-  uni.previewImage({
-    urls: imageList.value,
-    current: imageList.value[Math.max(Number(index || 0), 0)] || imageList.value[0]
-  })
-}
-
 const onTapProfile = () => {
   const targetUserId = authorUserId.value
   if (!targetUserId) {
@@ -676,11 +489,10 @@ const copyContact = (value, title) => {
   })
 }
 
-onShareAppMessage(() => ({
+onShareAppMessage(() => { reportActivity('resource', postCode.value, 'share'); return ({
   title: String(post.value?.title || '资源详情').trim(),
-  path: `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode.value)}`,
-  imageUrl: imageList.value[0] || ''
-}))
+  path: `/pages/resources/detail/index?postCode=${encodeURIComponent(postCode.value)}`
+}) })
 
 onLoad((query = {}) => {
   postCode.value = String(query?.postCode || '').trim()
@@ -944,29 +756,6 @@ onPullDownRefresh(async () => {
   font-size: 28rpx;
   line-height: 44rpx;
   white-space: pre-wrap;
-}
-
-/* 图片画廊 - 标准网格布局 */
-.gallery {
-  padding: 0 32rpx 32rpx;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8rpx;
-}
-
-.gallery-image {
-  width: 100%;
-  height: 200rpx;
-  border-radius: 8rpx;
-  background: #f3f6fa;
-}
-
-.gallery-image-main {
-  height: 200rpx;
-}
-
-.gallery-image-sub {
-  height: 200rpx;
 }
 
 .stats-wrap {
@@ -1538,8 +1327,7 @@ onPullDownRefresh(async () => {
     color: #8a8a8a;
   }
 
-  .avatar,
-  .gallery-image {
+  .avatar {
     background: #2a2a2a;
   }
 
@@ -1617,4 +1405,5 @@ onPullDownRefresh(async () => {
     color: #8a8a8a;
   }
 }
+.redesign-detail-page{min-height:100vh;background:#f5f6f8}
 </style>

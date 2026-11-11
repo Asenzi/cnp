@@ -1,325 +1,233 @@
-/**
- * 生成个人名片分享图 - 紧凑版
- */
+// 微信会话分享卡片使用 5:4 横图，保证头像和文字完整显示。
+const CANVAS_WIDTH = 750
+const CANVAS_HEIGHT = 600
 
-// 下载网络图片到本地
-function downloadImage(url) {
+function getCanvasNode(canvasId) {
   return new Promise((resolve, reject) => {
-    if (!url || !url.startsWith('http')) {
-      resolve('')
-      return
-    }
-
-    uni.downloadFile({
-      url: url,
-      success: (res) => {
-        if (res.statusCode === 200) {
-          resolve(res.tempFilePath)
-        } else {
-          resolve('')
-        }
-      },
-      fail: () => {
-        resolve('')
+    uni.createSelectorQuery().select(`#${canvasId}`).fields({node:true, size:true}).exec(result => {
+      const canvas = result?.[0]?.node
+      if (!canvas || typeof canvas.getContext !== 'function') {
+        reject(new Error('分享画布尚未就绪，请重新进入页面'))
+        return
       }
+      canvas.width = CANVAS_WIDTH * 2
+      canvas.height = CANVAS_HEIGHT * 2
+      resolve(canvas)
     })
   })
 }
 
-// 绘制圆角矩形
-function drawRoundRect(ctx, x, y, width, height, radius) {
+function loadCanvasImage(canvas, src, required = false) {
+  if (!src) return required ? Promise.reject(new Error('分享素材路径为空')) : Promise.resolve(null)
+  return new Promise((resolve, reject) => {
+    const load = path => {
+      const image = canvas.createImage()
+      image.onload = () => resolve({path:image, width:image.width, height:image.height})
+      image.onerror = () => required ? reject(new Error(`分享素材加载失败：${src}`)) : resolve(null)
+      image.src = path.startsWith('static/') ? `/${path}` : path
+    }
+    if (/^https?:\/\//i.test(src)) {
+      uni.getImageInfo({src, success:info => load(info.path), fail:() => required ? reject(new Error('分享图片下载失败')) : resolve(null)})
+    } else {
+      load(src)
+    }
+  })
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
   ctx.beginPath()
   ctx.moveTo(x + radius, y)
   ctx.lineTo(x + width - radius, y)
-  ctx.arc(x + width - radius, y + radius, radius, 1.5 * Math.PI, 2 * Math.PI)
+  ctx.arc(x + width - radius, y + radius, radius, -Math.PI / 2, 0)
   ctx.lineTo(x + width, y + height - radius)
-  ctx.arc(x + width - radius, y + height - radius, radius, 0, 0.5 * Math.PI)
+  ctx.arc(x + width - radius, y + height - radius, radius, 0, Math.PI / 2)
   ctx.lineTo(x + radius, y + height)
-  ctx.arc(x + radius, y + height - radius, radius, 0.5 * Math.PI, Math.PI)
+  ctx.arc(x + radius, y + height - radius, radius, Math.PI / 2, Math.PI)
   ctx.lineTo(x, y + radius)
-  ctx.arc(x + radius, y + radius, radius, Math.PI, 1.5 * Math.PI)
+  ctx.arc(x + radius, y + radius, radius, Math.PI, Math.PI * 1.5)
   ctx.closePath()
 }
 
-// 绘制圆形头像
-function drawCircleAvatar(ctx, imagePath, x, y, radius) {
-  ctx.save()
-  ctx.beginPath()
-  ctx.arc(x + radius, y + radius, radius, 0, 2 * Math.PI)
-  ctx.clip()
-  ctx.drawImage(imagePath, x, y, radius * 2, radius * 2)
-  ctx.restore()
-}
-
-// 文字截断
-function truncateText(ctx, text, maxWidth) {
-  if (!text) return ''
-
-  let width = ctx.measureText(text).width
-  if (width <= maxWidth) return text
-
-  let truncated = text
-  while (width > maxWidth && truncated.length > 0) {
-    truncated = truncated.substring(0, truncated.length - 1)
-    width = ctx.measureText(truncated + '...').width
+function truncateText(ctx, value, maxWidth) {
+  const text = String(value || '').trim()
+  if (ctx.measureText(text).width <= maxWidth) return text
+  const characters = Array.from(text)
+  while (characters.length && ctx.measureText(`${characters.join('')}…`).width > maxWidth) {
+    characters.pop()
   }
-
-  return truncated + '...'
+  return `${characters.join('')}…`
 }
 
-// 文字换行
-function wrapText(ctx, text, maxWidth, maxLines = 2) {
-  if (!text) return []
-
+function wrapText(ctx, value, maxWidth, maxLines) {
+  const characters = Array.from(String(value || '').replace(/\s+/g, ' ').trim())
   const lines = []
-  let currentLine = ''
-
-  for (let i = 0; i < text.length; i++) {
-    const testLine = currentLine + text[i]
-    const metrics = ctx.measureText(testLine)
-
-    if (metrics.width > maxWidth && currentLine) {
-      lines.push(currentLine)
-      if (lines.length >= maxLines) {
-        break
+  let line = ''
+  for (let index = 0; index < characters.length; index += 1) {
+    const nextLine = line + characters[index]
+    if (ctx.measureText(nextLine).width > maxWidth && line) {
+      if (lines.length === maxLines - 1) {
+        lines.push(truncateText(ctx, line + characters.slice(index).join(''), maxWidth))
+        return lines
       }
-      currentLine = text[i]
+      lines.push(line)
+      line = characters[index]
     } else {
-      currentLine = testLine
+      line = nextLine
     }
   }
-
-  if (currentLine && lines.length < maxLines) {
-    lines.push(currentLine)
-  }
-
-  // 如果超出行数，最后一行加省略号
-  if (lines.length === maxLines && currentLine !== text) {
-    lines[lines.length - 1] = lines[lines.length - 1].substring(0, lines[lines.length - 1].length - 2) + '...'
-  }
-
+  if (line) lines.push(line)
   return lines
 }
 
-/**
- * 生成个人名片分享图
- * @param {Object} userData - 用户数据
- */
-export async function generateProfileShareImage(userData) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const ctx = uni.createCanvasContext('shareCanvas')
+export async function generateProfileShareImage(userData, options = {}) {
+  const canvasId = options.canvasId || 'shareCanvas'
+  const canvas = await getCanvasNode(canvasId)
+  const assetNames = ['brand', 'accent', 'growth', 'company', 'job', 'verified-label', 'owner-label', 'quote']
+  const [avatar, memberIcon, ...assetImages] = await Promise.all([
+    loadCanvasImage(canvas, userData.avatarUrl),
+    userData.isMember === true ? loadCanvasImage(canvas, '/static/icon/mennber1.png', true) : Promise.resolve(null),
+    ...assetNames.map((name) => loadCanvasImage(canvas, `/static/profile-share/${name}.png`, true))
+  ])
+  const assets = Object.fromEntries(assetNames.map((name, index) => [name, assetImages[index]]))
+  const ctx = canvas.getContext('2d')
+  ctx.scale(2, 2)
+  ctx.fillStyle = '#f7fbff'
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+  ctx.fillStyle = '#ffffff'
+  roundRect(ctx, 20, 20, 710, 560, 18)
+  ctx.fill()
+  ctx.strokeStyle = '#dceaff'
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.save()
+  roundRect(ctx, 21, 21, 708, 558, 17)
+  ctx.clip()
 
-      const canvasWidth = 750
-      const canvasHeight = 900
-      const padding = 40
+  if (assets.accent) ctx.drawImage(assets.accent.path, 442, 24, 287, 237.5)
+  if (assets.brand) ctx.drawImage(assets.brand.path, 48, 39, 78, 60)
+  ctx.strokeStyle = '#c4ddff'
+  ctx.beginPath()
+  ctx.moveTo(143, 46)
+  ctx.lineTo(143, 84)
+  ctx.stroke()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillStyle = '#0b172d'
+  ctx.font = 'bold 36px sans-serif'
+  ctx.fillText('圈脉链', 164, 78)
+  ctx.fillStyle = '#7e8ca8'
+  ctx.font = '19px sans-serif'
+  ctx.fillText('连接人脉 · 汇聚资源 · 成就更多可能', 164, 108)
 
-      // 1. 绘制白色背景
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+  const avatarX = 52
+  const avatarY = 146
+  const avatarSize = 158
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.arc(131, 225, 85, 0, 2 * Math.PI)
+  ctx.fill()
+  ctx.strokeStyle = '#d8eaff'
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(131, 225, 79, 0, 2 * Math.PI)
+  ctx.clip()
+  if (avatar && avatar.width > 0 && avatar.height > 0) {
+    const scale = Math.max(avatarSize / avatar.width, avatarSize / avatar.height)
+    const width = avatar.width * scale
+    const height = avatar.height * scale
+    ctx.drawImage(avatar.path, avatarX + (avatarSize - width) / 2, avatarY + (avatarSize - height) / 2, width, height)
+  } else {
+    ctx.fillStyle = '#eaf3ff'
+    ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize)
+    ctx.fillStyle = '#1684f5'
+    ctx.font = 'bold 56px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(Array.from(String(userData.nickname || '友'))[0], 131, 245)
+  }
+  ctx.restore()
 
-      // 2. 绘制顶部蓝色条
-      ctx.fillStyle = '#2563eb'
-      ctx.fillRect(0, 0, canvasWidth, 8)
+  ctx.fillStyle = '#0b172d'
+  ctx.font = 'bold 46px sans-serif'
+  const nameLines = wrapText(ctx, userData.nickname || '未命名用户', 290, 2)
+  nameLines.forEach((line, index) => {
+    ctx.fillText(line, 246, (nameLines.length > 1 ? 166 : 203) + index * 53)
+  })
+  let badgeX = 246
+  const badgeY = 259
+  const badgeHeight = 40
+  if (userData.isVerified === true && assets['verified-label']) {
+    ctx.drawImage(assets['verified-label'].path, badgeX, badgeY, 121, badgeHeight)
+    badgeX += 129
+  }
+  if (userData.isMember === true) {
+    ctx.fillStyle = '#edf3ff'
+    roundRect(ctx, badgeX, badgeY, 102, badgeHeight, 18)
+    ctx.fill()
+    if (memberIcon) ctx.drawImage(memberIcon.path, badgeX + 8, badgeY + 7, 26, 26)
+    ctx.fillStyle = '#477cff'
+    ctx.font = '25px sans-serif'
+    ctx.fillText('会员', badgeX + 39, badgeY + 30)
+    badgeX += 110
+  }
+  if (userData.isCircleOwner === true && assets['owner-label']) {
+    ctx.drawImage(assets['owner-label'].path, badgeX, badgeY, 101, badgeHeight)
+  }
 
-      // 3. 绘制头像和基本信息区域
-      const topPadding = 50
-      const avatarSize = 140
-      const avatarX = padding + 10
-      const avatarY = topPadding
+  ctx.strokeStyle = '#deebfc'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(50, 333)
+  ctx.lineTo(700, 333)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(467, 353)
+  ctx.lineTo(467, 418)
+  ctx.stroke()
+  if (assets.company) ctx.drawImage(assets.company.path, 50, 354, 53, 53)
+  if (assets.job) ctx.drawImage(assets.job.path, 490, 354, 53, 53)
+  ctx.fillStyle = '#7e8ca8'
+  ctx.font = '22px sans-serif'
+  ctx.fillText('所在公司', 122, 373)
+  ctx.fillText('职位', 560, 373)
+  ctx.fillStyle = '#0b172d'
+  ctx.font = 'bold 27px sans-serif'
+  ctx.fillText(truncateText(ctx, userData.company || '暂未填写', 325), 122, 409)
+  ctx.fillText(truncateText(ctx, userData.jobTitle || '暂未填写', 140), 560, 409)
 
-      // 下载并绘制头像
-      let localAvatarPath = ''
-      if (userData.avatarUrl) {
-        localAvatarPath = await downloadImage(userData.avatarUrl)
-      }
+  const quoteBackground = ctx.createLinearGradient(44, 450, 706, 566)
+  quoteBackground.addColorStop(0, '#f0f8ff')
+  quoteBackground.addColorStop(1, '#e9f4ff')
+  ctx.fillStyle = quoteBackground
+  roundRect(ctx, 44, 450, 662, 116, 12)
+  ctx.fill()
+  ctx.save()
+  roundRect(ctx, 44, 450, 662, 116, 12)
+  ctx.clip()
+  if (assets.growth) ctx.drawImage(assets.growth.path, 442, 459, 264, 107)
+  ctx.restore()
+  if (assets.quote) ctx.drawImage(assets.quote.path, 64, 468, 33, 29)
+  ctx.fillStyle = '#102e63'
+  ctx.font = 'bold 27px sans-serif'
+  const bio = '找人脉、找资源、找商机、商务社交就上圈脉链。'
+  wrapText(ctx, bio, 460, 2).forEach((line, index) => {
+    ctx.fillText(line, 118, 498 + index * 40)
+  })
+  ctx.restore()
 
-      // 获取图片实际尺寸
-      let imgWidth = avatarSize
-      let imgHeight = avatarSize
-
-      if (localAvatarPath) {
-        try {
-          const imgInfo = await new Promise((resolve, reject) => {
-            uni.getImageInfo({
-              src: localAvatarPath,
-              success: resolve,
-              fail: reject
-            })
-          })
-          imgWidth = imgInfo.width
-          imgHeight = imgInfo.height
-        } catch (err) {
-          console.log('获取图片信息失败，使用默认尺寸')
-        }
-      }
-
-      if (localAvatarPath) {
-        ctx.save()
-
-        // 创建圆形裁剪区域
-        const centerX = avatarX + avatarSize / 2
-        const centerY = avatarY + avatarSize / 2
-        const radius = avatarSize / 2
-
-        ctx.beginPath()
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI)
-        ctx.closePath()
-        ctx.clip()
-
-        // 计算居中裁剪参数
-        const scale = Math.max(avatarSize / imgWidth, avatarSize / imgHeight)
-        const scaledWidth = imgWidth * scale
-        const scaledHeight = imgHeight * scale
-        const offsetX = avatarX + (avatarSize - scaledWidth) / 2
-        const offsetY = avatarY + (avatarSize - scaledHeight) / 2
-
-        // 绘制头像 - 保持比例，居中裁剪
-        ctx.drawImage(localAvatarPath, offsetX, offsetY, scaledWidth, scaledHeight)
-
-        ctx.restore()
-      } else {
-        // 占位头像
-        ctx.fillStyle = '#f3f4f6'
-        ctx.beginPath()
-        ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, 2 * Math.PI)
-        ctx.fill()
-      }
-
-      // 4. 右侧基本信息
-      const infoX = avatarX + avatarSize + 35
-      const infoWidth = canvasWidth - infoX - padding
-      let infoY = avatarY + 40
-
-      // 昵称
-      ctx.fillStyle = '#111827'
-      ctx.font = 'bold 46px sans-serif'
-      ctx.textAlign = 'left'
-      const displayName = truncateText(ctx, userData.nickname || '用户', infoWidth)
-      ctx.fillText(displayName, infoX, infoY)
-      infoY += 48
-
-      // 认证标识
-      if (userData.isVerified) {
-        ctx.fillStyle = '#10b981'
-        ctx.font = '28px sans-serif'
-        ctx.fillText('✓ 已认证', infoX, infoY)
-        infoY += 45
-      } else {
-        infoY += 15
-      }
-
-      // 行业标签
-      if (userData.industry) {
-        ctx.font = 'bold 28px sans-serif'
-        const tagWidth = ctx.measureText(userData.industry).width + 32
-
-        ctx.fillStyle = '#eff6ff'
-        drawRoundRect(ctx, infoX, infoY - 30, tagWidth, 42, 6)
-        ctx.fill()
-
-        ctx.fillStyle = '#2563eb'
-        ctx.fillText(userData.industry, infoX + 16, infoY)
-      }
-
-      // 5. 职业信息区域
-      let jobY = avatarY + avatarSize + 40
-
-      // 分隔线
-      ctx.strokeStyle = '#f3f4f6'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.moveTo(padding, jobY)
-      ctx.lineTo(canvasWidth - padding, jobY)
-      ctx.stroke()
-
-      jobY += 50
-
-      // 公司
-      if (userData.company) {
-        ctx.fillStyle = '#111827'
-        ctx.font = 'bold 36px sans-serif'
-        const displayCompany = truncateText(ctx, userData.company, canvasWidth - padding * 2)
-        ctx.fillText(displayCompany, padding, jobY)
-        jobY += 55
-      }
-
-      // 职位
-      if (userData.jobTitle) {
-        ctx.fillStyle = '#6b7280'
-        ctx.font = '32px sans-serif'
-        const displayJob = truncateText(ctx, userData.jobTitle, canvasWidth - padding * 2)
-        ctx.fillText(displayJob, padding, jobY)
-        jobY += 55
-      }
-
-      // 6. 个人简介区域
-      if (userData.bio) {
-        // 分隔线
-        jobY += 40
-        ctx.strokeStyle = '#f3f4f6'
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.moveTo(padding, jobY)
-        ctx.lineTo(canvasWidth - padding, jobY)
-        ctx.stroke()
-
-        jobY += 45
-
-        ctx.fillStyle = '#6b7280'
-        ctx.font = '30px sans-serif'
-        const bioLines = wrapText(ctx, userData.bio, canvasWidth - padding * 2, 3)
-
-        for (let i = 0; i < bioLines.length; i++) {
-          ctx.fillText(bioLines[i], padding, jobY)
-          jobY += 44
-        }
-      }
-
-      // 7. 底部提示区域
-      const bottomY = canvasHeight - 120
-
-      // 底部背景
-      ctx.fillStyle = '#f9fafb'
-      ctx.fillRect(0, bottomY, canvasWidth, 120)
-
-      // 分隔线
-      ctx.strokeStyle = '#e5e7eb'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.moveTo(0, bottomY)
-      ctx.lineTo(canvasWidth, bottomY)
-      ctx.stroke()
-
-      ctx.fillStyle = '#6b7280'
-      ctx.font = '28px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('长按识别小程序码', canvasWidth / 2, bottomY + 45)
-
-      ctx.fillStyle = '#2563eb'
-      ctx.font = 'bold 32px sans-serif'
-      ctx.fillText('查看完整个人名片', canvasWidth / 2, bottomY + 85)
-
-      // 8. 绘制完成，导出图片
-      ctx.draw(false, () => {
-        setTimeout(() => {
-          uni.canvasToTempFilePath({
-            canvasId: 'shareCanvas',
-            destWidth: canvasWidth * 2,
-            destHeight: canvasHeight * 2,
-            success: (res) => {
-              resolve(res.tempFilePath)
-            },
-            fail: (err) => {
-              console.error('生成分享图失败:', err)
-              reject(err)
-            }
-          })
-        }, 500)
+  return new Promise((resolve, reject) => {
+    uni.canvasToTempFilePath({
+        canvas,
+        x: 0,
+        y: 0,
+        width: CANVAS_WIDTH * 2,
+        height: CANVAS_HEIGHT * 2,
+        destWidth: CANVAS_WIDTH * 2,
+        destHeight: CANVAS_HEIGHT * 2,
+        fileType: 'png',
+        success: (result) => resolve(result.tempFilePath),
+        fail: reject
       })
-    } catch (err) {
-      console.error('生成分享图异常:', err)
-      reject(err)
-    }
   })
 }

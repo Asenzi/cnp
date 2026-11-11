@@ -9,11 +9,14 @@ from datetime import datetime, timezone
 from secrets import token_hex
 from typing import Any
 
+from redis import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.logger import logger
 from app.core.profile_display import public_avatar_url, public_intro, public_nickname
 from app.crud.network import (
     create_reco_feedback,
@@ -30,7 +33,6 @@ from app.crud.network import (
     get_global_impression_counts_in_days,
     get_impression_counts_in_days,
     get_joined_circle_names,
-    get_recent_impression_target_user_pks,
     get_shared_circle_names,
     get_shared_connection_names,
     get_user_circle_codes,
@@ -99,10 +101,13 @@ RECO_CONFIG_CACHE_TTL_SECONDS = 30
 _RECO_CONFIG_CACHE_TS: float = 0.0
 _RECO_CONFIG_CACHE_VALUE: dict[str, float] = dict(DEFAULT_RECO_CONFIG)
 
-FIRST_PAGE_RECENT_CACHE_TTL_SECONDS = 30 * 60
-_FIRST_PAGE_RECENT_CACHE: dict[str, tuple[float, list[int]]] = {}
 REQUEST_SCOPE_CACHE_TTL_SECONDS = 30 * 60
 _REQUEST_SCOPE_REFRESH_CACHE: dict[str, tuple[float, list[int]]] = {}
+REQUEST_ORDER_CACHE_TTL_SECONDS = 10 * 60
+_REQUEST_ORDER_CACHE: dict[str, tuple[float, list[int]]] = {}
+_SYNC_REDIS_CLIENT: Redis | None = None
+REQUEST_ORDER_CACHE_KEY_PREFIX = "friends:network:reco:request_order:"
+REQUEST_SCOPE_CACHE_KEY_PREFIX = "friends:network:reco:request_scope:"
 
 POOL_PRIORITY = {"s": 5, "a": 4, "cold": 3, "b": 2, "downrank": 1}
 
@@ -235,27 +240,6 @@ def _decode_cursor(cursor: str | None) -> int:
         return 0
 
 
-def _build_refresh_context_key(
-    *,
-    viewer_user_pk: int,
-    tab: str,
-    keyword: str | None,
-    city_name: str | None,
-    industry_label: str | None,
-    domain: str | None,
-) -> str:
-    return "|".join(
-        [
-            str(int(viewer_user_pk)),
-            str(tab or "").strip(),
-            str(keyword or "").strip().lower(),
-            str(city_name or "").strip(),
-            str(industry_label or "").strip(),
-            str(domain or "").strip(),
-        ]
-    )
-
-
 def _clean_reason_text(value: str | None) -> str:
     text = str(value or "").strip()
     if not text:
@@ -375,7 +359,12 @@ def _is_default_avatar_url(avatar_url: str | None) -> bool:
     normalized = str(avatar_url or "").strip()
     if not normalized:
         return True
-    return normalized in {"/static/logo.png", settings.DEFAULT_AVATAR_URL}
+    lower = normalized.lower()
+    return (
+        normalized in {"/static/logo.png", settings.DEFAULT_AVATAR_URL}
+        or lower.endswith("/static/logo.png")
+        or "/static/logo.png?" in lower
+    )
 
 
 def _is_incomplete_recommendation_profile(user: User) -> bool:
@@ -383,6 +372,198 @@ def _is_incomplete_recommendation_profile(user: User) -> bool:
     if nickname.startswith("微信用户"):
         return True
     return _is_default_avatar_url(public_avatar_url(user))
+
+
+def _append_unique_users(base_users: list[User], extra_users: list[User]) -> list[User]:
+    result: list[User] = []
+    seen_ids: set[int] = set()
+    for user in [*base_users, *extra_users]:
+        if not user or not user.id:
+            continue
+        user_pk = int(user.id)
+        if user_pk in seen_ids:
+            continue
+        seen_ids.add(user_pk)
+        result.append(user)
+    return result
+
+
+def _count_recommendable_users(users: list[User]) -> int:
+    return sum(1 for user in users if user and user.id and not _is_incomplete_recommendation_profile(user))
+
+
+def _get_sync_redis() -> Redis | None:
+    global _SYNC_REDIS_CLIENT
+
+    if not settings.REDIS_ENABLED:
+        return None
+
+    if _SYNC_REDIS_CLIENT is None:
+        _SYNC_REDIS_CLIENT = Redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
+        )
+
+    return _SYNC_REDIS_CLIENT
+
+
+def _load_redis_user_pk_list(key: str) -> list[int] | None:
+    try:
+        redis_client = _get_sync_redis()
+        if redis_client is None:
+            return None
+        raw_payload = redis_client.get(key)
+    except (RuntimeError, RedisError, OSError) as exc:
+        logger.debug(f"Network recommendation Redis cache read skipped: {exc}")
+        return None
+
+    if not raw_payload:
+        return None
+
+    try:
+        payload = json.loads(raw_payload)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(payload, list):
+        return None
+
+    result: list[int] = []
+    for item in payload:
+        try:
+            result.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def _save_redis_user_pk_list(key: str, user_pks: list[int], ttl_seconds: int) -> None:
+    try:
+        redis_client = _get_sync_redis()
+        if redis_client is None:
+            return
+        payload = json.dumps([int(item) for item in user_pks if item], ensure_ascii=False, separators=(",", ":"))
+        redis_client.setex(key, int(ttl_seconds), payload)
+    except (RuntimeError, RedisError, OSError) as exc:
+        logger.debug(f"Network recommendation Redis cache write skipped: {exc}")
+
+
+def _request_cache_token(request_id: str) -> str:
+    return hashlib.sha256(str(request_id or "").strip().encode("utf-8")).hexdigest()
+
+
+def _request_order_cache_key(request_id: str) -> str:
+    return f"{REQUEST_ORDER_CACHE_KEY_PREFIX}{_request_cache_token(request_id)}"
+
+
+def _request_scope_cache_key(request_id: str) -> str:
+    return f"{REQUEST_SCOPE_CACHE_KEY_PREFIX}{_request_cache_token(request_id)}"
+
+
+def _load_request_order(request_id: str) -> list[int] | None:
+    normalized_request_id = str(request_id or "").strip()
+    if not normalized_request_id:
+        return None
+
+    redis_value = _load_redis_user_pk_list(_request_order_cache_key(normalized_request_id))
+    if redis_value is not None:
+        return redis_value
+
+    cached_value = _REQUEST_ORDER_CACHE.get(normalized_request_id)
+    if not cached_value:
+        return None
+
+    cached_ts, user_pks = cached_value
+    if datetime.now(timezone.utc).timestamp() - float(cached_ts) > REQUEST_ORDER_CACHE_TTL_SECONDS:
+        _REQUEST_ORDER_CACHE.pop(normalized_request_id, None)
+        return None
+
+    return [int(item) for item in (user_pks or []) if item]
+
+
+def _save_request_order(request_id: str, ordered_rows: list[CandidateScore]) -> None:
+    normalized_request_id = str(request_id or "").strip()
+    if not normalized_request_id:
+        return
+
+    user_pks = [int(row.user.id) for row in ordered_rows if row.user and row.user.id]
+    _save_redis_user_pk_list(
+        _request_order_cache_key(normalized_request_id),
+        user_pks,
+        REQUEST_ORDER_CACHE_TTL_SECONDS,
+    )
+    _REQUEST_ORDER_CACHE[normalized_request_id] = (
+        datetime.now(timezone.utc).timestamp(),
+        user_pks,
+    )
+
+
+def _load_request_scope_user_pks(request_id: str) -> list[int] | None:
+    normalized_request_id = str(request_id or "").strip()
+    if not normalized_request_id:
+        return None
+
+    redis_value = _load_redis_user_pk_list(_request_scope_cache_key(normalized_request_id))
+    if redis_value is not None:
+        return redis_value
+
+    cached_request_scope = _REQUEST_SCOPE_REFRESH_CACHE.get(normalized_request_id)
+    if not cached_request_scope:
+        return None
+
+    cached_ts, cached_user_pks = cached_request_scope
+    if datetime.now(timezone.utc).timestamp() - float(cached_ts) > REQUEST_SCOPE_CACHE_TTL_SECONDS:
+        _REQUEST_SCOPE_REFRESH_CACHE.pop(normalized_request_id, None)
+        return None
+
+    return [int(item) for item in (cached_user_pks or []) if item]
+
+
+def _save_request_scope_user_pks(request_id: str, user_pks: list[int]) -> None:
+    normalized_request_id = str(request_id or "").strip()
+    if not normalized_request_id:
+        return
+
+    normalized_user_pks = [int(item) for item in user_pks if item]
+    _save_redis_user_pk_list(
+        _request_scope_cache_key(normalized_request_id),
+        normalized_user_pks,
+        REQUEST_SCOPE_CACHE_TTL_SECONDS,
+    )
+    _REQUEST_SCOPE_REFRESH_CACHE[normalized_request_id] = (
+        datetime.now(timezone.utc).timestamp(),
+        normalized_user_pks,
+    )
+
+
+def _apply_cached_request_order(
+    *,
+    ordered_rows: list[CandidateScore],
+    cached_user_pks: list[int] | None,
+) -> list[CandidateScore]:
+    if not cached_user_pks:
+        return ordered_rows
+
+    row_map = {int(row.user.id): row for row in ordered_rows if row.user and row.user.id}
+    ordered: list[CandidateScore] = []
+    seen_ids: set[int] = set()
+    for user_pk in cached_user_pks:
+        row = row_map.get(int(user_pk))
+        if not row:
+            continue
+        ordered.append(row)
+        seen_ids.add(int(user_pk))
+
+    for row in ordered_rows:
+        user_pk = int(row.user.id)
+        if user_pk in seen_ids:
+            continue
+        ordered.append(row)
+
+    return ordered
 
 
 def _content_match_score(viewer: User, candidate: User, keyword: str | None, domain: str | None) -> float:
@@ -816,15 +997,7 @@ def list_network_recommendations(
     show_self_network = is_feed_self_visible(db=db, channel="network", default=False)
     stable_request_id = str(request_id or "").strip() or f"rec_{int(datetime.now(timezone.utc).timestamp())}_{token_hex(4)}"
     request_salt = stable_request_id
-    refresh_context_key = _build_refresh_context_key(
-        viewer_user_pk=viewer.id,
-        tab=normalized_tab,
-        keyword=keyword,
-        city_name=city_name,
-        industry_label=industry_label,
-        domain=domain,
-    )
-
+    cached_request_order = _load_request_order(stable_request_id) if offset > 0 else None
     blocked_set = get_bidirectional_blocked_user_pks(db=db, viewer_user_pk=viewer.id)
     connected_set = get_bidirectional_connected_user_pks(db=db, viewer_user_pk=viewer.id)
     feedback_block_set = get_feedback_targets_in_days(db=db, viewer_user_pk=viewer.id, days=90, event_types={"block"})
@@ -840,38 +1013,13 @@ def list_network_recommendations(
         refresh_excluded_user_pks = {int(pk) for pk in exclude_id_map.values() if pk}
 
     if offset > 0:
-        cached_request_scope = _REQUEST_SCOPE_REFRESH_CACHE.get(stable_request_id)
-        if cached_request_scope:
-            cached_ts, cached_user_pks = cached_request_scope
-            if datetime.now(timezone.utc).timestamp() - float(cached_ts) <= REQUEST_SCOPE_CACHE_TTL_SECONDS:
-                refresh_excluded_user_pks.update(int(item) for item in (cached_user_pks or []) if item)
-                request_scope_locked = True
-            else:
-                _REQUEST_SCOPE_REFRESH_CACHE.pop(stable_request_id, None)
+        cached_user_pks = _load_request_scope_user_pks(stable_request_id)
+        if cached_user_pks is not None:
+            refresh_excluded_user_pks.update(int(item) for item in (cached_user_pks or []) if item)
+            request_scope_locked = True
 
     if offset <= 0:
-        now_ts = datetime.now(timezone.utc).timestamp()
-        cached_value = _FIRST_PAGE_RECENT_CACHE.get(refresh_context_key)
-        if cached_value:
-            cached_ts, cached_user_pks = cached_value
-            if now_ts - float(cached_ts) <= FIRST_PAGE_RECENT_CACHE_TTL_SECONDS:
-                refresh_excluded_user_pks.update(int(item) for item in (cached_user_pks or []) if item)
-            else:
-                _FIRST_PAGE_RECENT_CACHE.pop(refresh_context_key, None)
-
-        recent_impression_excluded = get_recent_impression_target_user_pks(
-            db=db,
-            viewer_user_pk=viewer.id,
-            tab_key=normalized_tab,
-            scene="discover",
-            days=1,
-            limit=max(min(safe_limit, 20), 10),
-        )
-        refresh_excluded_user_pks.update(recent_impression_excluded)
-        _REQUEST_SCOPE_REFRESH_CACHE[stable_request_id] = (
-            now_ts,
-            [int(item) for item in refresh_excluded_user_pks if item],
-        )
+        _save_request_scope_user_pks(stable_request_id, [int(item) for item in refresh_excluded_user_pks if item])
         request_scope_locked = True
 
     rank_with_request_scope = bool(offset <= 0 or request_scope_locked)
@@ -897,8 +1045,8 @@ def list_network_recommendations(
         domain=domain,
         include_self=show_self_network,
     )
-    if not raw_candidates and preferred_city:
-        raw_candidates = list_candidate_users(
+    if preferred_city and _count_recommendable_users(raw_candidates) < safe_limit:
+        fallback_candidates = list_candidate_users(
             db=db,
             viewer_user_pk=viewer.id,
             limit_pool=600,
@@ -908,6 +1056,7 @@ def list_network_recommendations(
             domain=domain,
             include_self=show_self_network,
         )
+        raw_candidates = _append_unique_users(raw_candidates, fallback_candidates)
     candidate_exclude_levels = [
         {*strict_excluded_user_pks, *refresh_excluded_user_pks},
         strict_excluded_user_pks,
@@ -1202,7 +1351,8 @@ def list_network_recommendations(
             source_candidates=candidate_group,
             enforce_impression_hide=True,
         )
-        if not scored_rows:
+        expected_visible_count = min(safe_limit, len(candidate_group))
+        if len(scored_rows) < expected_visible_count:
             scored_rows = _build_scored_rows(
                 source_candidates=candidate_group,
                 enforce_impression_hide=False,
@@ -1222,6 +1372,14 @@ def list_network_recommendations(
                 shuffle_first_page=bool(rank_with_request_scope and normalized_tab == "recommend" and group_index == 0),
             )
         )
+
+    if offset > 0 and cached_request_order:
+        ordered_rows = _apply_cached_request_order(
+            ordered_rows=ordered_rows,
+            cached_user_pks=cached_request_order,
+        )
+    elif offset <= 0:
+        _save_request_order(stable_request_id, ordered_rows)
 
     total = len(ordered_rows)
     page_rows = ordered_rows[offset : offset + safe_limit]
@@ -1245,12 +1403,6 @@ def list_network_recommendations(
             .group_by(ResourcePost.author_user_pk)
         ).all()
         post_count_map = {int(user_pk): int(count) for user_pk, count in post_count_results}
-
-    if offset <= 0 and page_rows:
-        _FIRST_PAGE_RECENT_CACHE[refresh_context_key] = (
-            datetime.now(timezone.utc).timestamp(),
-            [int(row.user.id) for row in page_rows if row.user and row.user.id],
-        )
 
     items: list[dict[str, Any]] = []
     for row in page_rows:
@@ -1291,6 +1443,7 @@ def list_network_recommendations(
                 "intro": public_intro(row.user) or "",
                 "industry_label": row.user.industry_label,
                 "city_name": row.user.city_name,
+                "district_name": row.user.district_name,
                 "company_name": str(row.user.company_name or candidate_profile_map.get(int(row.user.id), {}).get("company_name", "")).strip(),
                 "job_title": str(row.user.job_title or candidate_profile_map.get(int(row.user.id), {}).get("job_title", "")).strip(),
                 "circle_names": list(safe_reason_detail["circle_names"]),

@@ -1,141 +1,25 @@
-<template>
-  <view class="page">
-    <view class="header" :style="{ paddingTop: statusBarHeight + 'px' }">
-      <text class="title">我的</text>
-    </view>
-
-    <view class="main">
-      <!-- 已登录 -->
-      <view v-if="isLoggedIn" class="user-section">
-        <view class="user-card">
-          <view class="user-top">
-            <image class="avatar" mode="aspectFill" :src="displayAvatar" />
-            <view class="user-info">
-              <view class="name-line">
-                <text class="name">{{ displayName }}</text>
-              </view>
-              <text class="id">ID: {{ displayUserId }}</text>
-              <view v-if="identityBadges.length" class="identity-badges">
-                <image
-                  v-for="badge in identityBadges"
-                  :key="badge.key"
-                  class="identity-badge"
-                  mode="aspectFit"
-                  :src="badge.icon"
-                />
-              </view>
-            </view>
-            <view class="edit" @tap="goEditInfo">
-              <image class="edit-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/edit.png" />
-            </view>
-          </view>
-
-          <view class="intro" :class="{ 'intro-empty': isIntroEmpty }" @tap="onIntroTap">
-            <text class="intro-text">{{ displayIntro }}</text>
-          </view>
-
-          <view class="stats">
-            <view class="stat" @tap="goMyFollowing">
-              <text class="stat-num">{{ displayCollectionCount }}</text>
-              <text class="stat-name">收藏</text>
-            </view>
-            <view class="stat" @tap="goMyCircles">
-              <text class="stat-num">{{ displayCircleCount }}</text>
-              <text class="stat-name">圈子</text>
-            </view>
-            <view class="stat" @tap="goMyActivities">
-              <text class="stat-num">{{ displayActivityCount }}</text>
-              <text class="stat-name">活动</text>
-            </view>
-            <view class="stat" @tap="goMessages">
-              <text class="stat-num">{{ unreadMessageCount }}</text>
-              <text class="stat-name">消息</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- 会员提示 -->
-        <view class="member-cards">
-          <view class="member-card" @tap="onOpenMember">
-            <view class="member-card-content">
-              <view class="member-card-top">
-                <image class="member-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/huiyuan.png" />
-                <text class="member-title">{{ isMemberOpened ? '会员中心' : '开通会员' }}</text>
-              </view>
-              <text class="member-desc">{{ isMemberOpened ? '查看会员权益' : '解锁更多权益' }}</text>
-            </view>
-            <text class="member-arrow">›</text>
-          </view>
-          <view class="member-card" @tap="onCircleOwnerAction">
-            <view class="member-card-content">
-              <view class="member-card-top">
-                <image class="member-icon" mode="aspectFit" src="https://cos.cnptec.site/static/icon/create.png" />
-                <text class="member-title">{{ isCircleOwner ? '管理圈子' : '成为圈主' }}</text>
-              </view>
-              <text class="member-desc">{{ isCircleOwner ? '创建与管理我的圈子' : '解锁更多圈主权益' }}</text>
-            </view>
-            <text class="member-arrow">›</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 未登录 -->
-      <view v-else class="guest-section">
-        <image class="guest-logo" mode="aspectFit" src="https://cos.cnptec.site/static/logo.png" />
-        <text class="guest-text">登录后查看完整功能</text>
-        <view class="guest-btn" @tap="goLogin">
-          <text class="guest-btn-text">立即登录</text>
-        </view>
-      </view>
-
-      <view class="block">
-        <view class="settings">
-          <view
-            v-for="item in visibleServiceList"
-            :key="item.key"
-            class="setting"
-            @tap="onServiceTap(item)"
-          >
-            <image class="setting-icon" mode="aspectFit" :src="item.iconPath" />
-            <text class="setting-name">{{ item.label }}</text>
-            <view v-if="item.key === 'messages' && unreadMessageCount > 0" class="message-badge">
-              <text class="message-badge-text">{{ unreadMessageCountText }}</text>
-            </view>
-            <text class="setting-arrow">›</text>
-          </view>
-          <view
-            v-for="item in visibleSettingList"
-            :key="item.key"
-            class="setting"
-            @tap="onSettingTap(item)"
-          >
-            <image class="setting-icon" mode="aspectFit" :src="item.iconPath" />
-            <text class="setting-name">{{ item.label }}</text>
-            <text class="setting-arrow">›</text>
-          </view>
-        </view>
-      </view>
-    </view>
-  </view>
-</template>
-
+<template><view class="page"><view class="main"><view v-if="isLoggedIn" class="profile-card"><view class="user-top"><image class="avatar" :src="displayAvatar" mode="aspectFill"/><view class="profile-details"><view class="user-info"><view class="name-line"><text class="name">{{displayName}}</text><view v-if="identityBadges.length" class="identity-badges"><view v-for="badge in identityBadges" :key="badge.key" class="identity-tag"><image :src="badge.icon" mode="aspectFit"/><text>{{ badge.label }}</text></view></view></view><view class="id-row"><text class="id" @tap="copyUserId">用户ID：{{displayUserId}}</text><image class="copy-icon" src="/static/me-reference/copy.png" @tap="copyUserId"/></view></view><view class="actions"><button @tap="goEditInfo"><image mode="aspectFit" src="/static/me-reference/edit.png"/>编辑名片</button><button open-type="share"><image mode="aspectFit" src="/static/me-reference/share.png"/>分享名片</button></view></view></view><view class="membership" @tap="onOpenMember"><image class="crown" mode="aspectFit" src="/static/me-reference/crown.png"/><view class="member-copy"><text class="member-title">{{isMemberOpened ? '钻石会员' : '开通会员'}}</text><text class="member-desc">解锁资源下载、发布、分销等全部权益</text></view><view v-if="isMemberOpened" class="expiry"><text>有效期至</text><text>{{memberExpiry}}</text></view></view><view class="stats"><view class="stat" @tap="goMyFollowing"><image mode="aspectFit" src="/static/me-reference/star.png"/><text>我的收藏</text></view><view class="stat" @tap="goMyCircles"><image mode="aspectFit" src="/static/me-reference/circles-stat.png"/><text>我的圈子</text></view><view class="stat" @tap="goMessages"><view class="stat-icon"><image mode="aspectFit" src="/static/me-reference/bell.png"/><text v-if="unreadMessageCount > 0" class="unread-badge">{{ unreadMessageCount > 99 ? '99+' : unreadMessageCount }}</text></view><text>我的消息</text></view><view class="stat" @tap="goWallet"><image mode="aspectFit" src="/static/me-reference/wallet.png"/><text>我的钱包</text></view></view></view><view v-else class="guest"><image class="avatar" :src="displayAvatar"/><text>登录后查看完整功能</text><button @tap="goLogin">立即登录</button></view><ManagementMenu class="management" :items="settingList" @select="onSettingTap"/><button class="publish" @tap="goPublish"><image class="publish-icon" src="/static/me-reference/plus.png"/>发布资源</button></view></view><canvas id="myProfileShareCanvas" type="2d" canvas-id="myProfileShareCanvas" style="position:fixed;left:-9999px;top:-9999px;width:750px;height:600px;" /></template>
 <script setup>
+
 import { computed, onUnmounted, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { generateProfileShareImage } from '../../../utils/profile-share-image'
+import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { getCurrentUserProfile } from '../../../api/user'
 import { getUnreadNotificationCount } from '../../../api/notification'
+import { getIncomeOverview } from '../../../api/settlement'
 import {
   connectRealtimeSocket,
   disconnectRealtimeSocket,
   subscribeRealtime
 } from '../../../utils/realtime'
-import { serviceList, settingList } from './modules/me-data'
-
-const { statusBarHeight = 0 } = uni.getSystemInfoSync()
+import ManagementMenu from './components/ManagementMenu.vue'
+import { buildIdentityBadges } from './modules/identity-badges'
+import { settingList } from './modules/me-data'
 
 const isLoggedIn = ref(false)
 const currentUser = ref({})
 const unreadMessageCount = ref(0)
+const walletBalance = ref(null)
 
 const DEFAULT_AVATAR = 'https://cos.cnptec.site/static/logo.png'
 
@@ -150,36 +34,7 @@ const isVerified = computed(() => {
     || Boolean(String(currentUser.value?.verified_real_name || '').trim())
 })
 
-const visibleServiceList = computed(() => {
-  return serviceList
-    .filter((item) => {
-      if (item.key === 'auth') return !isVerified.value
-      if (item.key === 'member_center') return isMemberOpened.value
-      if (item.key === 'income') return isCircleOwner.value
-      return true
-    })
-    .map((item) => {
-      if (item.key !== 'create_circle') {
-        return item
-      }
-      if (Boolean(currentUser.value?.is_circle_owner)) {
-        return {
-          ...item,
-          label: '创建圈子',
-          url: '/pages/circles/create/index'
-        }
-      }
-      return {
-        ...item,
-        label: '成为圈主',
-        url: '/pages/me/circle-owner/apply/index'
-      }
-    })
-})
 
-const visibleSettingList = computed(() => {
-  return settingList
-})
 
 const displayName = computed(() => {
   return currentUser.value?.nickname?.trim() || '圈脉用户'
@@ -190,13 +45,7 @@ const displayUserId = computed(() => {
   return id ? String(id) : '--'
 })
 
-const displayIntro = computed(() => {
-  return currentUser.value?.intro?.trim() || '一句话介绍你的行业、资源与合作方向，让更多合适的人脉主动找到你'
-})
 
-const isIntroEmpty = computed(() => {
-  return !currentUser.value?.intro?.trim()
-})
 
 const displayCircleCount = computed(() => {
   const count = currentUser.value?.circle_count
@@ -228,22 +77,9 @@ const displayCollectionCount = computed(() => {
   return Number.isFinite(numericCount) && numericCount >= 0 ? String(numericCount) : '0'
 })
 
-const displayFansCount = computed(() => {
-  const count = currentUser.value?.fans_count ?? currentUser.value?.follower_count
-  return typeof count === 'number' ? String(count) : '0'
-})
 
-const displayActivityCount = computed(() => {
-  const count = currentUser.value?.activity_count ?? currentUser.value?.event_count
-  return typeof count === 'number' ? String(count) : '--'
-})
+const displayWalletBalance = computed(() => walletBalance.value === null ? '--' : `¥${Number(walletBalance.value).toFixed(2)}`)
 
-const unreadMessageCountText = computed(() => {
-  const count = unreadMessageCount.value
-  if (count === 0) return '--'
-  if (count > 99) return '99+'
-  return String(count)
-})
 
 const isTruthyValue = (value) => {
   if (typeof value === 'boolean') return value
@@ -277,43 +113,13 @@ const isMemberOpened = computed(() => {
   return false
 })
 
-const isYearlyMemberOpened = computed(() => {
-  if (!isMemberOpened.value) return false
-  const info = currentUser.value || {}
-  const planId = String(info.member_plan_id || info.plan_id || info.vip_plan_id || '').trim().toLowerCase()
-  return planId === 'yearly'
-})
 
-const identityBadges = computed(() => {
-  const badges = []
-  if (isVerified.value) {
-    badges.push({
-      key: 'verified',
-      icon: 'https://cos.cnptec.site/static/icon/certification.png'
-    })
-  }
-  if (isMemberOpened.value) {
-    badges.push({
-      key: 'member',
-      icon: 'https://cos.cnptec.site/static/icon/mennber1.png'
-    })
-  }
-  if (isCircleOwner.value) {
-    badges.push({
-      key: 'circle-owner',
-      icon: 'https://cos.cnptec.site/static/icon/leader.png?v=20260623'
-    })
-  }
-  return badges
-})
-
-const showMemberCenter = computed(() => {
-  return isLoggedIn.value && !isMemberOpened.value
-})
 
 const isCircleOwner = computed(() => {
   return isTruthyValue(currentUser.value?.is_circle_owner)
 })
+
+const identityBadges = computed(() => buildIdentityBadges(currentUser.value, isVerified.value, isCircleOwner.value))
 
 const clearLoginState = () => {
   disconnectRealtimeSocket()
@@ -349,11 +155,6 @@ const goEditInfo = () => {
   uni.navigateTo({ url: '/pages/me/editInfo/index' })
 }
 
-const onIntroTap = () => {
-  if (!isIntroEmpty.value) return
-  goEditInfo()
-}
-
 const goLogin = () => {
   uni.navigateTo({ url: '/pages/auth/login/index' })
 }
@@ -366,12 +167,8 @@ const goMyFollowing = () => {
   uni.navigateTo({ url: '/pages/me/following/index' })
 }
 
-const goMyFans = () => {
-  uni.navigateTo({ url: '/pages/me/followers/index' })
-}
-
-const goMyActivities = () => {
-  uni.showToast({ title: '我的活动功能开发中', icon: 'none' })
+const goWallet = () => {
+  uni.navigateTo({ url: '/pages/me/income/index' })
 }
 
 const goMessages = () => {
@@ -395,46 +192,26 @@ const onCircleOwnerAction = () => {
   if (isCircleOwner.value) {
     uni.navigateTo({ url: '/pages/circles/manage/index' })
   } else {
-    if (!isYearlyMemberOpened.value) {
-      uni.showModal({
-        title: '需要年度会员',
-        content: '购买圈主身份前需要先开通年度会员，是否现在前往会员中心？',
-        confirmText: '去开通',
-        cancelText: '取消',
-        success: (res) => {
-          if (res?.confirm) {
-            uni.navigateTo({ url: '/pages/me/member-center/index?planId=yearly' })
-          }
-        }
-      })
-      return
-    }
     uni.navigateTo({ url: '/pages/me/circle-owner/apply/index' })
   }
 }
 
-const onServiceTap = (item) => {
-  if (!isLoggedIn.value) {
-    onNeedLogin()
-    return
-  }
-
-  if (item?.key === 'auth') {
-    if (isVerified.value) {
-      uni.showModal({
-        title: '实名认证',
-        content: '您已经实名认证。',
-        showCancel: false
-      })
-      return
+const onLogout = () => {
+  uni.showModal({
+    title: '退出登录',
+    content: '确定退出当前账号吗？',
+    confirmText: '退出登录',
+    cancelText: '取消',
+    confirmColor: '#ef4444',
+    success: (res) => {
+      if (!res?.confirm) {
+        return
+      }
+      clearLoginState()
+      unreadMessageCount.value = 0
+      uni.showToast({ title: '已退出登录', icon: 'none' })
     }
-    uni.navigateTo({ url: '/pages/me/auth/realname/index' })
-    return
-  }
-
-  if (item?.url) {
-    uni.navigateTo({ url: item.url })
-  }
+  })
 }
 
 const onSettingTap = (item) => {
@@ -443,7 +220,15 @@ const onSettingTap = (item) => {
     return
   }
 
+  if (item?.key === 'logout') {
+    onLogout()
+    return
+  }
+
   const urlMap = {
+    'resources': '/pages/resources/manage/index',
+    'circles': '/pages/circles/manage/index',
+    'distribution': '/pages/me/income/index',
     'account-security': '/pages/me/security/index',
     'profile-card': '/pages/me/card/index',
     'help': '/pages/me/help-feedback/index',
@@ -469,6 +254,7 @@ const refreshUserProfileFromServer = async () => {
     currentUser.value = profile || {}
     isLoggedIn.value = true
 
+    void prepareMyShareImage()
     // 加载未读消息数量
     loadUnreadMessageCount()
   } catch (err) {
@@ -489,6 +275,16 @@ const loadUnreadMessageCount = async () => {
   }
 }
 
+const loadWalletBalance = async () => {
+  try {
+    const data = await getIncomeOverview({ limit: 1 })
+    const balance = Number(data?.account?.available_balance)
+    walletBalance.value = Number.isFinite(balance) ? balance : null
+  } catch (err) {
+    walletBalance.value = null
+  }
+}
+
 const handleRealtimeEvent = (payload) => {
   if (payload?.event !== 'notification.changed') return
   const count = Number(payload?.data?.unread_count)
@@ -506,324 +302,68 @@ syncLoginState()
 onShow(() => {
   syncLoginState()
   if (isLoggedIn.value) {
+    void prepareMyShareImage()
     connectRealtimeSocket()
     refreshUserProfileFromServer()
+    loadWalletBalance()
+  } else {
+    walletBalance.value = null
   }
 })
 
 onUnmounted(() => {
   unsubscribeRealtime()
 })
+
+const memberExpiry = computed(() => String(currentUser.value?.member_expire_at || currentUser.value?.vip_expire_at || '').slice(0, 10) || '未开通')
+const myShareImage = ref('')
+let myShareKey = ''
+let myShareTask = Promise.resolve('')
+const prepareMyShareImage = () => {
+  if (!isLoggedIn.value || displayUserId.value === '--') return Promise.resolve('')
+  const profile = currentUser.value || {}
+  const data = {
+    nickname: displayName.value,
+    avatarUrl: displayAvatar.value,
+    company: String(profile.company_name || profile.company || '').trim(),
+    jobTitle: String(profile.job_title || profile.position || '').trim(),
+    bio: String(profile.intro || '').trim(),
+    isVerified: isVerified.value,
+    isMember: isMemberOpened.value,
+    isCircleOwner: isCircleOwner.value
+  }
+  const key = JSON.stringify([displayUserId.value, data])
+  if (myShareKey === key) return myShareTask
+  myShareKey = key
+  myShareImage.value = ''
+  myShareTask = myShareTask.catch(() => '').then(async () => {
+    try {
+      const image = await generateProfileShareImage(data, {canvasId:'myProfileShareCanvas'})
+      if (myShareKey === key) myShareImage.value = image
+      return image
+    } catch (error) {
+      if (myShareKey === key) myShareKey = ''
+      console.error('生成个人名片分享图失败', error)
+      uni.showToast({title:'分享图生成失败，请稍后重试',icon:'none'})
+      return data.avatarUrl || ''
+    }
+  })
+  return myShareTask
+}
+onShareAppMessage(() => {
+  const share = {
+    title: `${displayName.value}的个人名片`,
+    path: `/pages/me/card/index?userId=${encodeURIComponent(displayUserId.value)}`,
+    imageUrl: myShareImage.value || displayAvatar.value
+  }
+  return {...share, promise:prepareMyShareImage().then(imageUrl => ({...share, imageUrl}))}
+})
+const copyUserId = () => uni.setClipboardData({ data: displayUserId.value })
+const goPublish = () => { if (!isLoggedIn.value) return onNeedLogin(); uni.navigateTo({ url: '/pages/resources/publish/index' }) }
+
 </script>
-
 <style scoped>
-.page {
-  min-height: 100vh;
-  background: #f6f6f8;
-}
-
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: #ffffff;
-  border-bottom: 1rpx solid #e7ecf3;
-}
-
-.title {
-  display: block;
-  height: 88rpx;
-  line-height: 88rpx;
-  text-align: center;
-  font-size: 34rpx;
-  font-weight: 600;
-  color: #172033;
-}
-
-.main {
-  padding: 24rpx 32rpx;
-  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
-}
-
-/* 用户区域 */
-.user-section {
-  margin-bottom: 20rpx;
-}
-
-.user-card {
-  background: #ffffff;
-  border-radius: 16rpx;
-  padding: 32rpx;
-}
-
-.user-top {
-  display: flex;
-  gap: 20rpx;
-  margin-bottom: 24rpx;
-}
-
-.avatar {
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 56rpx;
-  background: #f3f6fa;
-  flex-shrink: 0;
-}
-
-.user-info {
-  flex: 1;
-  min-width: 0;
-  padding-top: 4rpx;
-}
-
-.name-line {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  margin-bottom: 8rpx;
-}
-
-.name {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #172033;
-}
-
-.id {
-  display: block;
-  font-size: 24rpx;
-  color: #66758a;
-  margin-bottom: 4rpx;
-}
-
-.identity-badges {
-  min-height: 34rpx;
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-}
-
-.identity-badge {
-  width: 32rpx;
-  height: 32rpx;
-  flex-shrink: 0;
-}
-
-.edit {
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 28rpx;
-  background: #f6f8fc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.edit-icon {
-  width: 40rpx;
-  height: 40rpx;
-}
-
-.intro {
-  padding: 20rpx;
-  background: #f6f8fc;
-  border-radius: 12rpx;
-  margin-bottom: 24rpx;
-}
-
-.intro-empty {
-  background: #f5f8ff;
-
-}
-
-.intro-text {
-  font-size: 26rpx;
-  line-height: 38rpx;
-  color: #66758a;
-}
-
-.intro-empty .intro-text {
-  color: #64748b;
-}
-
-.stats {
-  display: flex;
-  border-top: 1rpx solid #e7ecf3;
-  padding-top: 24rpx;
-}
-
-.stat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.stat-num {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #172033;
-}
-
-.stat-num-message {
-  color: #ef4444;
-}
-
-.stat-name {
-  font-size: 24rpx;
-  color: #66758a;
-}
-
-.member-cards {
-  display: flex;
-  gap: 16rpx;
-  margin-top: 16rpx;
-}
-
-.member-card {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  border-radius: 12rpx;
-  padding: 32rpx 24rpx;
-}
-
-.member-card-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  flex: 1;
-}
-
-.member-card-top {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.member-icon {
-  width: 40rpx;
-  height: 40rpx;
-  flex-shrink: 0;
-}
-
-.member-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-}
-
-.member-desc {
-  font-size: 22rpx;
-  color: #999;
-  padding-left: 52rpx;
-}
-
-.member-arrow {
-  font-size: 32rpx;
-  color: #999;
-  margin-left: 8rpx;
-}
-
-/* 未登录 */
-.guest-section {
-  background: #ffffff;
-  border-radius: 16rpx;
-  padding: 64rpx 32rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 32rpx;
-}
-
-.guest-logo {
-  width: 96rpx;
-  height: 96rpx;
-  margin-bottom: 20rpx;
-  opacity: 0.6;
-}
-
-.guest-text {
-  font-size: 26rpx;
-  color: #66758a;
-  margin-bottom: 32rpx;
-}
-
-.guest-btn {
-  width: 280rpx;
-  height: 80rpx;
-  background: #2563eb;
-  border-radius: 40rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.guest-btn-text {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #ffffff;
-}
-
-/* 功能区块 */
-.block {
-  margin-bottom: 32rpx;
-}
-
-.settings {
-  background: #ffffff;
-  border-radius: 16rpx;
-  overflow: hidden;
-}
-
-.setting {
-  display: flex;
-  align-items: center;
-  padding: 28rpx 32rpx;
-  border-bottom: 1rpx solid #f3f6fa;
-}
-
-.setting:last-child {
-  border-bottom: none;
-}
-
-.setting-icon {
-  width: 36rpx;
-  height: 36rpx;
-  margin-right: 20rpx;
-}
-
-.setting-name {
-  flex: 1;
-  font-size: 28rpx;
-  color: #172033;
-}
-
-.setting-arrow {
-  font-size: 32rpx;
-  color: #cbd5e1;
-}
-
-.message-badge {
-  min-width: 36rpx;
-  height: 36rpx;
-  padding: 0 8rpx;
-  background: #ef4444;
-  border-radius: 18rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 12rpx;
-}
-
-.message-badge-text {
-  font-size: 20rpx;
-  color: #ffffff;
-  font-weight: 500;
-  line-height: 1;
-}
+.page{min-height:100vh;background:#f7f8fc;color:#090b20}.main{padding:16rpx 18rpx 90rpx}.profile-card{background:#fff;border-radius:10rpx;padding:26rpx 17rpx 30rpx}.user-top{display:flex;align-items:center;gap:20rpx;min-height:120rpx}.profile-details{flex:1;min-width:0;display:flex;flex-direction:column;gap:16rpx}.user-info{display:flex;flex-direction:column;gap:16rpx}.avatar{width:120rpx;height:120rpx;border-radius:50%;flex-shrink:0}.user-info{flex:1;min-width:0}.name-line{display:flex;align-items:center;gap:8rpx}.name{font-size:32rpx;font-weight:600;line-height:40rpx}.badge{width:28rpx;height:28rpx}.id{display:block;font-size:24rpx;color:#77798d;margin-top:0;line-height:34rpx}.actions{display:flex;justify-content:flex-start;gap:10rpx;width:100%}.actions button{display:flex;align-items:center;gap:6rpx;height:50rpx;line-height:38rpx;border:2rpx solid #d3dcff;border-radius:8rpx;background:#fff;padding:0 14rpx;font-size:24rpx;margin:0}.actions image{width:28rpx;height:28rpx}button::after{border:0}.membership{display:flex;align-items:center;background:#f0f4ff;border-radius:22rpx;margin-top:24rpx;padding:22rpx 20rpx;gap:20rpx;min-height:66rpx}.crown{width:62rpx;height:55rpx;flex-shrink:0}.member-copy{flex:1;min-width:0}.member-title{display:block;font-size:28rpx;font-weight:600;line-height:40rpx}.member-desc{display:block;font-size:24rpx;color:#6e748a;margin-top:6rpx;white-space:nowrap;line-height:34rpx}.expiry{display:flex;flex-direction:column;align-items:center;border-left:1rpx solid #cbd6f4;padding-left:24rpx;font-size:24rpx;color:#4262a7;gap:6rpx;line-height:34rpx}.expiry text:last-child{font-size:26rpx;line-height:36rpx}.stats{display:flex;margin-top:36rpx}.stat{flex:1;display:flex;align-items:center;flex-direction:column;gap:8rpx;font-size:24rpx;color:#76798b;line-height:34rpx}.stat+.stat{border-left:1rpx solid #e6e8f0;font-size:24rpx;line-height:34rpx}.stat image,.stat-icon{width:44rpx;height:40rpx}.stat-icon{position:relative}.unread-badge{position:absolute;right:-16rpx;top:-12rpx;min-width:28rpx;height:28rpx;padding:0 6rpx;box-sizing:border-box;border:3rpx solid #fff;border-radius:18rpx;background:#f04444;color:#fff;font-size:20rpx;font-weight:600;line-height:22rpx;text-align:center;white-space:nowrap;z-index:1}.management{display:block;margin-top:20rpx}.publish{margin-top:36rpx;height:78rpx;line-height:78rpx;border-radius:22rpx;background:#1c5cf3;color:#fff;font-size:28rpx;font-weight:600}.guest{display:flex;align-items:center;flex-direction:column;gap:24rpx;padding:36rpx;background:#fff;border-radius:24rpx}.guest{font-size:26rpx;line-height:38rpx}.guest button{background:#1c5cf3;color:#fff}
+.id-row{display:flex;align-items:center;gap:12rpx;margin-top:0}.id-row .id{margin-top:0;font-size:24rpx;line-height:34rpx}.copy-icon{width:28rpx;height:28rpx}.publish{display:flex;align-items:center;justify-content:center;gap:16rpx;font-size:28rpx}.publish-icon{width:43rpx;height:43rpx}.stat image{object-fit:contain}
+.name-line{flex-wrap:wrap;row-gap:8rpx}.identity-badges{display:flex;flex-wrap:wrap;align-items:center;gap:8rpx}.identity-tag{display:flex;align-items:center;gap:4rpx;padding:2rpx 8rpx;border-radius:16rpx;background:#edf3ff;color:#3d6fdf;font-size:24rpx;line-height:32rpx}.identity-tag image{width:26rpx;height:26rpx;flex-shrink:0}
 </style>

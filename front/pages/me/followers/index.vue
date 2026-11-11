@@ -45,11 +45,7 @@
         </view>
 
         <!-- Empty state -->
-        <view v-else-if="loaded && !hasAny" class="empty-wrap">
-          <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-          <text class="empty-title">还没有粉丝</text>
-          <text class="empty-subtitle">完善个人信息，发布优质内容，吸引更多关注</text>
-        </view>
+        <AppEmptyState v-else-if="loaded && !hasAny"><template #title>还没有粉丝</template><template #description>完善个人信息，发布优质内容，吸引更多关注</template></AppEmptyState>
 
         <!-- Followers list -->
         <template v-else>
@@ -94,6 +90,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { getMyFollowersList } from '../../../api/user'

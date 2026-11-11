@@ -35,10 +35,7 @@
         <text class="loading-text">加载中...</text>
       </view>
 
-      <view v-else-if="items.length === 0" class="empty-wrap">
-        <text class="empty-title">暂无黑名单用户</text>
-        <text class="empty-subtitle">你屏蔽的用户会出现在这里</text>
-      </view>
+      <AppEmptyState v-else-if="items.length === 0"><template #title>暂无黑名单用户</template><template #description>你屏蔽的用户会出现在这里</template></AppEmptyState>
 
       <view v-else class="list-wrap">
         <view
@@ -67,6 +64,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { addBlockedUser, getBlockedUsers, removeBlockedUser } from '../../../../api/user'

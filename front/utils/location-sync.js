@@ -19,9 +19,10 @@ const reverseGeocodeCity = (latitude, longitude) => {
       success: (res) => {
         const payload = res?.data || {}
         const city = String(payload?.data?.city || '').trim()
-        resolve(city)
+        const district = String(payload?.data?.district || '').trim()
+        resolve({ city, district })
       },
-      fail: () => resolve('')
+      fail: () => resolve({ city: '', district: '' })
     })
   })
 }
@@ -52,7 +53,7 @@ export const getCurrentLocation = () => {
 /**
  * 上传用户位置到服务器
  */
-export const uploadUserLocation = async (latitude, longitude, cityName = '') => {
+export const uploadUserLocation = async (latitude, longitude, cityName = '', districtName = '') => {
   try {
     const normalizedCityName = String(cityName || '').trim()
     console.log('[位置同步] 开始上传位置到服务器:', { latitude, longitude, cityName: normalizedCityName })
@@ -63,6 +64,7 @@ export const uploadUserLocation = async (latitude, longitude, cityName = '') => 
     if (normalizedCityName) {
       payload.city_name = normalizedCityName
     }
+    if (districtName) payload.district_name = String(districtName).trim()
     const result = await updateCurrentUserProfile(payload)
     const cachedUserInfo = uni.getStorageSync('userInfo') || {}
     uni.setStorageSync('userInfo', {
@@ -70,7 +72,8 @@ export const uploadUserLocation = async (latitude, longitude, cityName = '') => 
       ...(result || {}),
       latitude,
       longitude,
-      ...(normalizedCityName ? { city_name: normalizedCityName } : {})
+      ...(normalizedCityName ? { city_name: normalizedCityName } : {}),
+      ...(districtName ? { district_name: String(districtName).trim() } : {})
     })
     console.log('[位置同步] 位置上传成功:', result)
     return true
@@ -89,12 +92,13 @@ export const syncUserLocation = async (silent = true) => {
 
   try {
     const location = await getCurrentLocation()
-    const cityName = await reverseGeocodeCity(location.latitude, location.longitude) || DEFAULT_CITY_NAME
+    const address = await reverseGeocodeCity(location.latitude, location.longitude)
+    const cityName = address.city || DEFAULT_CITY_NAME
     if (cityName) {
       uni.setStorageSync('currentCity', cityName)
       uni.setStorageSync('locationCity', cityName)
     }
-    const uploadSuccess = await uploadUserLocation(location.latitude, location.longitude, cityName)
+    const uploadSuccess = await uploadUserLocation(location.latitude, location.longitude, cityName, address.district)
 
     if (!uploadSuccess) {
       throw new Error('位置上传失败')

@@ -1,0 +1,122 @@
+<view class="detail-page">
+  <scroll-view class="detail-scroll" scroll-y show-scrollbar="{{false}}">
+    <!-- 顶部：banner + 圈子信息 -->
+    <view class="hero-wrap">
+      <image wx:if="{{detail.bannerImage}}" class="banner-image" src="{{detail.bannerImage}}" mode="widthFix" />
+      <view wx:else class="banner-image banner-placeholder"></view>
+
+      <view class="info-wrap">
+        <view class="top-row">
+          <image class="logo-image" src="{{detail.logoImage}}" mode="aspectFill" />
+          <view class="title-wrap">
+            <text class="title">{{detail.title}}</text>
+            <view class="meta-row">
+              <text class="level-tag">{{detail.levelTag}}</text>
+              <text class="meta-text">{{detail.membersText}} · {{detail.postsText}}</text>
+            </view>
+          </view>
+          <button class="share-btn" open-type="share" hover-class="share-btn-active">
+            <text class="share-text">分享</text>
+          </button>
+        </view>
+
+        <view wx:if="{{detail.description}}" class="description-wrap" bindtap="onToggleDescription">
+          <text class="description {{descExpanded ? '' : 'description-collapsed'}}">{{detail.description}}</text>
+          <text wx:if="{{descExpandable}}" class="expand-btn">{{descExpanded ? '收起' : '展开'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 圈主 -->
+    <view wx:if="{{detail.owner.name}}" class="owner-card">
+      <image class="owner-avatar" src="{{detail.owner.avatar}}" mode="aspectFill" />
+      <view class="owner-main">
+        <view class="owner-name-row">
+          <text class="owner-name">{{detail.owner.name}}</text>
+          <text class="owner-role">{{detail.owner.role}}</text>
+        </view>
+        <text wx:if="{{detail.owner.intro}}" class="owner-intro">{{detail.owner.intro}}</text>
+      </view>
+    </view>
+
+    <!-- 公告 -->
+    <view wx:if="{{detail.notice}}" class="notice-card">
+      <text class="notice-title">圈子公告</text>
+      <text class="notice-text">{{detail.notice}}</text>
+    </view>
+
+    <!-- 内容切换 -->
+    <view class="tabs-wrap">
+      <view
+        wx:for="{{tabs}}"
+        wx:key="key"
+        class="tab-item {{activeTabKey === item.key ? 'tab-item-active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="onTabChange"
+      >
+        <text class="tab-text">{{item.label}}</text>
+      </view>
+    </view>
+
+    <view class="list-wrap">
+      <view wx:if="{{loading}}" class="tip-wrap">
+        <text class="tip-text">{{UI_TEXT.loading}}</text>
+      </view>
+
+      <block wx:elif="{{activeTabKey === 'member'}}">
+        <circle-member-card
+          wx:for="{{members}}"
+          wx:key="id"
+          member="{{item}}"
+          bind:detail="onMemberDetail"
+        />
+        <view wx:if="{{!members.length}}" class="tip-wrap">
+          <text class="tip-text">{{UI_TEXT.noMembers}}</text>
+        </view>
+      </block>
+
+      <block wx:elif="{{activeTabKey === 'event'}}">
+        <resource-feed-card
+          wx:for="{{posts}}"
+          wx:key="id"
+          item="{{item}}"
+          bind:detail="onPostDetail"
+        />
+        <view wx:if="{{!posts.length}}" class="tip-wrap">
+          <text class="tip-text">{{UI_TEXT.noEvents}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="bottom-placeholder"></view>
+  </scroll-view>
+
+  <!-- 底部操作栏 -->
+  <view class="bottom-bar">
+    <button wx:if="{{!isLoggedIn}}" class="primary-btn" hover-class="primary-btn-active" bindtap="onInterestBeforeLogin">
+      去收藏
+    </button>
+
+    <view wx:elif="{{isOwner || detail.isJoined}}" class="state-tip">
+      <text class="state-text">{{isOwner ? '你是该圈子的圈主' : '已加入该圈子'}}</text>
+    </view>
+
+    <view wx:else class="action-row">
+      <view
+        class="collect-btn {{detail.isInterested ? 'collect-btn-active' : ''}}"
+        hover-class="collect-btn-hover"
+        bindtap="onToggleInterest"
+      >
+        <text class="collect-text">{{detail.isInterested ? '已收藏' : '收藏'}}</text>
+      </view>
+      <button
+        class="join-btn"
+        hover-class="join-btn-active"
+        disabled="{{joinAction.disabled}}"
+        bindtap="onApplyJoin"
+      >
+        {{joinAction.text}}
+      </button>
+    </view>
+  </view>
+</view>

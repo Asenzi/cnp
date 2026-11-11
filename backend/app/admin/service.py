@@ -28,7 +28,7 @@ from app.payment.contact_package import (
     get_admin_contact_package_config as get_contact_package_admin_config,
     save_admin_contact_package_config as save_contact_package_admin_config,
 )
-from app.payment.service import CIRCLE_OWNER_PLAN_ID
+from app.payment.service import CIRCLE_OWNER_PLAN_ID, PARTNER_PLANS
 from app.schemas.admin import AdminLoginResponse, AdminProfile
 
 ADMIN_JWT_SCOPE = "admin"
@@ -94,10 +94,13 @@ def _sum_paid_member_orders(
     ]
     if plan_kind == "circle_owner":
         conditions.append(MemberOrder.plan_id == CIRCLE_OWNER_PLAN_ID)
+    elif plan_kind == "partner":
+        conditions.append(MemberOrder.plan_id.in_(list(PARTNER_PLANS)))
     else:
         conditions.extend(
             [
                 MemberOrder.plan_id != CIRCLE_OWNER_PLAN_ID,
+                ~MemberOrder.plan_id.in_(list(PARTNER_PLANS)),
                 ~MemberOrder.plan_id.like(f"{CONTACT_PACKAGE_PLAN_ID_PREFIX}%"),
                 ~MemberOrder.plan_id.like(f"{LEGACY_CONTACT_PACKAGE_PLAN_ID_PREFIX}%"),
             ]
@@ -290,6 +293,12 @@ def get_admin_dashboard_overview(db: Session, *, revenue_period: str = "day") ->
         start_at=revenue_start_at,
         end_at=revenue_end_at,
     )
+    partner_order_count, partner_amount = _sum_paid_member_orders(
+        db,
+        plan_kind="partner",
+        start_at=revenue_start_at,
+        end_at=revenue_end_at,
+    )
     circle_join_count, circle_join_fee = _sum_circle_join_platform_fee(
         db,
         start_at=revenue_start_at,
@@ -315,11 +324,13 @@ def get_admin_dashboard_overview(db: Session, *, revenue_period: str = "day") ->
             "period": _normalize_lower(revenue_period) if _normalize_lower(revenue_period) in REVENUE_PERIODS else "day",
             "start_at": _serialize_datetime(revenue_start_at),
             "end_at": _serialize_datetime(revenue_end_at),
-            "total_amount": round(member_order_amount + circle_owner_amount + circle_join_fee, 2),
+            "total_amount": round(member_order_amount + circle_owner_amount + partner_amount + circle_join_fee, 2),
             "member_amount": member_order_amount,
             "member_count": member_order_count,
             "circle_owner_amount": circle_owner_amount,
             "circle_owner_count": circle_owner_order_count,
+            "partner_amount": partner_amount,
+            "partner_count": partner_order_count,
             "circle_amount": circle_join_fee,
             "circle_count": circle_join_count,
         },

@@ -4,7 +4,7 @@
       <view class="back-btn" @tap="goBack">
         <image class="back-icon" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/arrow-back-dark.png" />
       </view>
-      <text class="title">编辑资料</text>
+      <text class="title">编辑名片</text>
       <view class="placeholder"></view>
     </view>
 
@@ -47,43 +47,20 @@
             <text v-if="fromLogin && !String(nickname || '').trim()" class="required-tip field-tip">昵称为必填项</text>
           </view>
 
-          <view class="field">
+          <view v-if="!fromLogin" class="field">
             <text class="label">个人简介</text>
-            <textarea
-              v-model="bio"
-              class="textarea"
-              maxlength="255"
-              placeholder="描述您的专业背景、成就或合作需求..."
-              placeholder-class="placeholder"
-            />
+            <GuidedIntroduction v-model="bio" />
           </view>
         </view>
 
         <!-- 职业信息 -->
-        <view class="section">
+        <view v-if="!fromLogin" class="section">
           <view class="section-header">
             <view class="section-line"></view>
             <text class="section-title">职业信息</text>
           </view>
 
-          <view class="field">
-            <text class="label">行业</text>
-            <view class="picker-field">
-              <picker
-                class="picker"
-                mode="selector"
-                :range="industryOptions"
-                range-key="label"
-                :value="industryIndex"
-                @change="onIndustryChange"
-              >
-                <view class="picker-value" :class="{ 'picker-placeholder': industryIndex === 0 }">
-                  {{ industryOptions[industryIndex].label }}
-                </view>
-              </picker>
-              <image class="arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
-            </view>
-          </view>
+
 
           <view class="field">
             <text class="label">公司</text>
@@ -97,37 +74,19 @@
           </view>
 
           <view class="field">
-            <text class="label">职位</text>
+            <text class="label">职务</text>
             <input
               v-model="jobTitle"
               class="input"
               maxlength="64"
-              placeholder="请输入您的职位"
+              placeholder="请输入您的职务"
               placeholder-class="placeholder"
             />
           </view>
 
-          <view class="field">
-            <text class="label">所在城市</text>
-            <view class="picker-field">
-              <picker
-                class="picker"
-                mode="multiSelector"
-                :range="cityPickerRange"
-                range-key="label"
-                :value="cityPickerValue"
-                @change="onCityChange"
-                @columnchange="onCityColumnChange"
-              >
-                <view class="picker-value" :class="{ 'picker-placeholder': !selectedCityCode }">
-                  {{ cityDisplayText }}
-                </view>
-              </picker>
-              <image class="arrow" mode="aspectFit" src="https://cos.cnptec.site/static/me-icons/expand-more-slate.png" />
-            </view>
-          </view>
 
-          <!-- 位置坐标字段已移除 - 现在由系统自动获取 -->
+
+
           <!-- <view class="field">
             <text class="label">位置坐标</text>
             <view class="location-field">
@@ -149,14 +108,14 @@
         </view>
 
         <!-- 联系方式 -->
-        <view class="section">
+        <view v-if="!fromLogin" class="section">
           <view class="section-header">
             <view class="section-line"></view>
             <text class="section-title">联系方式</text>
           </view>
 
           <view class="field">
-            <text class="label">展示手机号</text>
+            <text class="label">手机号</text>
             <input
               v-model="displayPhone"
               class="input"
@@ -168,7 +127,7 @@
           </view>
 
           <view class="field">
-            <text class="label">展示微信号</text>
+            <text class="label">微信号</text>
             <input
               v-model="displayWechat"
               class="input"
@@ -178,17 +137,7 @@
             />
           </view>
 
-          <view class="field">
-            <text class="label">邮箱</text>
-            <input
-              v-model="email"
-              class="input"
-              type="text"
-              maxlength="100"
-              placeholder="请输入您的邮箱地址"
-              placeholder-class="placeholder"
-            />
-          </view>
+
         </view>
 
         <!-- 保存按钮 -->
@@ -199,11 +148,13 @@
         </view>
       </view>
     </view>
+
   </view>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
+import GuidedIntroduction from './components/GuidedIntroduction.vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import {
   getCurrentUserProfile,
@@ -215,6 +166,7 @@ import { PROVINCE_CITY_OPTIONS } from './modules/city-picker-data'
 
 const DEFAULT_AVATAR = 'https://cos.cnptec.site/static/logo.png'
 const LOGIN_DISCOVER_REFRESH_STORAGE_KEY = 'discover_login_refresh_v1'
+const LOGIN_PROFILE_REQUIRED_STORAGE_KEY = 'login_profile_required_v1'
 
 const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
@@ -351,6 +303,7 @@ const isReviewBlockedError = (err) => [4267, 4272, 4273].includes(Number(err?.co
 
 const goBack = () => {
   if (fromLogin.value) {
+    uni.removeStorageSync(LOGIN_PROFILE_REQUIRED_STORAGE_KEY)
     uni.setStorageSync(LOGIN_DISCOVER_REFRESH_STORAGE_KEY, Date.now())
     uni.switchTab({ url: '/pages/tab/discover/index' })
     return
@@ -490,9 +443,15 @@ const applyProfile = (profile = {}) => {
     : {}
   // 只在没有选择新头像时才更新头像
   if (!hasSelectedNewAvatar.value) {
-    avatarUrl.value = typeof profile?.avatar_url === 'string' && profile.avatar_url.trim() ? profile.avatar_url : DEFAULT_AVATAR
+    const profileAvatar = fromLogin.value && typeof profile?.raw_avatar_url === 'string'
+      ? profile.raw_avatar_url
+      : profile?.avatar_url
+    avatarUrl.value = typeof profileAvatar === 'string' && profileAvatar.trim() ? profileAvatar : DEFAULT_AVATAR
   }
-  const nextNickname = typeof profile?.nickname === 'string' ? profile.nickname : ''
+  const profileNickname = fromLogin.value && typeof profile?.raw_nickname === 'string'
+    ? profile.raw_nickname
+    : profile?.nickname
+  const nextNickname = typeof profileNickname === 'string' ? profileNickname : ''
   nickname.value = fromLogin.value && isSystemNickname(nextNickname) ? '' : nextNickname
   bio.value = typeof profile?.intro === 'string' ? profile.intro : ''
   companyName.value = typeof profile?.company_name === 'string' ? profile.company_name : ''
@@ -589,13 +548,11 @@ const onSave = async () => {
   }
 
   const intro = String(bio.value || '').trim()
+  if (intro.length > 255) { showToast('个人简介最多255字，请精简后保存'); return }
   const normalizedCompanyName = String(companyName.value || '').trim()
   const normalizedJobTitle = String(jobTitle.value || '').trim()
   const normalizedDisplayPhone = String(displayPhone.value || '').replace(/\D/g, '').slice(0, 11)
   const normalizedDisplayWechat = String(displayWechat.value || '').trim().replace(/\s+/g, '')
-  const normalizedEmail = String(email.value || '').trim()
-  const selectedIndustry = industryOptions[industryIndex.value] || industryOptions[0]
-  const selectedCity = currentSelectedCity.value
 
   const baseUrl = getApiBaseUrl()
   const normalizedAvatarUrl = String(avatarUrl.value || DEFAULT_AVATAR).trim()
@@ -610,14 +567,9 @@ const onSave = async () => {
     return
   }
 
-  if (normalizedEmail && !EMAIL_REGEX.test(normalizedEmail)) {
-    showToast('请输入正确的邮箱地址')
-    return
-  }
 
   displayPhone.value = normalizedDisplayPhone
   displayWechat.value = normalizedDisplayWechat
-  email.value = normalizedEmail
 
   saving.value = true
   let avatarForSave = normalizedAvatarUrl
@@ -686,13 +638,8 @@ const onSave = async () => {
         normalizedCompanyName !== (currentProfile.company_name || '') ||
         normalizedJobTitle !== (currentProfile.job_title || '') ||
         normalizedDisplayPhone !== (currentProfile.display_phone || '') ||
-        normalizedDisplayWechat !== (currentProfile.display_wechat || '') ||
-        normalizedEmail !== (currentProfile.email || '') ||
-        // 经纬度由系统自动更新，不再检查
-        // normalizeCoordinate(latitude.value) !== normalizeCoordinate(currentProfile.latitude) ||
-        // normalizeCoordinate(longitude.value) !== normalizeCoordinate(currentProfile.longitude) ||
-        (selectedIndustry.value && selectedIndustry.value !== (currentProfile.industry_code || '')) ||
-        (selectedCity?.value && selectedCity.value !== (currentProfile.city_code || ''))
+        normalizedDisplayWechat !== (currentProfile.display_wechat || '')
+
 
       if (!hasOtherChanges) {
         // 只修改了头像，已保存成功
@@ -709,15 +656,10 @@ const onSave = async () => {
     const payload = {
       nickname: normalizedNickname,
       intro,
-      industry_code: selectedIndustry.value || null,
-      industry_label: selectedIndustry.value ? selectedIndustry.label : null,
       company_name: normalizedCompanyName || null,
       job_title: normalizedJobTitle || null,
       display_phone: normalizedDisplayPhone || null,
       display_wechat: normalizedDisplayWechat || null,
-      email: normalizedEmail || null,
-      city_code: selectedCity?.value || null,
-      city_name: selectedCity?.label || null
       // 经纬度由系统自动更新，不再手动提交
       // latitude: hasCoordinates.value ? Number(latitude.value) : null,
       // longitude: hasCoordinates.value ? Number(longitude.value) : null
@@ -753,6 +695,7 @@ const onSave = async () => {
 
     showToast('保存成功')
     setTimeout(() => {
+      uni.removeStorageSync(LOGIN_PROFILE_REQUIRED_STORAGE_KEY)
       goBack()
     }, 250)
   } catch (err) {
@@ -772,7 +715,7 @@ const onSave = async () => {
 }
 
 onLoad((options) => {
-  fromLogin.value = String(options?.from || '').trim() === 'login'
+  fromLogin.value = String(options?.from || '').trim() === 'login' || uni.getStorageSync(LOGIN_PROFILE_REQUIRED_STORAGE_KEY) === true
 })
 
 onShow(() => {
@@ -837,6 +780,9 @@ onShow(() => {
 
 .avatar-wrap {
   position: relative;
+  display: block;
+  width: 128rpx;
+  height: 128rpx;
   margin: 0;
   padding: 0;
   border: 0;

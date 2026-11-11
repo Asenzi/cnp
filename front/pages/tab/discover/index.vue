@@ -56,11 +56,7 @@
           </view>
 
           <template v-else>
-            <view v-if="showEmpty" class="empty-state">
-              <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-              <text class="empty-title">暂无推荐人脉</text>
-              <text class="empty-subtitle">试试调整筛选条件或切换城市</text>
-            </view>
+            <AppEmptyState v-if="showEmpty"><template #title>暂无推荐人脉</template><template #description>试试调整筛选条件或切换城市</template></AppEmptyState>
 
             <NetworkMemberCard
               v-for="item in members"
@@ -97,6 +93,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import {
@@ -157,7 +155,7 @@ const uiText = {
   sameCityTag: '\u540c\u57ce',
   unnamedUser: '\u672a\u547d\u540d\u7528\u6237',
   verifyLv1: 'LV1 \u5df2\u8ba4\u8bc1',
-  defaultRole: '暂未填写行业',
+  defaultRole: '暂未填写公司',
   activeFallback: '\u6700\u8fd1\u6d3b\u8dc3',
   recommendationLoadError: '\u4eba\u8109\u63a8\u8350\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
   missingTarget: '\u76ee\u6807\u7528\u6237\u4fe1\u606f\u7f3a\u5931',
@@ -904,8 +902,10 @@ const runQueuedRecommendationReset = () => {
 const mapMemberCard = (item = {}) => {
   const businessUserId = String(item.user_id || '').trim()
   const cityName = String(item.city_name || '').trim()
+  const districtName = String(item.district_name || item.district || item.county_name || item.county || '').trim()
+  const jobTitle = String(item.job_title || '').trim()
   const intro = String(item.intro || '').trim()
-  const industryLabel = String(item.industry_label || '').trim()
+  const companyName = String(item.company_name || item.company || '').trim()
   const reasonTags = Array.isArray(item.reason_tags)
     ? item.reason_tags.map((tag) => normalizeTag(tag)).filter(Boolean)
     : []
@@ -918,6 +918,12 @@ const mapMemberCard = (item = {}) => {
   const sharedCircles = normalizeCircleList(reasonDetail.shared_circle_names)
   const sharedSource = normalizeTag(reasonDetail.shared_connection_source || '')
   const visibleCircleTags = intro ? [intro] : []
+  const cityDisplay = cityName && !/[市州地区盟]$/.test(cityName) ? `${cityName}市` : cityName
+  const locationText = [cityDisplay, districtName]
+    .filter(Boolean)
+    .filter((part, index, all) => index === 0 || !part.startsWith(cityName) && !part.startsWith(cityDisplay))
+    .join('')
+  const metaLine = [jobTitle, locationText].filter(Boolean).join(' | ')
 
   return {
     id: businessUserId || `${String(item.nickname || 'guest').trim()}-${cityName || 'city'}`,
@@ -925,7 +931,8 @@ const mapMemberCard = (item = {}) => {
     name: String(item.nickname || '').trim() || uiText.unnamedUser,
     verifyType: resolveIdentityVerified(item) ? 'lv1' : '',
     verifyText: resolveIdentityVerified(item) ? uiText.verifyLv1 : '',
-    detailLine: industryLabel || uiText.defaultRole,
+    detailLine: companyName || uiText.defaultRole,
+    metaLine,
     distanceText: String(item.distance_text || '').trim(),
     memberEnabled: resolveMemberEnabled(item),
     circleOwner: resolveCircleOwnerEnabled(item),
@@ -1153,7 +1160,7 @@ const fetchRecommendations = async (reset = false, options = {}) => {
     scope: isNationalScope.value ? 'national' : 'city'
   })
 
-  if (reset && !forceRefresh) {
+  if (reset && !forceRefresh && !loaded.value) {
     const cachedEntry = getFreshRecommendationCacheEntry(recommendationCacheKey)
     if (cachedEntry && !shouldBypassSparseRecommendationCache(cachedEntry)) {
       pendingRecommendationReset.value = false
@@ -1179,9 +1186,6 @@ const fetchRecommendations = async (reset = false, options = {}) => {
       cityName: effectiveCityName.value,
       industryLabel: filters.value.industry_label || ''
     })
-    const historyIds = !forceRefresh && reset && loaded.value && Array.isArray(firstPageHistoryByContext.value[recoContextKey])
-      ? firstPageHistoryByContext.value[recoContextKey].slice(0, FIRST_PAGE_HISTORY_LIMIT)
-      : []
     const cityCandidates = reset
       ? (String(effectiveCityName.value || '').trim()
         ? buildCityQueryCandidates(effectiveCityName.value)
@@ -1193,11 +1197,6 @@ const fetchRecommendations = async (reset = false, options = {}) => {
     let data = null
     let incoming = []
     let selectedQueryCity = ''
-    let shouldRetryWithoutHistory = false
-    const canUseFallbackRecovery = reset
-      && !normalizedKeyword.value
-      && !filters.value.city_name
-      && !filters.value.industry_label
 
     for (let index = 0; index < fallbackCandidates.length; index += 1) {
       const candidateCityName = fallbackCandidates[index]
@@ -1210,35 +1209,13 @@ const fetchRecommendations = async (reset = false, options = {}) => {
         city_name: candidateCityName,
         industry_label: filters.value.industry_label || ''
       }
-      if (reset && historyIds.length) {
-        params.exclude_user_ids = historyIds
-      }
-
       data = await getNetworkRecommendations(params)
       incoming = Array.isArray(data?.items) ? data.items : []
       selectedQueryCity = candidateCityName
-      shouldRetryWithoutHistory = canUseFallbackRecovery
-        && historyIds.length > 0
-        && incoming.length <= SPARSE_FIRST_PAGE_THRESHOLD
 
       if (!reset || incoming.length > 0 || index === fallbackCandidates.length - 1) {
         break
       }
-    }
-
-    if (shouldRetryWithoutHistory) {
-      clearFirstPageHistory(recoContextKey)
-      const retryParams = {
-        tab: activeTab.value,
-        request_id: reset ? '' : requestId.value,
-        limit: PAGE_SIZE,
-        cursor: reset ? '' : nextCursor.value,
-        keyword: normalizedKeyword.value,
-        city_name: selectedQueryCity,
-        industry_label: filters.value.industry_label || ''
-      }
-      data = await getNetworkRecommendations(retryParams)
-      incoming = Array.isArray(data?.items) ? data.items : []
     }
 
     const mapped = incoming.map((item) => mapMemberCard(item))
@@ -1266,13 +1243,7 @@ const fetchRecommendations = async (reset = false, options = {}) => {
     }
 
     if (reset) {
-      const currentFirstPageIds = mapped
-        .map((item) => String(item.businessUserId || '').trim())
-        .filter(Boolean)
-        .slice(0, PAGE_SIZE)
-      if (mapped.length) {
-        appendFirstPageHistory(recoContextKey, currentFirstPageIds)
-      }
+      clearFirstPageHistory(recoContextKey)
       if (!shouldBypassSparseRecommendationCache({ members: mapped })) {
         persistRecommendationCacheEntry(recommendationCacheKey, {
           members: mapped,
@@ -1600,7 +1571,7 @@ onUnmounted(() => {
   max-width: 750rpx;
   margin: 0 auto;
   height: 100vh;
-  background: #f6f6f9;
+  background: #f6f6f8;
   overflow: hidden;
   box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.08);
   display: flex;
@@ -1619,11 +1590,11 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   height: 0;
-  background: #f6f6f9;
+  background: #f6f6f8;
 }
 
 .list-container {
-  background: #f6f6f9;
+  background: #f6f6f8;
   padding: 0 24rpx calc(28rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;

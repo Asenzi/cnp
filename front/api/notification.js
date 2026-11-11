@@ -58,3 +58,7 @@ export function getUnreadNotificationCount() {
     method: 'GET'
   })
 }
+
+export function getActivityNotifications(params = {}) {
+  return request({ url: `/api/v1/notifications/activity?offset=${Number(params.offset || 0)}&limit=${Math.min(Number(params.limit || 50), 100)}`, method: 'GET' })
+}

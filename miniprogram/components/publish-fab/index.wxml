@@ -1,0 +1,4 @@
+<view class="fab-btn" hover-class="fab-btn-active" catchtap="onTap">
+  <view class="plus-horizontal"></view>
+  <view class="plus-vertical"></view>
+</view>

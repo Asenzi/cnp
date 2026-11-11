@@ -1,3 +1,4 @@
+import { reportActivity } from '../utils/activity-notification'
 ﻿import { getApiBaseUrl, request } from '../utils/request'
 
 export function getCurrentUserProfile() {
@@ -27,7 +28,7 @@ export function getUserProfileById(targetUserId) {
   return request({
     url: `/api/v1/user/profiles/${safeId}`,
     method: 'GET'
-  })
+  }).then(data => { reportActivity('user', targetUserId, 'view'); return data })
 }
 
 export function getUserProfileMiniappCode(targetUserId) {

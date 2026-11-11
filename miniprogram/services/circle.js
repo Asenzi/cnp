@@ -1,0 +1,353 @@
+import { getApiBaseUrl, request } from '../utils/request'
+
+export function createCircle(payload) {
+  return request({
+    url: '/api/v1/circle',
+    method: 'POST',
+    data: payload || {}
+  })
+}
+
+export function updateCircle(circleCode, payload) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  return request({
+    url: `/api/v1/circle/${safeCode}`,
+    method: 'PATCH',
+    data: payload || {}
+  })
+}
+
+export function getCircleDetail(circleCode) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  return request({
+    url: `/api/v1/circle/${safeCode}`,
+    method: 'GET'
+  })
+}
+
+export function getCirclePosts(circleCode, params = {}) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  const cursor = String(params.cursor || '').trim()
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const query = [`limit=${limit}`]
+  if (cursor) {
+    query.push(`cursor=${encodeURIComponent(cursor)}`)
+  }
+  return request({
+    url: `/api/v1/circle/${safeCode}/posts?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function getCircleMembers(circleCode, params = {}) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  return request({
+    url: `/api/v1/circle/${safeCode}/members?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function getManagedCircleMembers(circleCode, params = {}) {
+  const code = encodeURIComponent(String(circleCode || '').trim())
+  const offset = Math.max(Number(params.offset || 0), 0)
+  return request({
+    url: `/api/v1/circle/${code}/manage-members?offset=${offset}&limit=20`,
+    method: 'GET'
+  })
+}
+
+export function removeCircleMember(circleCode, userId) {
+  const code = encodeURIComponent(String(circleCode || '').trim())
+  const member = encodeURIComponent(String(userId || '').trim())
+  return request({ url: `/api/v1/circle/${code}/manage-members/${member}/remove`, method: 'POST' })
+}
+
+export function refundCircleMember(circleCode, userId) {
+  const code = encodeURIComponent(String(circleCode || '').trim())
+  const member = encodeURIComponent(String(userId || '').trim())
+  return request({ url: `/api/v1/circle/${code}/manage-members/${member}/refund`, method: 'POST' })
+}
+
+export function getDiscoverCircles(params = {}) {
+  const query = []
+  const appendQuery = (key, value) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+    query.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  }
+
+  const tab = String(params.tab || 'recommend').trim()
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const keyword = String(params.keyword || '').trim()
+  const cityName = String(params.city_name || '').trim()
+  const industryLabel = String(params.industry_label || '').trim()
+  const requestId = String(params.request_id || '').trim()
+  const excludeCircleCodes = Array.isArray(params.exclude_circle_codes)
+    ? params.exclude_circle_codes.map((code) => String(code || '').trim()).filter(Boolean).join(',')
+    : String(params.exclude_circle_codes || '').trim()
+  appendQuery('tab', tab)
+  appendQuery('offset', offset)
+  appendQuery('limit', limit)
+  appendQuery('keyword', keyword)
+  appendQuery('city_name', cityName)
+  appendQuery('industry_label', industryLabel)
+  appendQuery('request_id', requestId)
+  appendQuery('exclude_circle_codes', excludeCircleCodes)
+  return request({
+    url: `/api/v1/circle/discover?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function getMyCircles(params = {}) {
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.max(Number(params.limit || 20), 1)
+  const keyword = String(params.keyword || '').trim()
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (keyword) {
+    query.push(`keyword=${encodeURIComponent(keyword)}`)
+  }
+  return request({
+    url: `/api/v1/circle/me?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function getOwnedCircles(params = {}) {
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const keyword = String(params.keyword || '').trim()
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (keyword) {
+    query.push(`keyword=${encodeURIComponent(keyword)}`)
+  }
+  return request({
+    url: `/api/v1/circle/owned?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function getUserOwnedCircles(targetUserId, params = {}) {
+  const safeTargetUserId = encodeURIComponent(String(targetUserId || '').trim())
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const keyword = String(params.keyword || '').trim()
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (keyword) {
+    query.push(`keyword=${encodeURIComponent(keyword)}`)
+  }
+  return request({
+    url: `/api/v1/circle/user/${safeTargetUserId}/owned?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function getUserCircles(targetUserId, params = {}) {
+  const safeTargetUserId = encodeURIComponent(String(targetUserId || '').trim())
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.max(Number(params.limit || 20), 1)
+  const keyword = String(params.keyword || '').trim()
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (keyword) {
+    query.push(`keyword=${encodeURIComponent(keyword)}`)
+  }
+  return request({
+    url: `/api/v1/circle/user/${safeTargetUserId}?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+export function uploadCircleImage(filePath, fileName = 'circle-image') {
+  const token = wx.getStorageSync('token')
+  const headers = {}
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: `${getApiBaseUrl()}/api/v1/circle/cover-file`,
+      filePath,
+      name: 'file',
+      header: headers,
+      formData: {
+        file_name: fileName
+      },
+      success: (res) => {
+        const statusCode = res?.statusCode || 500
+        let payload = {}
+
+        try {
+          payload = JSON.parse(res?.data || '{}')
+        } catch (err) {
+          payload = {}
+        }
+
+        if (statusCode >= 200 && statusCode < 300 && payload?.code === 0) {
+          resolve(payload.data)
+          return
+        }
+
+        reject({
+          statusCode,
+          code: payload?.code ?? statusCode,
+          message: payload?.message || `Upload failed: ${statusCode}`,
+          payload
+        })
+      },
+      fail: (err) => {
+        reject({
+          statusCode: 0,
+          code: -1,
+          message: err?.errMsg || 'Network error',
+          payload: err
+        })
+      }
+    })
+  })
+}
+
+export function uploadCircleCover(filePath, fileName = 'circle-cover') {
+  return uploadCircleImage(filePath, fileName)
+}
+
+export function uploadCircleAvatar(filePath, fileName = 'circle-avatar') {
+  return uploadCircleImage(filePath, fileName)
+}
+
+export function uploadCircleShareImage(filePath, fileName = 'circle-share') {
+  return uploadCircleImage(filePath, fileName)
+}
+
+export function toggleCircleInterest(circleCode, desired) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  const query = typeof desired === 'boolean' ? `?desired=${desired}` : ''
+  return request({
+    url: `/api/v1/circle/${safeCode}/interest/toggle${query}`,
+    method: 'POST'
+  })
+}
+
+export function toggleCircleCollection(circleCode, desired) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  const query = typeof desired === 'boolean' ? `?desired=${desired}` : ''
+  return request({
+    url: `/api/v1/circle/${safeCode}/collect/toggle${query}`,
+    method: 'POST'
+  })
+}
+
+export function getInterestedCircles(params = {}) {
+  const query = []
+  const appendQuery = (key, value) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+    query.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  }
+
+  const cursor = String(params.cursor || '').trim()
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+
+  appendQuery('cursor', cursor)
+  appendQuery('limit', limit)
+
+  return request({
+    url: `/api/v1/circle/interests${query.length ? `?${query.join('&')}` : ''}`,
+    method: 'GET'
+  })
+}
+
+export function getCollectedCircles(params = {}) {
+  const query = []
+  const appendQuery = (key, value) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+    query.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  }
+
+  const cursor = String(params.cursor || '').trim()
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+
+  appendQuery('cursor', cursor)
+  appendQuery('limit', limit)
+
+  return request({
+    url: `/api/v1/circle/collections${query.length ? `?${query.join('&')}` : ''}`,
+    method: 'GET'
+  })
+}
+
+// 获取圈子加入申请列表
+export function getCircleJoinRequests(params = {}) {
+  const status = String(params.status || '').trim()
+  const offset = Math.max(Number(params.offset || 0), 0)
+  const limit = Math.min(Math.max(Number(params.limit || 20), 1), 50)
+  const query = [`offset=${offset}`, `limit=${limit}`]
+  if (status) {
+    query.push(`status=${encodeURIComponent(status)}`)
+  }
+  return request({
+    url: `/api/v1/circle/join-requests?${query.join('&')}`,
+    method: 'GET'
+  })
+}
+
+// 审批圈子加入申请
+export function reviewCircleJoinRequest(requestId, payload = {}) {
+  const safeRequestId = encodeURIComponent(String(requestId || '').trim())
+  return request({
+    url: `/api/v1/circle/join-requests/${safeRequestId}/review`,
+    method: 'POST',
+    data: {
+      action: String(payload.action || '').trim(), // 'approve' or 'reject'
+      reject_reason: String(payload.reject_reason || '').trim()
+    }
+  })
+}
+
+export function cancelCircleJoinRequest(requestId) {
+  const safeRequestId = encodeURIComponent(String(requestId || '').trim())
+  return request({
+    url: `/api/v1/circle/join-requests/${safeRequestId}/cancel`,
+    method: 'POST'
+  })
+}
+
+// 提交圈子加入申请
+export function submitCircleJoinRequest(circleCode, payload = {}) {
+  const safeCode = encodeURIComponent(String(circleCode || '').trim())
+  return request({
+    url: `/api/v1/circle/${safeCode}/join-request`,
+    method: 'POST',
+    data: {
+      message: String(payload.message || '').trim(),
+      pay_channel: String(payload.pay_channel || '').trim() || undefined
+    }
+  })
+}
+
+export function confirmCircleJoinPayment(orderNo, payload = {}) {
+  const safeOrderNo = encodeURIComponent(String(orderNo || '').trim())
+  return request({
+    url: `/api/v1/circle/join-orders/${safeOrderNo}/confirm`,
+    method: 'POST',
+    data: {
+      transaction_id: String(payload.transaction_id || '').trim() || undefined
+    }
+  })
+}
+
+export function getCircleJoinOrderStatus(orderNo) {
+  const safeOrderNo = encodeURIComponent(String(orderNo || '').trim())
+  return request({
+    url: `/api/v1/circle/join-orders/${safeOrderNo}`,
+    method: 'GET'
+  })
+}

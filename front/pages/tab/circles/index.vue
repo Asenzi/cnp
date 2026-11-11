@@ -59,11 +59,7 @@
         </view>
 
         <template v-else>
-          <view v-if="showEmpty" class="empty-state">
-            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-            <text class="empty-title">{{ texts.empty }}</text>
-            <text class="empty-desc">试试调整筛选条件或搜索关键词</text>
-          </view>
+          <AppEmptyState v-if="showEmpty"><template #title>{{ texts.empty }}</template><template #description>试试调整筛选条件或搜索关键词</template></AppEmptyState>
 
           <DiscoverList :items="circles" @interest="onToggleInterest" />
 
@@ -93,6 +89,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
@@ -195,14 +193,11 @@ const capsuleAvoidRightInsetPx = capsuleLeft > 0
   ? Math.max(windowWidth - capsuleLeft - 8, 0)
   : 0
 const pxPerRpx = windowWidth / 750
-const circleScrollTopPx = Math.ceil(
-  topPaddingPx
-  + capsuleRowHeightPx
+// Match the header's actual height; list spacing belongs to DiscoverList.
+const circleScrollTopPx = topPaddingPx
+  + Math.max(capsuleRowHeightPx, 34)
   + 8
-  + (84 * pxPerRpx)
-  + (10 * pxPerRpx)
-  + 12
-)
+  + (85 * pxPerRpx)
 const circleScrollStyle = computed(() => `padding-top:${circleScrollTopPx}px;`)
 
 const cachedCity = String(
@@ -442,6 +437,12 @@ const sanitizeCircleImage = (value) => {
   return normalized
 }
 
+const formatCircleViews = (value) => {
+  if (value == null) return '0'
+  const count = Math.max(0, Number(value) || 0)
+  return count >= 10000 ? `${Number((count / 10000).toFixed(1))}万` : count.toLocaleString('en-US')
+}
+
 const mapCircleCard = (item = {}, index = 0) => {
   const industryLabel = String(item.industry_label || '').trim()
   const ownerCity = String(item.owner_city_name || '').trim()
@@ -454,8 +455,9 @@ const mapCircleCard = (item = {}, index = 0) => {
     description: description || texts.defaultDesc,
     industryLabel,
     ownerCity,
-    members: formatCompactNumber(item.member_count || 0),
-    posts: formatCompactNumber(item.post_count || 0),
+    members: Math.max(0, Number(item.member_count) || 0).toLocaleString('en-US'),
+    posts: Math.max(0, Number(item.resource_count ?? item.post_count) || 0).toLocaleString('en-US'),
+    views: formatCircleViews(item.view_count ?? item.visit_count),
     coverImage: sanitizeCircleImage(item.avatar_url || item.cover_url || ''),
     ownerName: String(item.owner_nickname || '').trim(),
     ownerAvatar: String(item.owner_avatar_url || '').trim(),
@@ -894,7 +896,7 @@ onUnmounted(() => {
   max-width: 750rpx;
   margin: 0 auto;
   height: 100vh;
-  background: #ffffff;
+  background: #f6f6f8;
   display: flex;
   flex-direction: column;
   overflow: hidden;

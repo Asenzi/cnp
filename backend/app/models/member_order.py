@@ -17,6 +17,19 @@ class MemberOrder(Base):
         nullable=False,
         index=True,
     )
+    referral_partner_user_pk: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="会员订单转化时的合作邀请码归属快照",
+    )
+    referral_captured: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("0"),
+        comment="是否由新归因流程明确记录来源（包含平台来源）",
+    )
     plan_id: Mapped[str] = mapped_column(String(32), nullable=False)
     plan_name: Mapped[str] = mapped_column(String(64), nullable=False)
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default=text("30"))
@@ -61,6 +74,12 @@ class MemberOrder(Base):
         nullable=False,
         default="wallet",
         server_default=text("'wallet'"),
+    )
+    client_platform: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+        index=True,
+        comment="客户端平台: ios/android/devtools/windows/macos/unknown",
     )
     status: Mapped[str] = mapped_column(
         String(16),

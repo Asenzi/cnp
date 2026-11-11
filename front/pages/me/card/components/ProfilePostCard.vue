@@ -15,11 +15,6 @@
     <text class="resource-title">{{ item.title }}</text>
     <text v-if="item.content" class="resource-desc">{{ item.content }}</text>
 
-    <view v-if="item.images?.length" class="image-grid" :class="`grid-${Math.min(item.images.length, 3)}`">
-      <image v-for="(img, idx) in item.images.slice(0, 3)" :key="`${item.id}-${idx}`" class="grid-image" :src="img"
-        mode="aspectFill" />
-    </view>
-
     <view class="card-footer">
       <view v-if="item.industryLabels?.length" class="tags-row">
         <text v-for="(label, idx) in item.industryLabels.slice(0, 2)" :key="`${item.id}-tag-${idx}`"
@@ -180,32 +175,6 @@ const isInterested = computed(() => {
   word-break: break-all;
 }
 
-.image-grid {
-  display: grid;
-  gap: 8rpx;
-  margin-top: 4rpx;
-}
-
-.grid-1 {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.grid-2 {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.grid-3 {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.grid-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  background: #f1f5f9;
-  aspect-ratio: 1 / 1;
-}
-
 .card-footer {
   display: flex;
   align-items: center;
@@ -296,10 +265,6 @@ const isInterested = computed(() => {
 
   .resource-desc {
     color: #94a3b8;
-  }
-
-  .grid-image {
-    background: #1e293b;
   }
 
   .industry-tag {

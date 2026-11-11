@@ -30,7 +30,7 @@ defineEmits(['enter'])
   display: flex;
   align-items: center;
   gap: 16rpx;
-  border-radius: 16rpx;
+  border-radius: 0;
   border: 1rpx solid rgba(0, 0, 0, 0.06);
   background: #ffffff;
   padding: 16rpx;
@@ -46,7 +46,7 @@ defineEmits(['enter'])
 .cover {
   width: 104rpx;
   height: 104rpx;
-  border-radius: 12rpx;
+  border-radius: 0;
   background: linear-gradient(135deg, #1a57db 0%, #60a5fa 100%);
   flex-shrink: 0;
 }
@@ -62,8 +62,8 @@ defineEmits(['enter'])
 
 .name {
   color: #111827;
-  font-size: 28rpx;
-  line-height: 36rpx;
+  font-size: 30rpx;
+  line-height: 42rpx;
   font-weight: 600;
 }
 
@@ -77,16 +77,16 @@ defineEmits(['enter'])
 .sub-text,
 .dot {
   color: #6b7280;
-  font-size: 24rpx;
-  line-height: 32rpx;
+  font-size: 28rpx;
+  line-height: 40rpx;
 }
 
 .industry-text {
   margin-top: 4rpx;
   display: block;
   color: #9ca3af;
-  font-size: 22rpx;
-  line-height: 30rpx;
+  font-size: 28rpx;
+  line-height: 42rpx;
 }
 
 @media (prefers-color-scheme: dark) {

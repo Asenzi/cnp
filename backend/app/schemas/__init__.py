@@ -16,7 +16,7 @@ from .network import (
     NetworkRecommendationItem,
     NetworkRecommendationListData,
 )
-from .payment import MemberOrderConfirmRequest, MemberSubscribeRequest
+from .payment import MemberOrderConfirmRequest, MemberPaymentClientErrorRequest, MemberSubscribeRequest
 from .post import ResourcePostCreateRequest
 
 __all__ = [
@@ -37,6 +37,7 @@ __all__ = [
     "NetworkImpressionsBatchRequest",
     "NetworkFeedbackRequest",
     "MemberOrderConfirmRequest",
+    "MemberPaymentClientErrorRequest",
     "MemberSubscribeRequest",
     "ResourcePostCreateRequest",
 ]

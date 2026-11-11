@@ -26,7 +26,7 @@
             <text class="hero-desc">
               {{ overview.is_circle_owner
                 ? '圈主身份永久有效，现在可以创建并运营自己的圈子。'
-                : '一次付费，无需审核。支付成功后即可创建圈子，长期沉淀成员与行业资源。' }}
+                : '一次付费，支付成功后完成实名认证即可创建圈子，长期沉淀成员与行业资源。' }}
             </text>
           </view>
 
@@ -76,7 +76,7 @@
                 src="https://cos.cnptec.site/static/icon/safe.png"
                 mode="aspectFit"
               />
-              <text class="instant-text">支付成功即刻生效，无需提交资料或等待人工审核</text>
+              <text class="instant-text">支付成功即刻生效，未实名认证需先完成认证后创建圈子</text>
             </view>
           </template>
 
@@ -115,9 +115,11 @@ import {
   confirmMemberOrderPayment,
   getCircleOwnerOverview,
   getMemberOrderStatus,
+  reportMemberPaymentClientError,
   purchaseCircleOwner
 } from '../../../../api/payment'
 import { getCurrentUserProfile } from '../../../../api/user'
+import { refreshWechatSessionForPayment } from '../../../../utils/payment-session'
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -173,12 +175,6 @@ const showOriginalPrice = computed(() => {
   return Number(overview.value?.plan?.original_price || 0) > Number(overview.value?.plan?.price || 0)
 })
 const planEnabled = computed(() => Boolean(overview.value?.plan?.enabled))
-const isYearlyMemberOpened = computed(() => {
-  const member = overview.value?.member || {}
-  const opened = Boolean(member.opened || member.is_member || member.member_opened)
-  const planId = String(member.plan_id || member.member_plan_id || '').trim().toLowerCase()
-  return opened && planId === 'yearly'
-})
 const walletInsufficient = computed(() => {
   return Number(overview.value?.wallet_balance || 0) < Number(overview.value?.plan?.price || 0)
 })
@@ -197,7 +193,6 @@ const selectedPaymentLabel = computed(() => {
 const purchaseButtonText = computed(() => {
   if (submitting.value) return '处理中...'
   if (!planEnabled.value) return '暂不可开通'
-  if (!isYearlyMemberOpened.value) return '年度会员后开通'
   return `支付 ¥${priceText.value} 永久开通`
 })
 
@@ -255,6 +250,39 @@ const confirmPurchase = () => {
   })
 }
 
+const getPaymentDebugInfo = (extra = {}) => {
+  let systemInfo = {}
+  try {
+    systemInfo = uni.getSystemInfoSync() || {}
+  } catch {
+    systemInfo = {}
+  }
+
+  return {
+    platform: systemInfo.platform,
+    system: systemInfo.system,
+    brand: systemInfo.brand,
+    model: systemInfo.model,
+    wechatVersion: systemInfo.version,
+    SDKVersion: systemInfo.SDKVersion,
+    envVersion: typeof __wxConfig !== 'undefined' ? __wxConfig?.envVersion : '',
+    ...extra
+  }
+}
+
+const getVirtualPaymentErrorMessage = (err, fallback = '支付失败，请稍后重试') => {
+  const message = String(err?.errMsg || err?.message || '')
+  const code = String(err?.errCode || err?.errno || '')
+  const normalized = message.toLowerCase()
+  if (code === '-15005' || normalized.includes('signature_invalid')) {
+    return '微信登录态已失效，请重新登录后再支付'
+  }
+  if (code === '-15001' || message.includes('尚未开启iOS支付')) {
+    return '当前小程序尚未开启 iOS 支付，请先在微信后台开启苹果 IAP 支付'
+  }
+  return message || fallback
+}
+
 const invokeWxpayAndConfirm = async (result) => {
   const orderNo = String(result?.order_no || '').trim()
   const virtualPayment = result?.virtual_payment || {}
@@ -269,7 +297,19 @@ const invokeWxpayAndConfirm = async (result) => {
       paySig: String(virtualPayment.paySig),
       signature: String(virtualPayment.signature),
       success: (res) => resolve(res || {}),
-      fail: (err) => reject({ ...(err || {}), order_no: orderNo })
+      fail: (err) => {
+        reportMemberPaymentClientError({
+          order_no: orderNo,
+          scene: 'circle_owner',
+          err_msg: err?.errMsg,
+          err_code: err?.errCode || err?.errno,
+          ext: getPaymentDebugInfo({
+            mode: virtualPayment.mode,
+            signData: virtualPayment.signData || {}
+          })
+        }).catch(() => {})
+        reject({ ...(err || {}), order_no: orderNo })
+      }
     })
   })
 
@@ -283,28 +323,30 @@ const syncUserCache = async () => {
   try {
     const profile = await getCurrentUserProfile()
     uni.setStorageSync('userInfo', profile || {})
+    return profile || {}
   } catch {
     const cached = uni.getStorageSync('userInfo') || {}
     uni.setStorageSync('userInfo', { ...cached, is_circle_owner: true })
+    return { ...cached, is_circle_owner: true }
   }
+}
+
+const isRealNameVerified = (profile = {}) => {
+  return Boolean(
+    profile?.is_verified ||
+    profile?.real_name_verified ||
+    String(profile?.verified_real_name || '').trim()
+  )
+}
+
+const redirectToRealNameIfNeeded = (profile = {}) => {
+  if (isRealNameVerified(profile)) return false
+  uni.navigateTo({ url: '/pages/me/auth/realname/index' })
+  return true
 }
 
 const purchase = async () => {
   if (submitting.value || !planEnabled.value) return
-  if (!isYearlyMemberOpened.value) {
-    uni.showModal({
-      title: '需要年度会员',
-      content: '购买圈主身份前需要先开通年度会员，是否现在前往会员中心？',
-      confirmText: '去开通',
-      cancelText: '取消',
-      success: (res) => {
-        if (res?.confirm) {
-          uni.navigateTo({ url: '/pages/me/member-center/index?planId=yearly' })
-        }
-      }
-    })
-    return
-  }
   if (!selectedPaymentChannel.value) {
     showToast('暂无可用支付方式')
     return
@@ -314,15 +356,19 @@ const purchase = async () => {
   submitting.value = true
   uni.showLoading({ title: '处理中...' })
   try {
+    await refreshWechatSessionForPayment()
     const result = await purchaseCircleOwner({
       pay_channel: selectedPaymentChannel.value
     })
     if (String(result?.action || '') === 'virtualpay_required') {
       await invokeWxpayAndConfirm(result)
     }
-    await syncUserCache()
+    const profile = await syncUserCache()
     await loadOverview()
     uni.showToast({ title: '圈主身份已开通', icon: 'success' })
+    setTimeout(() => {
+      redirectToRealNameIfNeeded(profile)
+    }, 500)
   } catch (err) {
     const message = String(err?.errMsg || err?.message || '')
     if (message.toLowerCase().includes('cancel')) {
@@ -331,9 +377,12 @@ const purchase = async () => {
         try {
           const status = await getMemberOrderStatus(orderNo)
           if (Boolean(status?.paid)) {
-            await syncUserCache()
+            const profile = await syncUserCache()
             await loadOverview()
             uni.showToast({ title: '圈主身份已开通', icon: 'success' })
+            setTimeout(() => {
+              redirectToRealNameIfNeeded(profile)
+            }, 500)
             return
           }
         } catch {
@@ -342,7 +391,7 @@ const purchase = async () => {
       }
       showToast('已取消支付')
     } else {
-      showToast(err?.message || '开通失败，请稍后重试')
+      showToast(getVirtualPaymentErrorMessage(err, '开通失败，请稍后重试'))
     }
   } finally {
     submitting.value = false

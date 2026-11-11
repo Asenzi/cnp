@@ -1,0 +1,62 @@
+<view class="login-container">
+  <!-- 背景装饰 -->
+  <view class="background-layer">
+    <view class="gradient-overlay"></view>
+    <view class="network-decoration">
+      <view class="node node-1"></view>
+      <view class="node node-2"></view>
+      <view class="node node-3"></view>
+      <view class="connection connection-1"></view>
+      <view class="connection connection-2"></view>
+    </view>
+  </view>
+
+  <!-- 内容区 -->
+  <view class="content-area" style="padding-top:{{statusBarHeight}}px">
+    <!-- 品牌区域 -->
+    <view class="brand-section">
+      <text class="auth-title"></text>
+    </view>
+
+    <!-- 登录区域 -->
+    <view class="login-section">
+      <view class="login-card">
+        <view class="card-glow"></view>
+
+        <button
+          class="wechat-login-btn {{isLoading ? 'btn-loading' : ''}}"
+          disabled="{{isLoading}}"
+          open-type="getPhoneNumber"
+          hover-class="btn-hover"
+          bindgetphonenumber="handleWechatLogin"
+        >
+          <view class="btn-glow"></view>
+          <view class="btn-content">
+            <text class="btn-text">{{isLoading ? '登录中...' : '手机号快捷登录'}}</text>
+          </view>
+          <view class="btn-shine"></view>
+        </button>
+
+        <button class="skip-login-btn" disabled="{{isLoading}}" hover-class="skip-login-hover" bindtap="handleSkipLogin">
+          <text class="skip-login-text">暂不登录，返回首页</text>
+        </button>
+
+        <view class="agreement-section">
+          <view class="checkbox-wrapper" bindtap="toggleAgreement">
+            <view class="checkbox {{agreed ? 'checkbox-checked' : ''}}">
+              <view wx:if="{{agreed}}" class="checkbox-mark"></view>
+            </view>
+            <text class="agreement-text">登录即表示同意<text class="agreement-link" data-type="user" catchtap="openAgreement">《用户协议》</text>和<text class="agreement-link" data-type="privacy" catchtap="openAgreement">《隐私政策》</text></text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部装饰 -->
+    <view class="footer-decoration">
+      <view class="footer-line"></view>
+      <text class="footer-text">专业 · 信任 · 价值</text>
+      <view class="footer-line"></view>
+    </view>
+  </view>
+</view>

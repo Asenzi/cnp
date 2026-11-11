@@ -55,21 +55,10 @@
         </view>
 
         <template v-else>
-          <!-- 活动卡片 -->
+          <!-- 供需和活动使用资源列表专属卡片 -->
           <template v-for="(post, index) in feedCards" :key="post.id || post.postCode">
-            <VenueEventCard
-              v-if="post.type === 'venue'"
+            <ResourceFeedCard
               :item="post"
-              :show-interest="true"
-              :style="{ animationDelay: `${index * 50}ms` }"
-              class="feed-card-enter"
-              @detail="onTapDetail"
-              @interest="onToggleInterest"
-            />
-            <ProfilePostCard
-              v-else
-              :item="post"
-              :show-interest="true"
               :style="{ animationDelay: `${index * 50}ms` }"
               class="feed-card-enter"
               @detail="onTapDetail"
@@ -77,11 +66,7 @@
             />
           </template>
 
-          <view v-if="showEmpty" class="empty-wrap">
-            <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-            <text class="empty-title">暂无匹配内容</text>
-            <text class="empty-desc">换个关键词或筛选条件试试</text>
-          </view>
+          <AppEmptyState v-if="showEmpty"><template #title>暂无匹配内容</template><template #description>换个关键词或筛选条件试试</template></AppEmptyState>
 
           <template v-if="loadingMore">
             <view v-for="i in 2" :key="`paging-skeleton-${i}`" class="skeleton-card paging-skeleton-card">
@@ -109,7 +94,6 @@
       </view>
     </scroll-view>
 
-    <ResourcePublishFab @publish="onTapPublish" />
 
     <NetworkFilterPanel
       :visible="filterVisible"
@@ -123,6 +107,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import {
@@ -133,10 +119,8 @@ import {
   toggleResourceCollection
 } from '../../../api/post'
 import TopSearchFilterHeader from '../components/TopSearchFilterHeader.vue'
-import ProfilePostCard from '../../me/card/components/ProfilePostCard.vue'
+import ResourceFeedCard from './components/ResourceFeedCard.vue'
 import NetworkFilterPanel from '../discover/components/NetworkFilterPanel.vue'
-// import VenueEventCard from './components/VenueEventCard.vue' // 第二版上线
-import ResourcePublishFab from './components/ResourcePublishFab.vue'
 import { mapProfilePostItem } from '../../me/card/modules/profile-home-view-model'
 import { getLocationErrorMessage, resolveCurrentCityByGps, saveCurrentCity } from '../discover/modules/location'
 import { INDUSTRY_OPTIONS } from '../../../utils/industry-options'
@@ -155,7 +139,7 @@ const texts = {
 }
 
 const keyword = ref('')
-const activeMode = ref('cooperate')
+const activeMode = ref('all')
 const sortKey = ref('latest')
 const selectedIndustry = ref('')
 
@@ -180,7 +164,6 @@ const isPageAlive = ref(true) // 页面生命周期标记
 const loginRedirectTimer = ref(null) // 登录跳转定时器
 const currentRequestId = ref(0) // 请求ID，用于取消过期请求
 const reportedImpressionKeys = ref(new Set())
-const publishNavigating = ref(false)
 const interestSubmittingCodes = new Set()
 // 暂时隐藏城市定位筛选入口，但保留相关状态和逻辑，便于后续恢复
 const showLocationFilter = false
@@ -222,9 +205,7 @@ const normalizedKeyword = computed(() => String(keyword.value || '').trim())
 const hasActiveFilter = computed(() => Boolean(selectedIndustry.value))
 const sortLabel = computed(() => (sortKey.value === 'latest' ? '最新' : '热门'))
 
-const resourceLeftTabs = computed(() => [
-  { key: 'cooperate', label: '需求' }
-])
+const resourceLeftTabs = computed(() => [])
 
 const resourceRightControls = computed(() => [
   ...(showLocationFilter ? [{ key: 'locate', label: locating.value ? texts.locating : currentCity.value, showArrow: false }] : []),
@@ -429,7 +410,7 @@ const fetchFeed = async (reset = false) => {
 
   try {
     const params = {
-      mode: activeMode.value,
+      mode: activeMode.value === 'all' ? '' : activeMode.value,
       sort: sortKey.value,
       keyword: normalizedKeyword.value,
       industry_label: selectedIndustry.value,
@@ -474,7 +455,7 @@ const fetchFeed = async (reset = false) => {
     hasMore.value = Boolean(data?.has_more) && Boolean(nextCursor.value)
     loaded.value = true
     loadError.value = ''
-    reportFeedImpressions(incoming, requestId.value, params.mode)
+    reportFeedImpressions(incoming, requestId.value, activeMode.value)
 
     if (reset && incoming.length) {
       const currentFirstPageIds = incoming
@@ -514,7 +495,7 @@ const fetchFeed = async (reset = false) => {
 
 const onChangeFilter = (key) => {
   const nextMode = String(key || '').trim()
-  activeMode.value = ['resource', 'cooperate'].includes(nextMode) ? nextMode : 'cooperate'
+  activeMode.value = ['resource', 'cooperate', 'venue'].includes(nextMode) ? nextMode : 'all'
   fetchFeed(true)
 }
 
@@ -583,32 +564,6 @@ const onTapDetail = (post) => {
 
   reportFeedFeedback(postCode, 'click_detail', { source: 'resource_feed' })
   uni.navigateTo({ url })
-}
-
-const onTapPublish = () => {
-  if (publishNavigating.value) {
-    return
-  }
-
-  if (!ensureLoggedIn()) {
-    return
-  }
-
-  publishNavigating.value = true
-  uni.navigateTo({
-    url: '/pages/resources/publish/index',
-    events: {
-      created: () => {
-        fetchFilterOptions()
-        fetchFeed(true)
-      }
-    },
-    complete: () => {
-      setTimeout(() => {
-        publishNavigating.value = false
-      }, 800)
-    }
-  })
 }
 
 const onToggleInterest = async (post) => {
@@ -799,10 +754,10 @@ onUnmounted(() => {
 }
 
 .feed-wrap {
-  padding: 24rpx 32rpx calc(120rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 7rpx calc(120rpx + env(safe-area-inset-bottom)) 14rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 12rpx;
 }
 
 /* 卡片进入动画 */

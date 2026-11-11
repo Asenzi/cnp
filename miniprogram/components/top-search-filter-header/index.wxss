@@ -1,0 +1,150 @@
+.header-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #ffffff;
+  border-bottom: 1rpx solid #f1f5f9;
+}
+
+.search-wrap {
+  padding: 0 32rpx;
+}
+
+.search-bar {
+  height: 88rpx;
+  border-radius: 16rpx;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  width: 32rpx;
+  height: 32rpx;
+  margin-left: 24rpx;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  height: 88rpx;
+  border: 0;
+  background: transparent;
+  padding: 0 20rpx 0 10rpx;
+  color: #0f172a;
+  font-size: 26rpx;
+}
+
+.search-placeholder {
+  color: #94a3b8;
+}
+
+.switch-wrap {
+  height: 84rpx;
+  padding: 0 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.switch-left {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  flex-shrink: 0;
+}
+
+.tab-item {
+  height: 84rpx;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tab-text {
+  color: #4b5563;
+  font-size: 26rpx;
+  line-height: 30rpx;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tab-text-active {
+  color: #111827;
+  font-weight: 700;
+}
+
+.switch-right {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-shrink: 0;
+}
+
+.ctrl-btn {
+  height: 52rpx;
+  min-width: 96rpx;
+  padding: 0 16rpx;
+  border: 0;
+  border-radius: 10rpx;
+  background: #f3f4f6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  position: relative;
+  line-height: 1.2;
+  box-sizing: border-box;
+  margin: 0;
+  font-size: inherit;
+}
+
+.ctrl-btn::after {
+  border: 0;
+}
+
+.ctrl-btn-active {
+  opacity: 0.82;
+}
+
+.ctrl-btn-active-filter {
+  background: rgba(26, 87, 219, 0.12);
+}
+
+.ctrl-text {
+  color: #374151;
+  font-size: 22rpx;
+  line-height: 26rpx;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ctrl-text-active {
+  color: #1a57db;
+}
+
+.arrow {
+  width: 12rpx;
+  height: 12rpx;
+  border-right: 3rpx solid #b6bcc8;
+  border-bottom: 3rpx solid #b6bcc8;
+  border-radius: 1rpx;
+  transform: rotate(45deg) translateY(-2rpx);
+  margin-left: 2rpx;
+  flex-shrink: 0;
+}
+
+.arrow-active {
+  border-right-color: #1a57db;
+  border-bottom-color: #1a57db;
+}
+
+.dot {
+  position: absolute;
+  top: 10rpx;
+  right: 8rpx;
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: #1a57db;
+}

@@ -12,6 +12,14 @@ function buildQuery(params = {}) {
   return query.join('&')
 }
 
+function getClientPlatform() {
+  try {
+    return String(uni.getSystemInfoSync()?.platform || '').trim().toLowerCase() || 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 export function getMemberCenterOverview() {
   return request({
     url: '/api/v1/payment/member/center',
@@ -31,20 +39,46 @@ export function purchaseCircleOwner(payload = {}) {
     url: '/api/v1/payment/circle-owner/purchase',
     method: 'POST',
     data: {
-      pay_channel: String(payload.pay_channel || '').trim() || undefined
+      pay_channel: String(payload.pay_channel || '').trim() || undefined,
+      client_platform: String(payload.client_platform || '').trim() || getClientPlatform()
+    }
+  })
+}
+
+export function getPartnerOverview(partnerType) {
+  const type = encodeURIComponent(String(partnerType || '').trim())
+  return request({
+    url: `/api/v1/payment/partner/${type}/overview`,
+    method: 'GET'
+  })
+}
+
+export function purchasePartner(partnerType, payload = {}) {
+  const type = encodeURIComponent(String(partnerType || '').trim())
+  return request({
+    url: `/api/v1/payment/partner/${type}/purchase`,
+    method: 'POST',
+    data: {
+      pay_channel: String(payload.pay_channel || '').trim() || undefined,
+      client_platform: String(payload.client_platform || '').trim() || getClientPlatform()
     }
   })
 }
 
 export function subscribeMemberPlan(payload = {}) {
+  const data = {
+    plan_id: String(payload.plan_id || '').trim(),
+    pay_channel: String(payload.pay_channel || '').trim() || undefined,
+    use_points_discount: typeof payload.use_points_discount === 'boolean' ? payload.use_points_discount : undefined,
+    client_platform: String(payload.client_platform || '').trim() || getClientPlatform()
+  }
+  if (typeof payload.referral_invite_code === 'string') {
+    data.referral_invite_code = payload.referral_invite_code.trim().toUpperCase()
+  }
   return request({
     url: '/api/v1/payment/member/subscribe',
     method: 'POST',
-    data: {
-      plan_id: String(payload.plan_id || '').trim(),
-      pay_channel: String(payload.pay_channel || '').trim() || undefined,
-      use_points_discount: typeof payload.use_points_discount === 'boolean' ? payload.use_points_discount : undefined
-    }
+    data
   })
 }
 
@@ -55,6 +89,20 @@ export function confirmMemberOrderPayment(orderNo, payload = {}) {
     method: 'POST',
     data: {
       transaction_id: String(payload.transaction_id || '').trim() || undefined,
+      ext: payload.ext && typeof payload.ext === 'object' ? payload.ext : undefined
+    }
+  })
+}
+
+export function reportMemberPaymentClientError(payload = {}) {
+  return request({
+    url: '/api/v1/payment/member/payment-client-error',
+    method: 'POST',
+    data: {
+      order_no: String(payload.order_no || '').trim(),
+      scene: String(payload.scene || '').trim() || undefined,
+      err_msg: String(payload.err_msg || payload.errMsg || '').trim() || undefined,
+      err_code: payload.err_code ?? payload.errCode,
       ext: payload.ext && typeof payload.ext === 'object' ? payload.ext : undefined
     }
   })

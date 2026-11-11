@@ -5,9 +5,9 @@
         id="editor"
         class="rich-editor"
         :placeholder="editorPlaceholder"
-        :show-img-size="true"
-        :show-img-toolbar="true"
-        :show-img-resize="true"
+        :show-img-size="false"
+        :show-img-toolbar="false"
+        :show-img-resize="false"
         @ready="onEditorReady"
         @input="onEditorInput"
       />
@@ -18,10 +18,6 @@
         <text class="count-text">{{ contentLength }}/5000</text>
       </view>
       <view class="button-group">
-        <button class="image-btn" hover-class="image-btn-hover" @tap="onAddImage">
-          <text class="image-icon">📷</text>
-          <text class="image-text">添加图片</text>
-        </button>
         <button class="save-btn" hover-class="save-btn-hover" @tap="onSave">
           保存并返回
         </button>
@@ -33,7 +29,6 @@
 <script setup>
 import { ref } from 'vue'
 import { onLoad, onReady } from '@dcloudio/uni-app'
-import { uploadResourceImage } from '../../../api/post'
 
 const detailContent = ref('')
 const contentLength = ref(0)
@@ -63,60 +58,6 @@ const onEditorInput = (e) => {
     const text = e.detail.html.replace(/<[^>]+>/g, '')
     contentLength.value = text.length
   }
-}
-
-const onAddImage = () => {
-  uni.chooseImage({
-    count: 1,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: async (res) => {
-      const tempFilePath = res.tempFilePaths[0]
-
-      uni.showLoading({
-        title: '上传中...',
-        mask: true
-      })
-
-      try {
-        const data = await uploadResourceImage(tempFilePath, 'detail-image.jpg')
-
-        if (data.url && editorCtx) {
-          // 插入图片到编辑器
-          editorCtx.insertImage({
-            src: data.url,
-            width: '100%',
-            success: () => {
-              uni.hideLoading()
-              uni.showToast({
-                title: '图片添加成功',
-                icon: 'success'
-              })
-            },
-            fail: () => {
-              uni.hideLoading()
-              uni.showToast({
-                title: '图片插入失败',
-                icon: 'none'
-              })
-            }
-          })
-        } else {
-          uni.hideLoading()
-          uni.showToast({
-            title: '图片上传失败',
-            icon: 'none'
-          })
-        }
-      } catch (err) {
-        uni.hideLoading()
-        uni.showToast({
-          title: '图片上传失败',
-          icon: 'none'
-        })
-      }
-    }
-  })
 }
 
 const onSave = () => {
@@ -243,35 +184,6 @@ onReady(() => {
 .button-group {
   display: flex;
   gap: 16rpx;
-}
-
-.image-btn {
-  flex: 1;
-  height: 96rpx;
-  border-radius: 16rpx;
-  background: #f1f5f9;
-  border: 2rpx solid #e2e8f0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-}
-
-.image-btn-hover {
-  background: #e2e8f0;
-}
-
-.image-icon {
-  font-size: 32rpx;
-  line-height: 32rpx;
-}
-
-.image-text {
-  color: #64748b;
-  font-size: 28rpx;
-  line-height: 32rpx;
-  font-weight: 600;
 }
 
 .save-btn {

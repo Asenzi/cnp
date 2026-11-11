@@ -1,10 +1,10 @@
 <template>
-  <view class="empty-wrap">
-    <image class="empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-    <text class="empty-title">未找到匹配圈子</text>
-    <text class="empty-subtitle">试试其他关键词</text>
-  </view>
+  <AppEmptyState><template #title>未找到匹配圈子</template><template #description>试试其他关键词</template></AppEmptyState>
 </template>
+
+<script setup>
+import AppEmptyState from '../../../../components/AppEmptyState/AppEmptyState.vue'
+</script>
 
 <style scoped>
 .empty-wrap {

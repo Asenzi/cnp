@@ -8,7 +8,7 @@
       :value="modelValue"
       class="search-input"
       type="text"
-      placeholder="搜索已加入的圈子"
+      :placeholder="placeholder"
       placeholder-class="search-placeholder"
       @input="onInput"
     />
@@ -17,6 +17,7 @@
 
 <script setup>
 defineProps({
+  placeholder: { type: String, default: '搜索圈子' },
   modelValue: {
     type: String,
     default: ''

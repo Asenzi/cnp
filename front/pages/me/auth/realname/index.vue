@@ -42,47 +42,17 @@
             </view>
 
             <view class="field-item">
-              <text class="field-label">邮箱</text>
+              <text class="field-label">邀请码（选填）</text>
               <input
-                v-model="email"
+                v-model="inviteCode"
                 class="field-input"
-                type="text"
-                maxlength="100"
-                :disabled="hasContactInfo || loading"
-                placeholder="请输入您的邮箱地址"
+                maxlength="4"
+                :disabled="referralLocked || isPrimaryDisabled"
+                placeholder="请输入4位邀请码"
                 placeholder-class="field-placeholder"
+                @blur="inviteCode = inviteCode.trim().toUpperCase()"
               />
-              <text v-if="hasContactInfo" class="field-hint">联系方式提交后不可修改</text>
-            </view>
-
-            <view class="field-item">
-              <text class="field-label">手机号</text>
-              <input
-                v-model="phoneNumber"
-                class="field-input"
-                type="number"
-                maxlength="11"
-                :disabled="hasContactInfo || loading"
-                placeholder="请输入您的手机号"
-                placeholder-class="field-placeholder"
-              />
-              <text v-if="hasContactInfo" class="field-hint">联系方式提交后不可修改</text>
-            </view>
-          </view>
-
-          <view class="status-card">
-            <view class="status-head">
-              <text class="status-title">当前状态</text>
-              <text class="status-tag" :class="statusTagClass">{{ statusText }}</text>
-            </view>
-            <text class="status-desc">{{ statusDesc }}</text>
-            <view v-if="verificationProvider" class="meta-row">
-              <text class="meta-label">认证通道</text>
-              <text class="meta-value">{{ verificationProviderText }}</text>
-            </view>
-            <view v-if="maskedIdNumber" class="meta-row">
-              <text class="meta-label">实名证件</text>
-              <text class="meta-value">{{ maskedIdNumber }}</text>
+              <text class="field-hint">{{ referralLocked ? '邀请归属已确认，后续续费沿用' : '已自动带入邀请信息，可修改；实名认证成功后确认归属，留空则归属平台' }}</text>
             </view>
           </view>
 
@@ -160,19 +130,17 @@ const verifiedSource = ref('')
 const realName = ref('')
 const idNumber = ref('')
 const wechatId = ref('')
-const email = ref('')
-const phoneNumber = ref('')
+const inviteCode = ref('')
+const referralLocked = ref(false)
+let inviteCodeInitialized = false
 const maskedIdNumber = ref('')
 const pendingBizToken = ref('')
 const pendingRedirectUrl = ref('')
 
 const isApproved = computed(() => currentStatus.value === VERIFICATION_STATUS.APPROVED)
 const hasContactInfo = computed(() => {
-  return Boolean(
-    (wechatId.value && String(wechatId.value).trim()) ||
-    (email.value && String(email.value).trim()) ||
-    (phoneNumber.value && String(phoneNumber.value).trim())
-  ) && currentStatus.value !== VERIFICATION_STATUS.NOT_SUBMITTED
+  return Boolean(wechatId.value && String(wechatId.value).trim()) &&
+    currentStatus.value !== VERIFICATION_STATUS.NOT_SUBMITTED
 })
 const hasPendingSession = computed(() => Boolean(pendingBizToken.value) && !isApproved.value)
 const showSecondaryButton = computed(() => hasPendingSession.value && Boolean(pendingRedirectUrl.value))
@@ -287,6 +255,8 @@ const openVerificationPage = () => {
 }
 
 const validateIdentityInput = () => {
+  const invitationError = validateInviteCode()
+  if (invitationError) return invitationError
   const normalizedName = String(realName.value || '').trim()
   if (!normalizedName) {
     return '请输入真实姓名'
@@ -299,21 +269,13 @@ const validateIdentityInput = () => {
   if (!normalizedWechat) {
     return '请输入微信号'
   }
-  const normalizedEmail = String(email.value || '').trim()
-  if (!normalizedEmail) {
-    return '请输入邮箱地址'
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    return '邮箱格式不正确'
-  }
-  const normalizedPhone = String(phoneNumber.value || '').trim()
-  if (!normalizedPhone) {
-    return '请输入手机号'
-  }
-  if (!/^1[3-9]\d{9}$/.test(normalizedPhone)) {
-    return '手机号格式不正确'
-  }
   return ''
+}
+
+const validateInviteCode = () => {
+  inviteCode.value = String(inviteCode.value || '').trim().toUpperCase()
+  return inviteCode.value && !/^[1-9A-Z]{4}$/.test(inviteCode.value)
+    ? '邀请码须为4位数字1–9或字母A–Z' : ''
 }
 
 const loadRealNameDetail = async () => {
@@ -324,6 +286,11 @@ const loadRealNameDetail = async () => {
   loading.value = true
   try {
     const detail = await getRealNameVerificationDetail()
+    referralLocked.value = Boolean(detail?.referral_locked)
+    if (!inviteCodeInitialized || referralLocked.value) {
+      inviteCode.value = String(detail?.invite_code || '').trim().toUpperCase()
+      inviteCodeInitialized = true
+    }
     currentStatus.value = detail?.status || VERIFICATION_STATUS.NOT_SUBMITTED
     rejectReason.value = detail?.reject_reason || ''
     verificationProvider.value = String(detail?.verification_provider || '').trim()
@@ -334,8 +301,6 @@ const loadRealNameDetail = async () => {
       ? maskedIdNumber.value
       : String(detail?.id_number || '').trim()
     wechatId.value = String(detail?.wechat_id || '').trim()
-    email.value = String(detail?.email || '').trim()
-    phoneNumber.value = String(detail?.phone_number || '').trim()
 
     if (isApproved.value) {
       clearPendingSession()
@@ -371,8 +336,7 @@ const startVerification = async () => {
       real_name: String(realName.value || '').trim(),
       id_number: String(idNumber.value || '').trim().toUpperCase(),
       wechat_id: String(wechatId.value || '').trim(),
-      email: String(email.value || '').trim(),
-      phone_number: String(phoneNumber.value || '').trim()
+      invite_code: inviteCode.value
     })
 
     // 二要素验证是同步的，直接完成认证
@@ -397,6 +361,11 @@ const startVerification = async () => {
 }
 
 const finishVerification = async () => {
+  const invitationError = validateInviteCode()
+  if (invitationError) {
+    showToast(invitationError)
+    return
+  }
   if (!pendingBizToken.value) {
     showToast('请先发起实名认证')
     return
@@ -405,7 +374,8 @@ const finishVerification = async () => {
   finishing.value = true
   try {
     const data = await finishTencentRealNameVerification({
-      provider_biz_token: pendingBizToken.value
+      provider_biz_token: pendingBizToken.value,
+      invite_code: inviteCode.value
     })
     currentStatus.value = data?.status || VERIFICATION_STATUS.PENDING
     maskedIdNumber.value = String(data?.id_number_masked || '').trim()

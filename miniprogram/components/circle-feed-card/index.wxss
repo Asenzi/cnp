@@ -1,0 +1,139 @@
+.circle-card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-bottom: 10rpx;
+}
+
+.circle-card-active {
+  background: #f8f8f8;
+}
+
+.card-header {
+  display: flex;
+  gap: 16rpx;
+  align-items: flex-start;
+}
+
+.circle-cover {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  flex-shrink: 0;
+  background: #f1f5f9;
+}
+
+.circle-cover-placeholder {
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.12), rgba(226, 232, 240, 0.35)),
+    #f8fafc;
+}
+
+.header-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.circle-title {
+  flex: 1;
+  min-width: 0;
+  color: #0f172a;
+  font-size: 28rpx;
+  line-height: 1.3;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.city-tag {
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 20rpx;
+  line-height: 1.3;
+}
+
+.industry-tag {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 320rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  background: rgba(15, 23, 42, 0.04);
+  color: #475569;
+  font-size: 20rpx;
+  line-height: 1.3;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 4rpx;
+}
+
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4rpx;
+}
+
+.stat-value {
+  color: #0f172a;
+  font-size: 24rpx;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.stat-label {
+  color: #94a3b8;
+  font-size: 20rpx;
+  line-height: 1.3;
+}
+
+.stat-divider {
+  width: 1rpx;
+  height: 20rpx;
+  background: #e2e8f0;
+}
+
+.collected-flag {
+  flex-shrink: 0;
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  background: rgba(26, 87, 219, 0.08);
+}
+
+.collected-text {
+  color: #1a57db;
+  font-size: 20rpx;
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.circle-desc {
+  color: #64748b;
+  font-size: 24rpx;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}

@@ -1,0 +1,82 @@
+<view class="card-page">
+  <view wx:if="{{loading}}" class="state-wrap">
+    <text class="state-text">加载中...</text>
+  </view>
+
+  <view wx:elif="{{loadError}}" class="state-wrap">
+    <text class="state-text">{{loadError}}</text>
+    <button class="retry-btn" hover-class="retry-btn-active" bindtap="onRetry">重新加载</button>
+  </view>
+
+  <block wx:elif="{{profile}}">
+    <!-- 英雄区 -->
+    <view class="hero-wrap">
+      <view class="hero-row">
+        <image class="avatar" src="{{profile.avatarUrl}}" mode="aspectFill" />
+
+        <view class="meta-wrap">
+          <view class="name-row">
+            <text class="name">{{profile.name}}</text>
+            <view wx:if="{{profile.badges.length}}" class="badge-row">
+              <image
+                wx:for="{{profile.badges}}"
+                wx:key="key"
+                class="identity-badge"
+                mode="aspectFit"
+                src="{{item.icon}}"
+              />
+            </view>
+          </view>
+          <text class="meta-line">{{profile.metaLine}}</text>
+          <text wx:if="{{profile.locationLine}}" class="location-line">{{profile.locationLine}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 统计 -->
+    <view class="stats-wrap">
+      <view wx:for="{{profile.stats}}" wx:key="key" class="stat-card">
+        <text class="stat-value">{{item.value}}</text>
+        <text class="stat-label">{{item.label}}</text>
+      </view>
+    </view>
+
+    <!-- 个人介绍 -->
+    <view class="bio-wrap">
+      <view class="bio-card">
+        <text class="bio-text">{{profile.bio}}</text>
+      </view>
+    </view>
+
+    <!-- 圈子 -->
+    <view wx:if="{{profile.circles.length}}" class="section-wrap">
+      <text class="section-title">加入的圈子</text>
+      <view class="circle-list">
+        <view wx:for="{{profile.circles}}" wx:key="id" class="circle-card">
+          <view class="circle-main">
+            <text class="circle-name">{{item.name}}</text>
+            <text class="circle-role">{{item.role}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部操作 -->
+    <view class="actions-wrap">
+      <button class="action-btn secondary-btn" hover-class="btn-active" bindtap="onSendMessage">
+        <text class="secondary-text">发送消息</text>
+      </button>
+      <button
+        wx:if="{{!isSelf}}"
+        class="action-btn {{profile.followed ? 'secondary-btn' : 'primary-btn'}}"
+        disabled="{{followPending}}"
+        hover-class="btn-active"
+        bindtap="onToggleFollow"
+      >
+        <text class="{{profile.followed ? 'secondary-text' : 'primary-text'}}">
+          {{profile.followed ? '已关注' : '关注'}}
+        </text>
+      </button>
+    </view>
+  </block>
+</view>

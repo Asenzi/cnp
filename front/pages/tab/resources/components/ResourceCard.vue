@@ -14,10 +14,6 @@
     <text class="title">{{ post.title || '\u672a\u547d\u540d\u8d44\u6e90' }}</text>
     <text class="desc">{{ post.description || '' }}</text>
 
-    <view v-if="imageList.length" class="image-wrap" :class="imageList.length > 1 ? 'image-grid' : 'image-single'">
-      <image v-for="(image, index) in imageList" :key="`${post.post_code || post.id}-${index}`" class="cover-image"
-        mode="aspectFill" :src="image" @tap.stop="onPreviewImage(index)" />
-    </view>
   </view>
 </template>
 
@@ -38,11 +34,6 @@ const authorAvatar = computed(() => String(author.value.avatar_url || 'https://c
 const authorName = computed(() => String(author.value.nickname || '\u672a\u547d\u540d\u7528\u6237').trim() || '\u672a\u547d\u540d\u7528\u6237')
 const authorRole = computed(() => String(author.value.role || '\u5546\u52a1\u4eba\u58eb').trim() || '\u5546\u52a1\u4eba\u58eb')
 const industryLabel = computed(() => String(props.post?.industry_label || '').trim())
-const imageList = computed(() => {
-  return Array.isArray(props.post?.images)
-    ? props.post.images.map((item) => String(item || '').trim()).filter(Boolean)
-    : []
-})
 
 const industryTagClass = computed(() => {
   const industry = industryLabel.value
@@ -51,16 +42,6 @@ const industryTagClass = computed(() => {
   if (industry.includes('\u5236\u9020') || industry.includes('\u5de5\u4e1a')) return 'tag-green'
   return 'tag-gray'
 })
-
-const onPreviewImage = (index) => {
-  if (!imageList.value.length) {
-    return
-  }
-  uni.previewImage({
-    urls: imageList.value,
-    current: imageList.value[Math.max(Number(index || 0), 0)] || imageList.value[0]
-  })
-}
 </script>
 
 <style scoped>
@@ -163,24 +144,6 @@ const onPreviewImage = (index) => {
   color: #475569;
   font-size: 28rpx;
   line-height: 40rpx;
-}
-
-.image-wrap {
-  margin-top: 16rpx;
-}
-
-.image-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8rpx;
-}
-
-.cover-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  background: #e2e8f0;
-  aspect-ratio: 1 / 1;
 }
 
 @media (prefers-color-scheme: dark) {

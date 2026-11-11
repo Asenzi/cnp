@@ -96,7 +96,10 @@ def start_tencent_real_name_verification(
     wechat_id: str | None = None,
     email: str | None = None,
     phone_number: str | None = None,
+    invite_code: str | None = None,
 ) -> TencentRealNameStartData:
+    from app.verification.referral import validate_invite_code
+    validate_invite_code(db, user, invite_code)
     normalized_name = _normalize_text(real_name, 32)
     normalized_id_number = _normalize_id_number(id_number)
     if not normalized_name:
@@ -137,6 +140,7 @@ def start_tencent_real_name_verification(
         "real_name": normalized_name,
         "id_number_masked": id_number_masked,
         "verification_mode": "tencent_detect_auth",
+        "invite_code": invite_code,
     }
 
     try:
@@ -156,7 +160,7 @@ def start_tencent_real_name_verification(
             id_number_masked=id_number_masked,
             id_number_hash=id_number_hash,
             redirect_url=detect_result.redirect_url,
-            request_payload=detect_result.raw_response,
+            request_payload={**detect_result.raw_response, "referral_invite_code": invite_code},
         )
         sync_user_verified_flag(db=db, user=user)
     except IntegrityError as exc:
@@ -182,7 +186,10 @@ def finish_tencent_real_name_verification(
     *,
     user: User,
     provider_biz_token: str,
+    invite_code: str | None = None,
 ) -> TencentRealNameFinishData:
+    from app.verification.referral import validate_invite_code, confirm_membership_referral
+    validate_invite_code(db, user, invite_code)
     normalized_token = _normalize_text(provider_biz_token, 128)
     if not normalized_token:
         raise BusinessException(message="实名认证会话不存在", code=4363, status_code=404)
@@ -193,6 +200,10 @@ def finish_tencent_real_name_verification(
     )
     if session_record is None or int(session_record.user_pk) != int(user.id):
         raise BusinessException(message="实名认证会话不存在", code=4363, status_code=404)
+
+    if invite_code is None:
+        invite_code = json.loads(session_record.request_payload_json or "{}").get("referral_invite_code")
+    validate_invite_code(db, user, invite_code)
 
     detect_info = get_detect_info_enhanced(provider_biz_token=normalized_token)
     result_status = "verified" if detect_info.is_success else "failed"
@@ -236,6 +247,9 @@ def finish_tencent_real_name_verification(
     _assert_real_name_id_number_available(db=db, user_pk=int(user.id), id_number_hash=id_number_hash)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    # Persist the final choice before verification becomes visible to payments.
+    from app.verification.referral import prepare_membership_referral
+    prepare_membership_referral(db, user, invite_code)
     try:
         profile = upsert_user_real_name_profile(
             db=db,
@@ -272,6 +286,7 @@ def finish_tencent_real_name_verification(
         logger.exception(f"Failed to complete Tencent real-name verification. user_pk={user.id}, error={exc}")
         raise BusinessException(message="实名认证结果落库失败，请稍后重试", code=4365, status_code=500) from exc
 
+    confirm_membership_referral(db, user, invite_code)
     return TencentRealNameFinishData(
         session_id=int(session_record.id),
         provider=PROVIDER_NAME,

@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "圈子详情",
+  "backgroundColor": "#f6f6f8",
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "circle-member-card": "/components/circle-member-card/index",
+    "resource-feed-card": "/components/resource-feed-card/index"
+  }
+}

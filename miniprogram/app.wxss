@@ -1,0 +1,82 @@
+page {
+  --color-primary: #1a57db;
+  --color-bg: #f6f6f8;
+  --color-surface: #ffffff;
+  --color-text: #1f2329;
+  --color-text-secondary: #8a8f99;
+  --color-border: #ececf0;
+
+  background-color: #f6f6f8;
+  color: #1f2329;
+  font-size: 28rpx;
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+}
+
+page::-webkit-scrollbar,
+scroll-view::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+view,
+text,
+scroll-view {
+  box-sizing: border-box;
+}
+
+/* button 重置：去掉微信默认样式（display:block / margin:auto / padding 14px /
+   font-size 18px / line-height 2.55 / ::after 边框），与 uni-app 注入的基础样式对齐 */
+button {
+  display: block;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-align: center;
+  overflow: visible;
+}
+
+button::after {
+  border: none;
+}
+
+.app-page {
+  min-height: 100vh;
+  padding: 32rpx;
+}
+
+.app-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.app-placeholder__title {
+  font-size: 36rpx;
+  font-weight: 500;
+  color: #1f2329;
+}
+
+.app-placeholder__desc {
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: #8a8f99;
+}
+
+.app-placeholder__tag {
+  margin-top: 40rpx;
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  background-color: #ececf0;
+  font-size: 24rpx;
+  color: #8a8f99;
+}

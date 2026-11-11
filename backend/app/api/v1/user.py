@@ -6,7 +6,7 @@ from pathlib import Path
 from secrets import token_hex
 import time
 from urllib.error import URLError
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urlparse
 from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
@@ -21,6 +21,7 @@ from app.core.exceptions import BusinessException
 from app.core.logger import logger
 from app.core.response import success_response
 from app.core.storage import upload_public_asset
+from app.core.wechat_access_token import get_wechat_access_token
 from app.crud import (
     add_user_block,
     count_user_blocks,
@@ -74,7 +75,6 @@ CONTENT_TYPE_EXTENSION_MAP = {
 VALID_FRIEND_REQUEST_SCOPES = {"all", "friends_of_friends", "nobody"}
 VALID_MESSAGE_SCOPES = {"friends_or_contacts", "all", "mutual_follow"}
 DISPLAY_PHONE_REGEX = re.compile(r"^1\d{10}$")
-_WECHAT_ACCESS_TOKEN_CACHE: dict[str, str | float] = {"token": "", "expires_at": 0.0}
 
 
 def _normalize_optional_text(value: str | None, max_len: int) -> str | None:
@@ -132,6 +132,16 @@ def _to_moderation_media_url(media_url: str) -> str:
     scheme = str(settings.COS_SCHEME or "https").strip() or "https"
     path = parsed.path.lstrip("/")
     return f"{scheme}://{settings.COS_BUCKET}.cos.{settings.COS_REGION}.myqcloud.com/{path}"
+
+
+def _is_local_debug_media_url(media_url: str) -> bool:
+    if not (settings.DEBUG or settings.APP_ENV.strip().lower() in {"dev", "local", "test", "testing"}):
+        return False
+    normalized = str(media_url or "").strip()
+    if normalized.startswith("/static/uploads/"):
+        return True
+    parsed = urlparse(normalized)
+    return parsed.hostname in {"127.0.0.1", "localhost"}
 
 
 def _utc_now() -> datetime:
@@ -243,38 +253,18 @@ def _request_json(url: str, *, data: bytes | None = None, headers: dict[str, str
 
 
 def _get_wechat_access_token() -> str:
-    app_id = str(settings.WECHAT_MINI_APP_ID or "").strip()
-    app_secret = str(settings.WECHAT_MINI_APP_SECRET or "").strip()
-    if not app_id or not app_secret:
-        return ""
-
-    now = time.time()
-    cached_token = str(_WECHAT_ACCESS_TOKEN_CACHE.get("token") or "")
-    cached_expires_at = float(_WECHAT_ACCESS_TOKEN_CACHE.get("expires_at") or 0)
-    if cached_token and cached_expires_at > now + 60:
-        return cached_token
-
-    query = urlencode(
-        {
-            "grant_type": "client_credential",
-            "appid": app_id,
-            "secret": app_secret,
-        }
-    )
-    payload = _request_json(f"https://api.weixin.qq.com/cgi-bin/token?{query}")
-    token = str(payload.get("access_token") or "").strip()
-    if not token:
-        logger.warning(f"Failed to get WeChat access_token: {payload}")
-        return ""
-
-    expires_in = int(payload.get("expires_in") or 7200)
-    _WECHAT_ACCESS_TOKEN_CACHE["token"] = token
-    _WECHAT_ACCESS_TOKEN_CACHE["expires_at"] = now + max(expires_in - 120, 300)
-    return token
+    """Compatibility wrapper around the shared token manager."""
+    return get_wechat_access_token()
 
 
 def _should_check_wechat_content() -> bool:
     return bool(settings.WECHAT_CONTENT_SECURITY_ENABLED)
+
+
+def _should_skip_wechat_content_for_local_user(user: User) -> bool:
+    if not (settings.DEBUG or settings.APP_ENV.strip().lower() in {"dev", "local", "test", "testing"}):
+        return False
+    return not str(getattr(user, "wechat_openid", "") or "").strip()
 
 
 def _require_wechat_content_token() -> str:
@@ -288,6 +278,8 @@ def _require_wechat_content_token() -> str:
 
 def _assert_wechat_text_safe(*, user: User, fields: dict[str, str | None]) -> None:
     if not _should_check_wechat_content():
+        return
+    if _should_skip_wechat_content_for_local_user(user):
         return
     content = "\n".join(str(value or "").strip() for value in fields.values() if str(value or "").strip())
     if not content:
@@ -322,6 +314,8 @@ def _assert_wechat_text_safe(*, user: User, fields: dict[str, str | None]) -> No
 
 def _submit_wechat_image_check(*, user: User, media_url: str) -> None:
     if not _should_check_wechat_content():
+        return
+    if _should_skip_wechat_content_for_local_user(user):
         return
     token = _require_wechat_content_token()
     if not token:
@@ -427,6 +421,8 @@ def _assert_profile_text_safe(*, user: User, fields: dict[str, str | None]) -> N
 
 def _assert_profile_image_safe(*, user: User, media_url: str) -> None:
     moderation_url = _to_moderation_media_url(media_url)
+    if _is_local_debug_media_url(moderation_url):
+        return
     _submit_wechat_image_check(user=user, media_url=moderation_url)
     _assert_ims_safe(content_type="image", value=moderation_url, user=user)
 
@@ -465,7 +461,11 @@ def _approved_profile_fields(updates: dict[str, str | None]) -> dict[str, str | 
 
 
 def _download_profile_miniapp_code(*, target_user_id: str, output_path: Path) -> bool:
-    token = _get_wechat_access_token()
+    try:
+        token = _get_wechat_access_token()
+    except (OSError, URLError) as exc:
+        logger.warning(f"Failed to get WeChat access_token for miniapp code. target={target_user_id}, error={exc}")
+        return False
     if not token:
         return False
 
@@ -780,10 +780,13 @@ def _serialize_user(user, request: Request, db: Session) -> dict:
         "wechat_bound_at": user.wechat_bound_at.isoformat() if user.wechat_bound_at else None,
         "nickname": _public_nickname(user),
         "avatar_url": _to_public_avatar_url(_public_avatar_value(user), request),
+        "raw_nickname": str(user.nickname or "").strip(),
+        "raw_avatar_url": str(user.avatar_url or "").strip(),
         "profile_review": _profile_review_status_payload(user),
         "miniapp_code_url": _get_profile_miniapp_code_url(target_user_id=user.user_id, request=request),
         "is_verified": bool(user.is_verified),
         "is_circle_owner": bool(user.is_circle_owner),
+        "partner_type": str(getattr(user, "partner_type", "") or ""),
         "circle_owner_application_status": (
             str(circle_owner_application.status) if circle_owner_application is not None else ""
         ),
@@ -1157,6 +1160,9 @@ def update_current_user_profile(
 
     if payload.city_name is not None:
         updates["city_name"] = _normalize_optional_text(payload.city_name, 32)
+
+    if payload.district_name is not None:
+        updates["district_name"] = _normalize_optional_text(payload.district_name, 32)
 
     if payload.latitude is not None:
         updates["latitude"] = Decimal(str(payload.latitude)).quantize(Decimal("0.0000001"))

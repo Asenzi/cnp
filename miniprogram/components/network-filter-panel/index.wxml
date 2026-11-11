@@ -1,0 +1,28 @@
+<view wx:if="{{visible}}" class="filter-mask" bindtap="onClose">
+  <view class="filter-panel" catchtap="onPanelTap">
+    <view class="panel-head">
+      <text class="panel-title">选择行业</text>
+      <text class="panel-subtitle">用于缩小当前推荐范围</text>
+    </view>
+
+    <view class="section">
+      <view class="section-label">行业方向</view>
+      <view class="option-grid">
+        <view
+          wx:for="{{industryOptions}}"
+          wx:key="*this"
+          class="option-chip {{draftIndustry === item ? 'option-chip-active' : ''}}"
+          data-industry="{{item}}"
+          bindtap="setIndustry"
+        >
+          <text class="option-chip-text {{draftIndustry === item ? 'option-chip-text-active' : ''}}">{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="actions">
+      <button class="reset-btn" hover-class="reset-btn-active" bindtap="onReset">不限行业</button>
+      <button class="apply-btn" hover-class="apply-btn-active" bindtap="onApply">应用行业</button>
+    </view>
+  </view>
+</view>

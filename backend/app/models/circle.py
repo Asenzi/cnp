@@ -31,6 +31,7 @@ class Circle(Base):
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     cover_url: Mapped[str] = mapped_column(String(255), nullable=False)
     avatar_url: Mapped[str] = mapped_column(String(255), nullable=False)
+    share_image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     join_type: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
@@ -68,6 +69,7 @@ class Circle(Base):
         default=0,
         server_default=text("0"),
     )
+    view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     last_active_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,

@@ -43,10 +43,22 @@ PAYMENT_PAID = "paid"
 PAYMENT_REFUNDED = "refunded"
 REFUND_NONE = "none"
 REFUND_SUCCESS = "success"
-CIRCLE_JOIN_PRICE_TIERS = tuple(Decimal(str(value)) for value in (98, 198, 398, 598, 980, 1980, 3980, 5980, 9980))
+CIRCLE_JOIN_PRICE_TIERS = tuple(
+    Decimal(value).quantize(Decimal("0.01"))
+    for value in ("0", "9.8", "98", "198", "398", "980", "1980", "3980", "5980", "9800")
+)
+
+
+def _price_product_suffix(price: Decimal) -> str:
+    normalized = price.quantize(Decimal("0.01"))
+    text = format(normalized, "f").rstrip("0").rstrip(".")
+    return text.replace(".", "_")
+
+
 DEFAULT_CIRCLE_JOIN_PRODUCT_IDS = {
-    price: f"CIRCLE_JOIN_{int(price)}"
+    price: f"CIRCLE_JOIN_{_price_product_suffix(price)}"
     for price in CIRCLE_JOIN_PRICE_TIERS
+    if price > 0
 }
 
 
@@ -72,7 +84,12 @@ def normalize_circle_join_price_tier(value: object) -> Decimal:
             message="付费入圈价格请选择固定档位",
             code=4354,
             status_code=400,
-            data={"allowed_prices": [int(item) for item in CIRCLE_JOIN_PRICE_TIERS]},
+            data={
+                "allowed_prices": [
+                    int(item) if item == item.to_integral_value() else float(item)
+                    for item in CIRCLE_JOIN_PRICE_TIERS
+                ]
+            },
         )
     return price
 
@@ -86,7 +103,10 @@ def _circle_join_product_id_for_amount(amount: Decimal) -> str:
             key, _, value = item.partition(":")
             product_id = value.strip()
             if key.strip() and product_id:
-                mapping[normalize_circle_join_price_tier(key.strip())] = product_id
+                try:
+                    mapping[normalize_circle_join_price_tier(key.strip())] = product_id
+                except BusinessException:
+                    continue
     product_id = str(mapping.get(price) or "").strip()
     if not product_id:
         raise BusinessException(message="付费入圈虚拟支付商品未配置", code=4387, status_code=500)
@@ -116,12 +136,18 @@ def _serialize(join_request: CircleJoinRequest) -> dict:
 
 
 def _notify_owner(db: Session, *, circle: Circle, join_request: CircleJoinRequest, nickname: str) -> None:
+    amount = Decimal(str(join_request.amount or 0)).quantize(Decimal("0.01"))
+    content = (
+        f"{nickname or '一位用户'}已支付入圈费用，申请加入“{circle.name}”"
+        if amount > 0
+        else f"{nickname or '一位用户'}申请加入“{circle.name}”"
+    )
     db.add(
         Notification(
             user_pk=int(circle.owner_user_pk),
             type="circle",
             title="新的入圈申请",
-            content=f"{nickname or '一位用户'}已支付入圈费用，申请加入“{circle.name}”",
+            content=content,
             link_type="circle_join_request",
             link_id=str(join_request.id or ""),
             is_read=False,
@@ -209,18 +235,15 @@ def create_circle_join_payment(
         if join_request.payment_status == PAYMENT_PAID:
             return {"action": "already_paid", **_serialize(join_request)}
 
-    amount = normalize_circle_join_price_tier(circle.join_price or 0)
+    circle_join_type = str(circle.join_type or "free").strip().lower()
+    if circle_join_type == "paid":
+        amount = normalize_circle_join_price_tier(circle.join_price or 0)
+        if amount <= 0:
+            raise BusinessException(message="付费入圈价格配置异常", code=4388, status_code=500)
+    else:
+        amount = Decimal("0.00")
     now = _now()
     order_no = _generate_order_no()
-    payment_options = _resolve_payment_options(db=db)
-    enabled = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
-    channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
-    if channel == PAY_CHANNEL_WXPAY:
-        channel = PAY_CHANNEL_VIRTUAL
-    if channel == PAY_CHANNEL_WALLET:
-        raise BusinessException(message="钱包余额支付已下线，请使用微信支付", code=4383, status_code=410)
-    if channel not in enabled or not enabled[channel]:
-        raise BusinessException(message="当前支付方式不可用", code=4383, status_code=400)
 
     if join_request is None:
         join_request = CircleJoinRequest(user_pk=user_pk, circle_code=circle_code)
@@ -232,7 +255,7 @@ def create_circle_join_payment(
     join_request.reviewed_at = None
     join_request.order_no = order_no
     join_request.amount = amount
-    join_request.pay_channel = channel if amount > 0 else "free"
+    join_request.pay_channel = "free"
     join_request.payment_status = PAYMENT_UNPAID
     join_request.transaction_id = None
     join_request.refund_status = REFUND_NONE
@@ -249,6 +272,17 @@ def create_circle_join_payment(
         _notify_owner(db, circle=circle, join_request=join_request, nickname=str(user.nickname or ""))
         db.commit()
         return {"action": "free_submitted", **_serialize(join_request)}
+
+    payment_options = _resolve_payment_options(db=db)
+    enabled = {str(item["key"]): bool(item["enabled"]) for item in payment_options["channels"]}
+    channel = str(pay_channel or payment_options["default_channel"]).strip().lower()
+    if channel == PAY_CHANNEL_WXPAY:
+        channel = PAY_CHANNEL_VIRTUAL
+    if channel == PAY_CHANNEL_WALLET:
+        raise BusinessException(message="钱包余额支付已下线，请使用微信支付", code=4383, status_code=410)
+    if channel not in enabled or not enabled[channel]:
+        raise BusinessException(message="当前支付方式不可用", code=4383, status_code=400)
+    join_request.pay_channel = channel
 
     wallet = ensure_user_wallet(db=db, user_pk=user_pk, default_balance=user.balance or 0)
     wallet_balance = Decimal(str(wallet.balance or 0)).quantize(Decimal("0.01"))
@@ -396,6 +430,8 @@ def refund_circle_join_payment(
         return
     amount = Decimal(str(join_request.amount or 0)).quantize(Decimal("0.01"))
     channel = str(join_request.pay_channel or "")
+    if amount > 0 and channel != PAY_CHANNEL_WALLET:
+        raise BusinessException(message="该支付方式暂不支持自动退费，请联系平台处理", code=4396, status_code=409)
     cancel_circle_join_split(db, join_request=join_request, reason=reason)
     if amount > 0 and channel == PAY_CHANNEL_WALLET:
         wallet = ensure_user_wallet(db=db, user_pk=join_request.user_pk, default_balance=0)
@@ -410,8 +446,6 @@ def refund_circle_join_payment(
             title=f"入圈费用退款-{circle.name}",
             remark=f"{reason}，圈子编号: {circle.circle_code}",
         )
-    elif amount > 0 and channel == PAY_CHANNEL_WXPAY:
-        _wechat_refund(join_request)
     join_request.payment_status = PAYMENT_REFUNDED
     join_request.refund_status = REFUND_SUCCESS
     join_request.refunded_at = _now()
@@ -483,5 +517,9 @@ def auto_approve_due_circle_joins(db: Session) -> int:
 
 
 if __name__ == "__main__":
+    assert normalize_circle_join_price_tier("0") == Decimal("0.00")
+    assert normalize_circle_join_price_tier("9.8") == Decimal("9.80")
     assert normalize_circle_join_price_tier("98") == Decimal("98.00")
+    assert _circle_join_product_id_for_amount(Decimal("9.8")) == "CIRCLE_JOIN_9_8"
     assert _circle_join_product_id_for_amount(Decimal("398")) == "CIRCLE_JOIN_398"
+    assert _circle_join_product_id_for_amount(Decimal("9800")) == "CIRCLE_JOIN_9800"

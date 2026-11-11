@@ -90,3 +90,11 @@ export function changePasswordBySms(code, newPassword) {
     data: { code, new_password: newPassword }
   })
 }
+
+export function closeAccount(confirmText) {
+  return request({
+    url: '/api/v1/auth/account',
+    method: 'DELETE',
+    data: { confirm_text: confirmText }
+  })
+}

@@ -51,6 +51,8 @@
     /* 小程序特有相关 */
     "mp-weixin" : {
         "appid" : "wxd801f2e147f4abb1",
+        "componentFramework" : "glass-easel",
+        "__usePrivacyCheck__" : true,
         "requiredPrivateInfos" : [ "getLocation", "chooseLocation" ],
         "permission" : {
             "scope.userLocation" : {

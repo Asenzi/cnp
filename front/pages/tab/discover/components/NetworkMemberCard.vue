@@ -22,9 +22,14 @@
             mode="aspectFit" />
         </view>
         <text class="detail-text">{{ member.detailLine }}</text>
-        <text v-if="member.distanceText" class="distance-text">{{ member.distanceText }}</text>
+        <view class="meta-row">
+          <text class="meta-text">{{ member.metaLine }}</text>
+          <text v-if="member.distanceText" class="distance-text">{{ member.distanceText }}</text>
+        </view>
         <!-- <text v-if="member.postCount && member.postCount > 0" class="post-count-line">已发布 {{ member.postCount }}</text> -->
       </view>
+
+      <slot name="collection-action" />
 
       <!-- <button v-if="showFollow && !member.privacyHint" class="follow-btn-header"
         :class="{ 'follow-btn-followed': isFollowed(member) }" :disabled="followPending" hover-class="follow-btn-active"
@@ -35,12 +40,12 @@
 
     <view class="card-body">
       <view class="tag-row">
-        <text v-if="!member.circleTags || member.circleTags.length === 0" class="tag-chip tag-chip-placeholder">
+        <view v-if="!member.circleTags || member.circleTags.length === 0" class="tag-chip tag-chip-placeholder">
           该用户很低调，暂未进行个人介绍
-        </text>
-        <text v-else v-for="tag in member.circleTags" :key="`${member.id}-${tag}`" class="tag-chip">
+        </view>
+        <view v-else v-for="tag in member.circleTags" :key="`${member.id}-${tag}`" class="tag-chip">
           {{ tag }}
-        </text>
+        </view>
       </view>
     </view>
 
@@ -209,12 +214,30 @@ defineEmits(['view', 'verify', 'follow'])
 .detail-text {
   display: block;
   color: #64748b;
-  font-size: 26rpx;
+  font-size: 28rpx;
   line-height: 34rpx;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   margin-bottom: 4rpx;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+  margin-bottom: 4rpx;
+}
+
+.meta-text {
+  min-width: 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 28rpx;
+  line-height: 34rpx;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .post-count-line {
@@ -225,11 +248,11 @@ defineEmits(['view', 'verify', 'follow'])
 }
 
 .distance-text {
-  display: block;
-  margin-bottom: 6rpx;
+  flex-shrink: 0;
+  margin-left: 0;
   color: #2563eb;
-  font-size: 22rpx;
-  line-height: 28rpx;
+  font-size: 28rpx;
+  line-height: 34rpx;
   font-weight: 500;
 }
 
@@ -281,13 +304,19 @@ defineEmits(['view', 'verify', 'follow'])
   align-items: center;
   gap: 8rpx;
   flex-wrap: wrap;
+  padding: 8rpx 14rpx;
 }
 
 .tag-chip {
-  padding: 8rpx 14rpx;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #475569;
   font-size: 26rpx;
   line-height: 34rpx;
+  word-break: break-all;
 }
 
 .tag-chip-placeholder {

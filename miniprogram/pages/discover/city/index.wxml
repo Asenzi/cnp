@@ -1,0 +1,104 @@
+<view class="city-page">
+  <view class="page-shell">
+    <view class="search-wrap">
+      <view class="search-box">
+        <view class="search-icon">
+          <view class="search-ring"></view>
+          <view class="search-tail"></view>
+        </view>
+        <input
+          value="{{keyword}}"
+          class="search-input"
+          placeholder="搜索城市/拼音"
+          placeholder-class="search-placeholder"
+          bindinput="onInputKeyword"
+        />
+        <view
+          class="all-city-btn {{selectedCity === '全国' ? 'all-city-btn-active' : ''}}"
+          hover-class="all-city-btn-hover"
+          bindtap="onSelectAllCity"
+        >
+          <text class="all-city-btn-text {{selectedCity === '全国' ? 'all-city-btn-text-active' : ''}}">全国</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="content-wrap">
+      <scroll-view
+        class="city-scroll"
+        scroll-y
+        show-scrollbar="{{false}}"
+        scroll-into-view="{{scrollIntoView}}"
+        scroll-with-animation
+      >
+        <view class="section">
+          <view class="section-head">
+            <text class="section-title">当前定位</text>
+            <button class="relocate-btn" hover-class="relocate-btn-hover" bindtap="onRefreshLocation">
+              {{locating ? '定位中...' : '刷新定位'}}
+            </button>
+          </view>
+          <view class="city-grid city-grid-current">
+            <view class="city-chip {{currentCitySelected ? 'city-chip-active' : ''}}" bindtap="onSelectCurrentCity">
+              <text class="city-chip-text {{currentCitySelected ? 'city-chip-text-active' : ''}}">{{currentCity}}</text>
+            </view>
+          </view>
+        </view>
+
+        <view wx:if="{{visibleHotCities.length}}" class="section">
+          <text class="section-title">热门城市</text>
+          <view class="city-grid">
+            <view
+              wx:for="{{visibleHotCities}}"
+              wx:key="label"
+              class="city-chip {{item.active ? 'city-chip-active' : ''}}"
+              data-city="{{item.label}}"
+              bindtap="onSelectCity"
+            >
+              <text class="city-chip-text {{item.active ? 'city-chip-text-active' : ''}}">{{item.label}}</text>
+            </view>
+          </view>
+        </view>
+
+        <view
+          wx:for="{{groupedCities}}"
+          wx:for-item="group"
+          wx:key="letter"
+          id="letter-{{group.letter}}"
+          class="section section-letter"
+        >
+          <text class="section-letter-title">{{group.letter}}</text>
+          <view class="city-grid">
+            <view
+              wx:for="{{group.cities}}"
+              wx:for-item="city"
+              wx:key="label"
+              class="city-chip {{city.active ? 'city-chip-active' : ''}}"
+              data-city="{{city.label}}"
+              bindtap="onSelectCity"
+            >
+              <text class="city-chip-text {{city.active ? 'city-chip-text-active' : ''}}">{{city.label}}</text>
+            </view>
+          </view>
+        </view>
+
+        <view wx:if="{{keyword && !groupedCities.length && !visibleHotCities.length}}" class="empty-wrap">
+          <text class="empty-text">未找到匹配城市</text>
+        </view>
+      </scroll-view>
+
+      <view wx:if="{{indexedLetters.length}}" class="letter-index">
+        <view
+          wx:for="{{indexedLetters}}"
+          wx:key="*this"
+          class="letter-item"
+          hover-class="letter-item-hover"
+          data-letter="{{item}}"
+          bindtap="onTapIndex"
+        >
+          <text class="letter-item-text">{{item}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

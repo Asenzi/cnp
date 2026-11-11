@@ -11,7 +11,8 @@ class CircleCreateRequest(BaseModel):
     description: str = Field(..., min_length=2, max_length=500)
     cover_url: str = Field(..., min_length=1, max_length=255)
     avatar_url: str = Field(..., min_length=1, max_length=255)
-    join_type: Literal["paid"] = "paid"
+    share_image_url: str | None = Field(default=None, min_length=1, max_length=255)
+    join_type: Literal["free", "paid"] = "free"
     join_price: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     rules_text: str | None = Field(default=None, max_length=2000)
 
@@ -22,7 +23,8 @@ class CircleUpdateRequest(BaseModel):
     description: str | None = Field(default=None, min_length=2, max_length=500)
     cover_url: str | None = Field(default=None, min_length=1, max_length=255)
     avatar_url: str | None = Field(default=None, min_length=1, max_length=255)
-    join_type: Literal["paid"] | None = None
+    share_image_url: str | None = Field(default=None, min_length=1, max_length=255)
+    join_type: Literal["free", "paid"] | None = None
     join_price: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
     rules_text: str | None = Field(default=None, max_length=2000)
 
@@ -41,6 +43,7 @@ class CircleData(BaseModel):
     description: str
     cover_url: str
     avatar_url: str
+    share_image_url: str | None = None
     join_type: str
     join_price: float
     rules_text: str | None = None

@@ -117,7 +117,7 @@ const resolvedAuthorName = computed(() => {
   display: block;
   margin-top: 10rpx;
   color: #0f172a;
-  font-size: 28rpx;
+  font-size: 30rpx;
   line-height: 38rpx;
   font-weight: 700;
 }
@@ -126,7 +126,7 @@ const resolvedAuthorName = computed(() => {
   display: block;
   margin-top: 8rpx;
   color: #64748b;
-  font-size: 22rpx;
+  font-size: 28rpx;
   line-height: 32rpx;
 }
 

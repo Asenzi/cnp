@@ -28,12 +28,7 @@
         <text class="state-text">正在加载圈子...</text>
       </view>
 
-      <view v-else-if="!loading && circles.length === 0" class="empty-card">
-        <image class="empty-icon" src="/static/icon/create.png" mode="aspectFit" />
-        <text class="empty-title">还没有创建圈子</text>
-        <text class="empty-desc">创建一个圈子，开始连接同领域伙伴</text>
-        <button class="empty-button" @tap="goCreate">创建第一个圈子</button>
-      </view>
+      <AppEmptyState v-else-if="!loading && circles.length === 0"><template #title>还没有创建圈子</template><template #description>创建一个圈子，开始连接同领域伙伴</template><button class="empty-button" @tap="goCreate">创建第一个圈子</button></AppEmptyState>
 
       <view v-else class="circle-list">
         <view v-for="circle in circles" :key="circle.circleCode" class="circle-card">
@@ -47,7 +42,7 @@
               <text class="circle-meta">{{ circle.industry }} · {{ circle.joinText }}</text>
               <text class="circle-description">{{ circle.description }}</text>
             </view>
-            <text class="circle-arrow">></text>
+            <text class="circle-arrow">›</text>
           </view>
 
           <view class="metric-row">
@@ -72,8 +67,7 @@
           </view>
 
           <view class="action-row">
-            <button class="action-button secondary" @tap="goDetail(circle)">查看主页</button>
-            <button class="action-button secondary" @tap="goEdit(circle)">编辑资料</button>
+            <button class="action-button secondary" @tap="goMembers(circle)">成员管理</button>
             <button class="action-button primary" @tap="openCirclePending(circle)">
               处理事项
               <text v-if="circle.pendingCount > 0" class="button-badge">{{ circle.pendingCount }}</text>
@@ -88,11 +82,7 @@
         <text class="state-text">正在加载待处理事项...</text>
       </view>
 
-      <view v-else-if="visiblePendingItems.length === 0" class="empty-card compact">
-        <image class="empty-icon" src="/static/icon/data-block.png" mode="aspectFit" />
-        <text class="empty-title">暂时没有待处理事项</text>
-        <text class="empty-desc">新的加入申请会出现在这里</text>
-      </view>
+      <AppEmptyState v-else-if="visiblePendingItems.length === 0"><template #title>暂时没有待处理事项</template><template #description>新的加入申请会出现在这里</template></AppEmptyState>
 
       <view v-else class="pending-list">
         <view v-for="item in visiblePendingItems" :key="item.key" class="pending-card">
@@ -123,6 +113,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, ref } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import {
@@ -147,7 +139,10 @@ const summary = computed(() => ({
 const visiblePendingItems = computed(() => [...joinRequests.value].sort((a, b) => b.timestamp - a.timestamp))
 
 const safeImage = (value) => String(value || '').trim() || '/static/logo.png'
-const formatJoinText = (item) => `付费入圈 ￥${Number(item.join_price || 0).toFixed(2)}`
+const formatJoinText = (item) => {
+  const price = Number(item.join_price || 0)
+  return price > 0 ? `付费入圈 ￥${price.toFixed(2)}` : '免费入圈'
+}
 
 const mapCircle = (item = {}) => {
   const pendingJoinCount = Number(item.pending_join_count || 0)
@@ -226,8 +221,8 @@ const goCreate = () => uni.navigateTo({ url: '/pages/circles/create/index' })
 const goDetail = (circle) => uni.navigateTo({
   url: `/pages/circles/detail/index?code=${encodeURIComponent(circle.circleCode)}`
 })
-const goEdit = (circle) => uni.navigateTo({
-  url: `/pages/circles/edit/index?code=${encodeURIComponent(circle.circleCode)}`
+const goMembers = (circle) => uni.navigateTo({
+  url: `/pages/circles/members/index?code=${encodeURIComponent(circle.circleCode)}`
 })
 
 const openCirclePending = (circle) => {
@@ -495,12 +490,13 @@ onPullDownRefresh(async () => {
 
 .action-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 14rpx;
   padding: 18rpx 20rpx 22rpx;
 }
 
 .action-button {
-  flex: 1;
+  flex: 1 1 calc(50% - 14rpx);
   height: 66rpx;
   margin: 0;
   padding: 0;

@@ -1,0 +1,3 @@
+<view class="end-wrap">
+  <text class="end-text">{{text}}</text>
+</view>

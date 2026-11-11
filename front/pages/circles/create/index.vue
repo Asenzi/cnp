@@ -3,6 +3,15 @@
     <scroll-view class="main-scroll" scroll-y :show-scrollbar="false">
       <view class="content-wrap">
         <CreateCoverUploader v-model="form.coverUrl" />
+        <CreateCoverUploader
+          v-model="form.shareImageUrl"
+          title="分享图片"
+          tip="点击上传分享图片"
+          subtip="按微信聊天卡片比例裁剪，请将重要内容放在中央"
+          :ratio-width="4"
+          :ratio-height="3"
+          crop-event="circle-share-image-cropped"
+        />
         <CreateAvatarUploader v-model="form.avatarUrl" />
 
         <view v-if="!realNameVerified || !isCircleOwner" class="verify-notice-card">
@@ -41,7 +50,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { createCircle, uploadCircleAvatar, uploadCircleCover } from '../../../api/circle'
+import { createCircle, uploadCircleAvatar, uploadCircleCover, uploadCircleShareImage } from '../../../api/circle'
 import { getCurrentUserProfile } from '../../../api/user'
 import CreateAvatarUploader from './components/CreateAvatarUploader.vue'
 import CreateBasicInfoCard from './components/CreateBasicInfoCard.vue'
@@ -59,15 +68,16 @@ const industryPickerVisible = ref(false)
 
 const form = reactive({
   coverUrl: defaultCoverImage,
+  shareImageUrl: '',
   avatarUrl: defaultCircleAvatar,
   name: '',
   industry: '',
   description: '',
-  joinType: 'paid',
-  price: '98'
+  joinType: 'free',
+  price: '0'
 })
 const currentUser = ref({})
-const joinPriceTiers = [98, 198, 398, 598, 980, 1980, 3980, 5980, 9980]
+const joinPriceTiers = [0, 9.8, 98, 198, 398, 980, 1980, 3980, 5980, 9800]
 
 const parseStoredUserInfo = () => {
   const stored = uni.getStorageSync('userInfo')
@@ -194,7 +204,7 @@ const validateForm = () => {
   }
   const value = Number(form.price)
   if (!joinPriceTiers.includes(value)) {
-    showToast('请选择固定付费档位')
+    showToast('请选择固定入圈价格')
     return false
   }
   return true
@@ -240,14 +250,25 @@ const onSubmit = async () => {
       finalAvatarUrl = finalCoverUrl
     }
 
+    let finalShareImageUrl = String(form.shareImageUrl || '').trim()
+    if (isLocalTempFilePath(finalShareImageUrl)) {
+      const uploadResult = await uploadCircleShareImage(finalShareImageUrl, `${Date.now()}-circle-share`)
+      finalShareImageUrl = String(uploadResult?.path || uploadResult?.url || '').trim()
+      if (!finalShareImageUrl) {
+        throw new Error('圈子分享图片上传失败')
+      }
+    }
+
+    const joinPrice = Number(form.price || 0)
     const payload = {
       name: String(form.name || '').trim(),
       industry_label: String(form.industry || '').trim(),
       description: String(form.description || '').trim(),
       cover_url: finalCoverUrl,
       avatar_url: finalAvatarUrl,
-      join_type: 'paid',
-      join_price: Number(form.price || 0)
+      share_image_url: finalShareImageUrl || undefined,
+      join_type: joinPrice > 0 ? 'paid' : 'free',
+      join_price: joinPrice
     }
 
     const created = await createCircle(payload)

@@ -1,8 +1,23 @@
 <template>
   <view class="card">
-    <view class="option-row">
-      <view class="radio">
-        <view class="radio-dot"></view>
+    <view class="option-row" :class="{ 'option-row-active': currentPrice <= 0 }" @tap="selectFree">
+      <view class="radio" :class="{ 'radio-active': currentPrice <= 0 }">
+        <view v-if="currentPrice <= 0" class="radio-dot"></view>
+      </view>
+
+      <view class="option-main">
+        <text class="option-title">免费入圈</text>
+        <text class="option-desc">无需支付费用，由圈主审核通过</text>
+      </view>
+
+      <view class="price-trigger price-trigger-free">
+        <text class="price-trigger-text">免费</text>
+      </view>
+    </view>
+
+    <view class="option-row" :class="{ 'option-row-active': currentPrice > 0 }" @tap="openPaidPicker">
+      <view class="radio" :class="{ 'radio-active': currentPrice > 0 }">
+        <view v-if="currentPrice > 0" class="radio-dot"></view>
       </view>
 
       <view class="option-main">
@@ -10,8 +25,8 @@
         <text class="option-desc">支付入圈费用后，由圈主审核通过</text>
       </view>
 
-      <view class="price-trigger" @tap="pricePickerVisible = true">
-        <text class="price-trigger-text">￥{{ currentPrice }}</text>
+      <view class="price-trigger">
+        <text class="price-trigger-text">{{ currentPrice > 0 ? formatPrice(currentPrice) : '选择价格' }}</text>
       </view>
     </view>
 
@@ -29,7 +44,7 @@
             :class="{ 'price-tier-active': Number(price) === tier }"
             @tap="selectPrice(tier)"
           >
-            <text>￥{{ tier }}</text>
+            <text>{{ formatPrice(tier) }}</text>
           </view>
         </view>
       </view>
@@ -49,8 +64,28 @@ const props = defineProps({
 
 const emit = defineEmits(['update:price'])
 const pricePickerVisible = ref(false)
-const priceTiers = [98, 198, 398, 598, 980, 1980, 3980, 5980, 9980]
-const currentPrice = computed(() => (priceTiers.includes(Number(props.price)) ? Number(props.price) : 98))
+const priceTiers = [9.8, 98, 198, 398, 980, 1980, 3980, 5980, 9800]
+const currentPrice = computed(() => (priceTiers.includes(Number(props.price)) ? Number(props.price) : 0))
+
+const formatPrice = (value) => {
+  const amount = Number(value || 0)
+  if (amount <= 0) {
+    return '免费'
+  }
+  return `￥${amount}`
+}
+
+const selectFree = () => {
+  emit('update:price', '0')
+  pricePickerVisible.value = false
+}
+
+const openPaidPicker = () => {
+  if (currentPrice.value <= 0) {
+    emit('update:price', String(priceTiers[0]))
+  }
+  pricePickerVisible.value = true
+}
 
 const selectPrice = (tier) => {
   emit('update:price', String(tier))
@@ -74,15 +109,27 @@ const selectPrice = (tier) => {
   gap: 12rpx;
 }
 
+.option-row + .option-row {
+  margin-top: 16rpx;
+}
+
+.option-row-active {
+  background: #f8fbff;
+}
+
 .radio {
   width: 32rpx;
   height: 32rpx;
   border-radius: 999rpx;
-  border: 2rpx solid #2563eb;
+  border: 2rpx solid #cbd5e1;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.radio-active {
+  border-color: #2563eb;
 }
 
 .radio-dot {
@@ -123,6 +170,11 @@ const selectPrice = (tier) => {
   align-items: center;
   justify-content: center;
   color: #2563eb;
+}
+
+.price-trigger-free {
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .price-trigger-text {

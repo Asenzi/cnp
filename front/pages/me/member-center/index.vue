@@ -58,6 +58,32 @@
         </view>
 
         <view class="section">
+          <text class="section-title">合作入口</text>
+          <view class="partner-entry-grid">
+            <view class="partner-entry" hover-class="partner-entry-active" @tap="onTapSalonOwner">
+              <view class="partner-entry-icon">
+                <image class="partner-entry-icon-image" mode="aspectFit" src="/static/icon/salon-owner.svg" />
+              </view>
+              <view class="partner-entry-copy">
+                <text class="partner-entry-title">沙龙主理人</text>
+                <text class="partner-entry-desc">发起沙龙，连接城市人脉</text>
+              </view>
+              <text class="partner-entry-arrow">›</text>
+            </view>
+            <view class="partner-entry" hover-class="partner-entry-active" @tap="onTapCityPartner">
+              <view class="partner-entry-icon">
+                <image class="partner-entry-icon-image" mode="aspectFit" src="/static/icon/city-partner.svg" />
+              </view>
+              <view class="partner-entry-copy">
+                <text class="partner-entry-title">城市合伙人</text>
+                <text class="partner-entry-desc">共建城市商务社交网络</text>
+              </view>
+              <text class="partner-entry-arrow">›</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="section">
           <text class="section-title">会员专属权益</text>
           <MemberBenefitGrid :items="benefits" />
         </view>
@@ -103,9 +129,12 @@ import {
   confirmMemberOrderPayment,
   getMemberCenterOverview,
   getMemberOrderStatus,
+  reportMemberPaymentClientError,
   subscribeMemberPlan
 } from '../../../api/payment'
 import { getCurrentUserProfile } from '../../../api/user'
+import { refreshWechatSessionForPayment } from '../../../utils/payment-session'
+import { getPartnerReferralPurchaseCode } from '../../../utils/partner-referral'
 import MemberBenefitGrid from './components/MemberBenefitGrid.vue'
 import MemberPlanCard from './components/MemberPlanCard.vue'
 import MemberStatusCard from './components/MemberStatusCard.vue'
@@ -132,6 +161,7 @@ const usePointsDiscount = ref(false)
 const initialPlanId = ref('')
 const isLoading = ref(false)
 const isSubmitting = ref(false)
+const currentUserProfile = ref({})
 
 const formatAmount = (value) => {
   const amount = Number(value || 0)
@@ -154,7 +184,8 @@ const normalizeBenefitList = (list) => {
     'https://cos.cnptec.site/static/icon/2.png',
     'https://cos.cnptec.site/static/icon/3.png',
     'https://cos.cnptec.site/static/icon/4.png',
-    'https://cos.cnptec.site/static/icon/5.png'
+    '/static/icon/summit-discount.svg',
+    '/static/icon/distribution.svg'
   ]
   return list
     .map((item, index) => ({
@@ -396,11 +427,8 @@ const syncPointsToggle = () => {
 
 const loadConfig = () => {
   const configuredPlans = uni.getStorageSync('member_plan_config')
-  const configuredBenefits = uni.getStorageSync('member_benefit_config')
   plans.value = normalizePlanList(configuredPlans)
-  benefits.value = Array.isArray(configuredBenefits) && configuredBenefits.length
-    ? normalizeBenefitList(configuredBenefits)
-    : [...DEFAULT_BENEFITS]
+  benefits.value = [...DEFAULT_BENEFITS]
   syncSelectedPlan()
   syncPointsToggle()
 }
@@ -409,15 +437,36 @@ const loadUserProfile = async () => {
   const token = String(uni.getStorageSync('token') || '').trim()
   if (!token) {
     memberStatus.value = resolveMemberStatus({})
+    currentUserProfile.value = {}
     return
   }
   try {
     const profile = await getCurrentUserProfile()
+    currentUserProfile.value = profile || {}
     memberStatus.value = resolveMemberStatus(profile || {})
     uni.setStorageSync('userInfo', profile || {})
+    return profile || {}
   } catch {
+    currentUserProfile.value = {}
     memberStatus.value = resolveMemberStatus({})
+    return {}
   }
+}
+
+const isRealNameVerified = (profile = {}) => {
+  return Boolean(
+    profile?.is_verified ||
+    profile?.real_name_verified ||
+    String(profile?.verified_real_name || '').trim()
+  )
+}
+
+const redirectToRealNameIfNeeded = (profile = {}, plan = selectedPlan.value) => {
+  if (String(plan?.productType || 'member').trim() !== 'member' || !isYearlyPlan(plan) || isRealNameVerified(profile)) {
+    return false
+  }
+  uni.navigateTo({ url: '/pages/me/auth/realname/index' })
+  return true
 }
 
 const loadMemberCenterOverview = async () => {
@@ -435,10 +484,8 @@ const loadMemberCenterOverview = async () => {
     }
     contactPackagePlans.value = normalizeContactPackageList(overview?.contact_package?.plans)
 
-    const serverBenefits = normalizeBenefitList(overview?.benefits)
-    if (serverBenefits.length) {
-      benefits.value = serverBenefits
-    }
+    // Keep the displayed benefits aligned with the product-defined six-item list.
+    benefits.value = [...DEFAULT_BENEFITS]
 
     const status = overview?.status || {}
     const opened = Boolean(status?.opened)
@@ -496,6 +543,47 @@ const goPointsCenter = () => {
   // 积分功能暂时隐藏
 }
 
+const onTapSalonOwner = () => {
+  uni.navigateTo({ url: '/pages/me/salon-owner/apply/index' })
+}
+
+const onTapCityPartner = () => {
+  uni.navigateTo({ url: '/pages/me/city-partner/apply/index' })
+}
+
+const getPaymentDebugInfo = (extra = {}) => {
+  let systemInfo = {}
+  try {
+    systemInfo = uni.getSystemInfoSync() || {}
+  } catch {
+    systemInfo = {}
+  }
+
+  return {
+    platform: systemInfo.platform,
+    system: systemInfo.system,
+    brand: systemInfo.brand,
+    model: systemInfo.model,
+    wechatVersion: systemInfo.version,
+    SDKVersion: systemInfo.SDKVersion,
+    envVersion: typeof __wxConfig !== 'undefined' ? __wxConfig?.envVersion : '',
+    ...extra
+  }
+}
+
+const getVirtualPaymentErrorMessage = (err, fallback = '支付失败，请稍后重试') => {
+  const message = String(err?.errMsg || err?.message || '')
+  const code = String(err?.errCode || err?.errno || '')
+  const normalized = message.toLowerCase()
+  if (code === '-15005' || normalized.includes('signature_invalid')) {
+    return '微信登录态已失效，请重新登录后再支付'
+  }
+  if (code === '-15001' || message.includes('尚未开启iOS支付')) {
+    return '当前小程序尚未开启 iOS 支付，请先在微信后台开启苹果 IAP 支付'
+  }
+  return message || fallback
+}
+
 const invokeWxpayAndConfirm = async (subscribeResult) => {
   const orderNo = String(subscribeResult?.order_no || '').trim()
   const virtualPayment = subscribeResult?.virtual_payment || {}
@@ -525,6 +613,16 @@ const invokeWxpayAndConfirm = async (subscribeResult) => {
           mode: virtualPayment.mode,
           signData
         })
+        reportMemberPaymentClientError({
+          order_no: orderNo,
+          scene: selectedProductType.value === 'contact_package' ? 'contact_package' : 'member',
+          err_msg: err?.errMsg,
+          err_code: err?.errCode || err?.errno,
+          ext: getPaymentDebugInfo({
+            mode: virtualPayment.mode,
+            signData
+          })
+        }).catch(() => {})
         reject({
           ...(err || {}),
           order_no: orderNo
@@ -593,9 +691,11 @@ const onTapOpenMember = async () => {
   })
 
   try {
+    await refreshWechatSessionForPayment()
     const result = await subscribeMemberPlan({
       plan_id: selected.id,
       pay_channel: paymentChannel.value,
+      referral_invite_code: getPartnerReferralPurchaseCode(),
       // 积分功能暂时隐藏
       use_points_discount: false
     })
@@ -604,11 +704,14 @@ const onTapOpenMember = async () => {
       await invokeWxpayAndConfirm(result)
     }
 
-    await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
+    const [profile] = await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
     uni.showToast({
       title: `${selected.name}${wasOpened ? '续费' : '开通'}成功`,
       icon: 'success'
     })
+    setTimeout(() => {
+      redirectToRealNameIfNeeded(profile || currentUserProfile.value, selected)
+    }, 500)
   } catch (err) {
     const errMsg = String(err?.errMsg || err?.message || '').toLowerCase()
     if (errMsg.includes('cancel')) {
@@ -617,11 +720,14 @@ const onTapOpenMember = async () => {
         try {
           const status = await getMemberOrderStatus(orderNo)
           if (Boolean(status?.paid)) {
-            await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
+            const [profile] = await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
             uni.showToast({
               title: `${selected.name}${wasOpened ? '续费' : '开通'}成功`,
               icon: 'success'
             })
+            setTimeout(() => {
+              redirectToRealNameIfNeeded(profile || currentUserProfile.value, selected)
+            }, 500)
             return
           }
         } catch {
@@ -630,7 +736,7 @@ const onTapOpenMember = async () => {
       }
       showToast('已取消支付')
     } else {
-      showToast(err?.message || '开通失败，请稍后重试')
+      showToast(getVirtualPaymentErrorMessage(err, '开通失败，请稍后重试'))
     }
   } finally {
     isSubmitting.value = false
@@ -687,9 +793,11 @@ const onTapOpenSelectedPlan = async () => {
   })
 
   try {
+    await refreshWechatSessionForPayment()
     const result = await subscribeMemberPlan({
       plan_id: selected.id,
       pay_channel: paymentChannel.value,
+      referral_invite_code: getPartnerReferralPurchaseCode(),
       use_points_discount: false
     })
 
@@ -697,11 +805,14 @@ const onTapOpenSelectedPlan = async () => {
       await invokeWxpayAndConfirm(result)
     }
 
-    await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
+    const [profile] = await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
     uni.showToast({
       title: successText,
       icon: 'success'
     })
+    setTimeout(() => {
+      redirectToRealNameIfNeeded(profile || currentUserProfile.value, selected)
+    }, 500)
   } catch (err) {
     const errMsg = String(err?.errMsg || err?.message || '').toLowerCase()
     if (errMsg.includes('cancel')) {
@@ -710,11 +821,14 @@ const onTapOpenSelectedPlan = async () => {
         try {
           const status = await getMemberOrderStatus(orderNo)
           if (Boolean(status?.paid)) {
-            await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
+            const [profile] = await Promise.all([loadUserProfile(), loadMemberCenterOverview()])
             uni.showToast({
               title: successText,
               icon: 'success'
             })
+            setTimeout(() => {
+              redirectToRealNameIfNeeded(profile || currentUserProfile.value, selected)
+            }, 500)
             return
           }
         } catch {
@@ -724,7 +838,7 @@ const onTapOpenSelectedPlan = async () => {
       showToast('已取消支付')
       return
     }
-    showToast(err?.message || '订阅失败，请稍后重试')
+    showToast(getVirtualPaymentErrorMessage(err, '订阅失败，请稍后重试'))
   } finally {
     isSubmitting.value = false
     uni.hideLoading()
@@ -926,6 +1040,76 @@ onShow(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--member-card-space);
+}
+
+.partner-entry-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.partner-entry {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 24rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  transition: all 0.2s ease;
+}
+
+.partner-entry-active {
+  opacity: 0.82;
+  transform: scale(0.99);
+}
+
+.partner-entry-icon {
+  width: 72rpx;
+  height: 72rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16rpx;
+  background: #e8f1ff;
+  color: #2f8fd2;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.partner-entry-icon-image {
+  width: 48rpx;
+  height: 48rpx;
+}
+
+.partner-entry-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.partner-entry-title,
+.partner-entry-desc {
+  display: block;
+}
+
+.partner-entry-title {
+  color: #111827;
+  font-size: 28rpx;
+  line-height: 38rpx;
+  font-weight: 600;
+}
+
+.partner-entry-desc {
+  margin-top: 4rpx;
+  color: #6b7280;
+  font-size: 22rpx;
+  line-height: 32rpx;
+}
+
+.partner-entry-arrow {
+  color: #94a3b8;
+  font-size: 38rpx;
+  line-height: 38rpx;
 }
 
 .notice-wrap {

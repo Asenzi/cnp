@@ -1,0 +1,14 @@
+{
+  "navigationStyle": "custom",
+  "backgroundColor": "#f6f6f8",
+  "backgroundTextStyle": "dark",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "top-search-filter-header": "/components/top-search-filter-header/index",
+    "resource-feed-card": "/components/resource-feed-card/index",
+    "publish-fab": "/components/publish-fab/index",
+    "skeleton-card": "/components/skeleton-card/index",
+    "empty-state": "/components/empty-state/index",
+    "network-end-hint": "/components/network-end-hint/index"
+  }
+}

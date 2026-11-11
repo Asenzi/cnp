@@ -341,12 +341,18 @@ def get_user_real_name_verification_detail(
     record = get_user_verification(db=db, user_pk=user.id, verify_type=VerificationType.REAL_NAME.value)
     profile = get_user_real_name_profile(db=db, user_pk=user.id)
     payload = _parse_submit_payload(record.submit_payload_json) if record else None
-    return _build_real_name_detail(
+    detail = _build_real_name_detail(
         profile=profile,
         record=record,
         fallback_payload=payload,
         include_sensitive_id_number=True,
     )
+    from app.verification.referral import current_invite_code
+    detail.referral_locked = user.member_referral_snapshot is not None
+    detail.invite_code = current_invite_code(db, user)
+    if not detail.referral_locked and payload and payload.get("invite_code") is not None:
+        detail.invite_code = str(payload["invite_code"])
+    return detail
 
 
 def submit_user_verification(

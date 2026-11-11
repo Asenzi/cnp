@@ -1,0 +1,66 @@
+<view class="circle-page">
+  <view class="page-shell">
+    <view class="tools-sticky">
+      <top-search-filter-header
+        keyword="{{keyword}}"
+        search-placeholder="{{UI_TEXT.searchPlaceholder}}"
+        top-padding-px="{{topPaddingPx}}"
+        right-inset-px="{{capsuleAvoidRightInsetPx}}"
+        search-bar-height-px="{{capsuleRowHeightPx}}"
+        left-items="{{topTabs}}"
+        active-left-key="{{activeTab}}"
+        right-items="{{rightControls}}"
+        active-right-keys="{{activeRightKeys}}"
+        bind:update="onKeywordInput"
+        bind:changeleft="onChangeTab"
+        bind:tapright="onTapRightControl"
+      />
+    </view>
+
+    <scroll-view
+      class="feed-scroll"
+      scroll-y
+      show-scrollbar="{{false}}"
+      lower-threshold="360"
+      refresher-enabled="{{true}}"
+      refresher-triggered="{{listRefreshing}}"
+      refresher-background="#f6f6f8"
+      bindscrolltolower="onListScrollToLower"
+      bindrefresherrefresh="onRefresherRefresh"
+      bindrefresherrestore="onRefresherRestore"
+    >
+      <view class="feed-wrap">
+        <skeleton-card wx:if="{{listSkeleton}}" count="4" />
+
+        <view wx:elif="{{listError && !listHasAny}}" class="status-wrap">
+          <text class="status-text">{{listError}}</text>
+          <button class="retry-btn" hover-class="retry-btn-active" bindtap="onListRetry">{{UI_TEXT.retry}}</button>
+        </view>
+
+        <block wx:else>
+          <empty-state
+            wx:if="{{listEmpty}}"
+            title="{{UI_TEXT.empty}}"
+            subtitle="{{UI_TEXT.emptyDesc}}"
+          />
+
+          <circle-feed-card
+            wx:for="{{listItems}}"
+            wx:key="id"
+            item="{{item}}"
+            bind:detail="onTapDetail"
+          />
+
+          <view wx:if="{{listLoadingMore}}" class="load-more-wrap">
+            <text class="load-more-text">{{UI_TEXT.loading}}</text>
+          </view>
+          <view wx:elif="{{listHasMore && listHasAny}}" class="load-more-wrap">
+            <text class="load-more-text">{{UI_TEXT.loadMore}}</text>
+          </view>
+
+          <network-end-hint wx:if="{{!listHasMore && listHasAny}}" text="{{UI_TEXT.noMore}}" />
+        </block>
+      </view>
+    </scroll-view>
+  </view>
+</view>

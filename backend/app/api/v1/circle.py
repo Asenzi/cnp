@@ -3,7 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -30,6 +30,8 @@ from app.models.circle import Circle
 from app.models.circle_interest import CircleInterest
 from app.models.circle_join_request import CircleJoinRequest
 from app.models.notification import Notification
+from app.models.resource_post import ResourcePost
+from app.models.resource_post_circle_sync import ResourcePostCircleSync
 from app.models.user import User
 from app.models.user_circle_membership import UserCircleMembership
 from app.payment import confirm_circle_join_payment, create_circle_join_payment, get_circle_join_order
@@ -126,6 +128,8 @@ def _serialize_circle(
     member_count = count_circle_members(db=db, circle_code=circle.circle_code)
     collect_count = _circle_collection_counts(db, [int(circle.id)]).get(int(circle.id), 0)
     cover_url, avatar_url = _resolve_circle_asset_urls(circle.cover_url, circle.avatar_url or circle.cover_url, request)
+    safe_share_image_url = sanitize_public_asset_url(circle.share_image_url)
+    share_image_url = _to_public_file_url(safe_share_image_url, request) if safe_share_image_url else None
     is_interested = False
     is_joined = False
     join_request = None
@@ -156,6 +160,7 @@ def _serialize_circle(
         description=circle.description,
         cover_url=cover_url,
         avatar_url=avatar_url,
+        share_image_url=share_image_url,
         join_type=circle.join_type,
         join_price=float(circle.join_price or 0),
         rules_text=circle.rules_text,
@@ -266,10 +271,17 @@ def create_new_circle(
         if payload.join_price is None:
             raise BusinessException(message='付费加入需要填写有效金额', code=4354, status_code=400)
         join_price = normalize_circle_join_price_tier(payload.join_price)
+        if join_price <= 0:
+            raise BusinessException(message='付费入圈价格请选择固定付费档位', code=4354, status_code=400)
 
     normalized_rules = (payload.rules_text or '').strip() or None
     cover_url = _normalize_circle_asset_url(payload.cover_url, request=request, field_label='圈子封面')
     avatar_url = _normalize_circle_asset_url(payload.avatar_url, request=request, field_label='圈子头像')
+    share_image_url = (
+        _normalize_circle_asset_url(payload.share_image_url, request=request, field_label='圈子分享图片')
+        if payload.share_image_url
+        else None
+    )
     _assert_profile_text_safe(
         user=owner,
         fields={
@@ -281,6 +293,8 @@ def create_new_circle(
     )
     _assert_profile_image_safe(user=owner, media_url=_to_public_file_url(cover_url, request))
     _assert_profile_image_safe(user=owner, media_url=_to_public_file_url(avatar_url, request))
+    if share_image_url:
+        _assert_profile_image_safe(user=owner, media_url=_to_public_file_url(share_image_url, request))
 
     try:
         circle = create_circle(
@@ -291,6 +305,7 @@ def create_new_circle(
             description=payload.description.strip(),
             cover_url=cover_url,
             avatar_url=avatar_url,
+            share_image_url=share_image_url,
             join_type=join_type,
             join_price=join_price,
             rules_text=normalized_rules,
@@ -343,6 +358,12 @@ def update_circle_info(
             request=request,
             field_label='圈子头像',
         )
+    if payload.share_image_url is not None:
+        updates['share_image_url'] = _normalize_circle_asset_url(
+            payload.share_image_url,
+            request=request,
+            field_label='圈子分享图片',
+        )
     if payload.join_type is not None:
         updates['join_type'] = payload.join_type.strip().lower()
     if payload.join_price is not None:
@@ -369,14 +390,18 @@ def update_circle_info(
         _assert_profile_image_safe(user=owner, media_url=_to_public_file_url(str(updates["cover_url"] or ""), request))
     if "avatar_url" in updates:
         _assert_profile_image_safe(user=owner, media_url=_to_public_file_url(str(updates["avatar_url"] or ""), request))
+    if "share_image_url" in updates:
+        _assert_profile_image_safe(user=owner, media_url=_to_public_file_url(str(updates["share_image_url"] or ""), request))
 
     join_type = str(updates.get('join_type') or circle.join_type or '').strip().lower()
     join_price = updates.get('join_price', circle.join_price)
     if join_type == 'paid':
         join_price = normalize_circle_join_price_tier(join_price)
+        if join_price <= 0:
+            raise BusinessException(message='付费入圈价格请选择固定付费档位', code=4354, status_code=400)
         if updates.get('join_price') != join_price:
             updates['join_price'] = join_price
-    elif 'join_price' in updates:
+    elif join_type == 'free':
         updates['join_price'] = Decimal('0.00')
 
     try:
@@ -551,6 +576,17 @@ def get_owned_circles(
     )
 
 
+def _append_circle_views(db: Session, payload: dict) -> None:
+    items = payload.get('items', [])
+    codes = [str(item.get('circle_code') or '').strip() for item in items if isinstance(item, dict)]
+    if not codes:
+        return
+    totals = dict(db.execute(select(Circle.circle_code, Circle.view_count).where(Circle.circle_code.in_(codes))).all())
+    for item in items:
+        if isinstance(item, dict):
+            item['view_count'] = int(totals.get(str(item.get('circle_code') or '').strip(), 0) or 0)
+
+
 @router.get('/discover', summary='List discover circles')
 def get_discover_circles(
     request: Request,
@@ -576,6 +612,7 @@ def get_discover_circles(
             city_name=city_name,
             industry_label=industry_label,
         )
+        _append_circle_views(db, payload)
         return success_response(data=payload)
 
     current_user = _require_current_user(db=db, current_user_pk=user_id)
@@ -646,6 +683,7 @@ def get_discover_circles(
             item['is_collected'] = is_interested
             item['collect_count'] = collect_count
             item['favorite_count'] = collect_count
+    _append_circle_views(db, payload)
     return success_response(data=payload)
 
 
@@ -1341,6 +1379,9 @@ def get_circle_detail(
     if owner is None:
         raise BusinessException(message='圈主不存在', code=4044, status_code=404)
 
+    db.execute(update(Circle).where(Circle.id == circle.id).values(view_count=Circle.view_count + 1))
+    db.commit()
+
     return success_response(
         data=_serialize_circle(
             circle=circle,
@@ -1433,4 +1474,120 @@ def get_circle_members(
         'offset': safe_offset,
         'limit': safe_limit,
     })
+
+
+@router.get('/{circle_code}/manage-members', summary='List members for circle owner')
+def get_managed_circle_members(
+    circle_code: str,
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=50),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    circle = get_circle_by_code(db=db, circle_code=circle_code.strip())
+    if circle is None:
+        raise BusinessException(message='圈子不存在', code=4043, status_code=404)
+    if int(circle.owner_user_pk) != int(user_id):
+        raise BusinessException(message='只有圈主可以管理成员', code=4401, status_code=403)
+    members = list_circle_members(db=db, circle_code=circle.circle_code, offset=offset, limit=limit)
+    items = []
+    for member, membership in members:
+        join_request = db.scalar(select(CircleJoinRequest).where(
+            CircleJoinRequest.circle_code == circle.circle_code,
+            CircleJoinRequest.user_pk == member.id,
+        ))
+        amount = Decimal(str(join_request.amount or 0)) if join_request else Decimal('0.00')
+        paid = bool(join_request and join_request.payment_status == 'paid' and amount > 0)
+        items.append({
+            'user_id': member.user_id,
+            'nickname': public_nickname(member),
+            'avatar_url': _to_public_file_url(public_avatar_url(member), request),
+            'joined_at': membership.created_at.isoformat() if membership.created_at else None,
+            'is_owner': int(member.id) == int(circle.owner_user_pk),
+            'join_amount': str(amount.quantize(Decimal('0.01'))),
+            'payment_status': str(join_request.payment_status) if join_request else 'none',
+            'refund_status': str(join_request.refund_status) if join_request else 'none',
+            'can_refund': paid and str(join_request.pay_channel) == 'wallet',
+        })
+    return success_response(data={
+        'items': items,
+        'total': count_circle_members(db=db, circle_code=circle.circle_code),
+        'offset': offset,
+        'limit': limit,
+        'join_type': circle.join_type,
+        'join_price': str(Decimal(str(circle.join_price or 0)).quantize(Decimal('0.01'))),
+    })
+
+
+@router.post('/{circle_code}/manage-members/{member_user_id}/remove', summary='Remove circle member')
+def remove_managed_circle_member(
+    circle_code: str,
+    member_user_id: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    circle = get_circle_by_code(db=db, circle_code=circle_code.strip())
+    if circle is None:
+        raise BusinessException(message='圈子不存在', code=4043, status_code=404)
+    if int(circle.owner_user_pk) != int(user_id):
+        raise BusinessException(message='只有圈主可以管理成员', code=4401, status_code=403)
+    member = get_user_by_business_user_id(db=db, business_user_id=member_user_id.strip())
+    if member is None:
+        raise BusinessException(message='成员不存在', code=4041, status_code=404)
+    if int(member.id) == int(user_id):
+        raise BusinessException(message='不能移除圈主', code=4402, status_code=409)
+    membership = db.scalar(select(UserCircleMembership).where(
+        UserCircleMembership.circle_code == circle.circle_code,
+        UserCircleMembership.user_pk == member.id,
+    ).with_for_update())
+    if membership is None or not membership.is_active:
+        raise BusinessException(message='该用户已不在圈子中', code=4403, status_code=409)
+    membership.is_active = False
+    db.flush()
+    circle.member_count = count_circle_members(db=db, circle_code=circle.circle_code)
+    db.add(Notification(user_pk=member.id, type='circle', title='已退出圈子',
+        content=f'你已被移出“{circle.name}”', link_type='circle', link_id=circle.circle_code, is_read=False))
+    db.commit()
+    return success_response(data={'user_id': member.user_id, 'status': 'removed'})
+
+
+@router.post('/{circle_code}/manage-members/{member_user_id}/refund', summary='Refund member join fee and remove membership')
+def refund_managed_circle_member(
+    circle_code: str,
+    member_user_id: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    circle = get_circle_by_code(db=db, circle_code=circle_code.strip())
+    if circle is None:
+        raise BusinessException(message='圈子不存在', code=4043, status_code=404)
+    if int(circle.owner_user_pk) != int(user_id):
+        raise BusinessException(message='只有圈主可以管理成员', code=4401, status_code=403)
+    member = get_user_by_business_user_id(db=db, business_user_id=member_user_id.strip())
+    if member is None or int(member.id) == int(user_id):
+        raise BusinessException(message='成员不存在', code=4041, status_code=404)
+    membership = db.scalar(select(UserCircleMembership).where(
+        UserCircleMembership.circle_code == circle.circle_code,
+        UserCircleMembership.user_pk == member.id,
+    ).with_for_update())
+    if membership is None or not membership.is_active:
+        raise BusinessException(message='该用户已不在圈子中', code=4403, status_code=409)
+    join_request = db.scalar(select(CircleJoinRequest).where(
+        CircleJoinRequest.circle_code == circle.circle_code,
+        CircleJoinRequest.user_pk == member.id,
+    ).with_for_update())
+    if join_request is None or join_request.payment_status != 'paid' or Decimal(str(join_request.amount or 0)) <= 0:
+        raise BusinessException(message='没有可退的入圈费用', code=4404, status_code=409)
+    refund_circle_join_payment(db=db, join_request=join_request, circle=circle, reason='圈主退费并移除成员')
+    membership.is_active = False
+    join_request.status = 'rejected'
+    join_request.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.flush()
+    circle.member_count = count_circle_members(db=db, circle_code=circle.circle_code)
+    db.add(Notification(user_pk=member.id, type='circle', title='入圈费用已退回',
+        content=f'“{circle.name}”的入圈费用已退回，圈子成员资格已结束',
+        link_type='circle', link_id=circle.circle_code, is_read=False))
+    db.commit()
+    return success_response(data={'user_id': member.user_id, 'status': 'refunded', 'amount': str(join_request.amount)})
 

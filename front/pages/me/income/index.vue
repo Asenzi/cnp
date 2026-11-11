@@ -8,13 +8,13 @@
         <view class="hero-title-wrap">
           <image class="hero-icon" src="https://cos.cnptec.site/static/icon/Profit.png" mode="aspectFit" />
           <view class="hero-title-copy">
-            <text class="eyebrow">CIRCLE OWNER INCOME</text>
-            <text class="hero-title">我的收益</text>
+            <text class="eyebrow">MY WALLET</text>
+            <text class="hero-title">我的钱包</text>
           </view>
         </view>
         <view class="status-pill">
           <text class="status-dot"></text>
-          <text class="status-pill-text">自动结算</text>
+          <text class="status-pill-text">提现人工审核</text>
         </view>
       </view>
 
@@ -24,7 +24,7 @@
           <text class="currency">¥</text>
           <text class="balance-value">{{ moneyText(account.available_balance) }}</text>
         </view>
-        <text class="balance-desc">来自付费入圈收益，扣除平台技术服务费后入账</text>
+        <text class="balance-desc">提现至当前登录微信账户 · 最低提现 ¥{{ payout.minimum_amount }}</text>
       </view>
 
       <view class="hero-actions">
@@ -32,10 +32,15 @@
           :disabled="!hasWithdrawable || withdrawing" hover-class="primary-action-active" @tap="onWithdraw">
           {{ withdrawing ? '提交中...' : '申请提现' }}
         </button>
-        <button class="ghost-action" hover-class="ghost-action-active" @tap="fetchIncome">
+        <button class="ghost-action" hover-class="ghost-action-active" @tap="refreshAll">
           刷新收益
         </button>
       </view>
+    </view>
+
+    <view class="payout-row">
+      <text>收款方式：当前登录微信</text>
+      <text>{{ payout.real_name_verified && payout.wechat_bound ? '已具备提现条件' : '请先完成实名并绑定微信' }}</text>
     </view>
 
     <view class="summary-strip">
@@ -53,34 +58,42 @@
         <text class="summary-value">¥{{ moneyText(account.total_withdrawn) }}</text>
         <text class="summary-label">累计提现</text>
       </view>
+      <view class="summary-divider"></view>
+      <view class="summary-item">
+        <text class="summary-value">¥{{ moneyText(account.frozen_balance) }}</text>
+        <text class="summary-label">冻结中</text>
+      </view>
     </view>
 
     <view class="rule-card">
       <view class="rule-head">
         <text class="section-title">收益规则</text>
-        <text class="rule-badge">付费入圈</text>
+        <text class="rule-badge">{{ settlementRule.role_name ? '会员推荐' : '付费入圈' }}</text>
       </view>
       <view class="rule-flow">
         <view class="rule-node">
-          <text class="rule-node-value">90%</text>
-          <text class="rule-node-label">圈主收益</text>
+          <text class="rule-node-value">{{ percentText(settlementRule.receiver_rate) }}</text>
+          <text class="rule-node-label">{{ settlementRule.role_name || '圈主' }}收益</text>
         </view>
         <view class="rule-line"></view>
         <view class="rule-node rule-node-muted">
-          <text class="rule-node-value">10%</text>
-          <text class="rule-node-label">技术服务费</text>
+          <text class="rule-node-value">{{ percentText(settlementRule.service_fee_rate) }}</text>
+          <text class="rule-node-label">{{ settlementRule.role_name ? '平台部分' : '技术服务费' }}</text>
         </view>
       </view>
-      <text class="rule-desc">用户付费申请入圈并完成加入后，系统自动生成收益流水。微信真实分账关闭时，这里展示内部结算收益。</text>
+      <text class="rule-desc">{{ settlementRule.role_name ? `推荐用户开通会员后，你获得会员实付金额的 ${percentText(settlementRule.receiver_rate)}；收益已入账，可按提现规则申请提现。` : '用户完成付费入圈后，系统会生成收益流水；收益进入可结算状态后即可申请提现。' }}</text>
     </view>
 
     <view class="records-card">
       <view class="records-head">
         <view>
-          <text class="section-title">最近收益</text>
-          <text class="section-subtitle">展示最近 30 条付费入圈分账记录</text>
+          <text class="section-title">收益明细</text>
+          <text class="section-subtitle">逐笔查看收益与服务费</text>
         </view>
         <text v-if="records.length" class="records-count">{{ records.length }} 条</text>
+      </view>
+      <view class="filter-row">
+        <text v-for="item in incomeFilters" :key="item.value" class="filter-chip" :class="{ 'filter-chip-active': incomeType === item.value }" @tap="changeIncomeType(item.value)">{{ item.label }}</text>
       </view>
 
       <view v-if="loading && !records.length" class="status-wrap">
@@ -91,13 +104,9 @@
         <text class="status-text">{{ loadError }}</text>
         <button class="retry-btn" hover-class="retry-btn-active" @tap="fetchIncome">重新加载</button>
       </view>
-      <view v-else-if="!records.length" class="status-wrap">
-        <image class="empty-icon" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-        <text class="status-text">暂无收益记录</text>
-        <text class="status-subtext">有成员付费加入你的圈子后，收益会显示在这里</text>
-      </view>
+      <AppEmptyState v-else-if="!records.length"><template #title>暂无收益记录</template><template #description>{{ settlementRule.role_name ? '你推荐的用户开通会员后，分佣记录会显示在这里' : '有成员付费加入你的圈子后，收益会显示在这里' }}</template></AppEmptyState>
       <view v-else class="record-list">
-        <view v-for="item in records" :key="item.id || item.order_no" class="record-item">
+        <view v-for="item in records" :key="item.id || item.order_no" class="record-item" @tap="showIncomeDetail(item)">
           <view class="record-icon" :class="statusClass(item.split_status)">
             <text class="record-icon-text">收</text>
           </view>
@@ -112,17 +121,55 @@
               }}</text>
             </view>
             <text v-if="item.remark" class="record-remark">{{ item.remark }}</text>
+            <text v-if="item.order_no" class="record-order">订单 {{ item.order_no }}</text>
           </view>
         </view>
       </view>
+      <button v-if="incomeHasMore" class="load-more-btn" :disabled="loading" @tap="loadMoreRecords">{{ loading ? '加载中...' : '加载更多' }}</button>
+    </view>
+
+    <view class="records-card withdrawals-card">
+      <view class="records-head">
+        <view>
+          <text class="section-title">提现记录</text>
+          <text class="section-subtitle">查看提现申请处理进度</text>
+        </view>
+        <text v-if="withdrawals.length" class="records-count">{{ withdrawals.length }} 条</text>
+      </view>
+      <view class="filter-row">
+        <text v-for="item in withdrawalFilters" :key="item.value" class="filter-chip" :class="{ 'filter-chip-active': withdrawalStatus === item.value }" @tap="changeWithdrawalStatus(item.value)">{{ item.label }}</text>
+      </view>
+      <AppEmptyState v-if="!withdrawals.length"><template #title>暂无提现记录</template></AppEmptyState>
+      <view v-else class="record-list">
+        <view v-for="item in withdrawals" :key="item.id || item.order_no" class="record-item" @tap="showWithdrawalDetail(item)">
+          <view class="record-icon withdrawal-record-icon">
+            <text class="record-icon-text">提</text>
+          </view>
+          <view class="record-main">
+            <view class="record-title-row">
+              <text class="record-title">提现申请</text>
+              <text class="record-amount withdrawal-amount">-¥{{ moneyText(item.amount) }}</text>
+            </view>
+            <view class="record-meta-row">
+              <text class="record-meta">{{ dateText(item.created_at) }}</text>
+              <text class="record-status" :class="withdrawalStatusClass(item.status)">{{ withdrawalStatusText(item.status) }}</text>
+            </view>
+            <text v-if="item.remark" class="record-remark">{{ item.remark }}</text>
+            <text v-if="item.status === 'failed'" class="record-remark">金额已退回可提现余额，可重新申请</text>
+          </view>
+        </view>
+      </view>
+      <button v-if="withdrawalHasMore" class="load-more-btn" :disabled="loadingWithdrawals" @tap="loadMoreWithdrawals">{{ loadingWithdrawals ? '加载中...' : '加载更多' }}</button>
     </view>
   </view>
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, ref } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
-import { createWithdrawal, getIncomeOverview } from '../../../api/settlement'
+import { createWithdrawal, getIncomeOverview, getWithdrawals } from '../../../api/settlement'
 
 const loading = ref(false)
 const withdrawing = ref(false)
@@ -131,16 +178,45 @@ const account = ref({
   available_balance: 0,
   pending_amount: 0,
   total_income: 0,
-  total_withdrawn: 0
+  total_withdrawn: 0,
+  frozen_balance: 0
 })
 const records = ref([])
-
-const hasWithdrawable = computed(() => Number(account.value?.available_balance || 0) > 0)
+const withdrawals = ref([])
+const payout = ref({ wechat_bound: false, real_name_verified: false, minimum_amount: '1.00' })
+const settlementRule = ref({ receiver_rate: 0.9, service_fee_rate: 0.1, auto_settle_enabled: true })
+const incomeType = ref('')
+const sourceTypes = ref([])
+const withdrawalStatus = ref('')
+const incomeCursor = ref(null)
+const withdrawalCursor = ref(null)
+const incomeHasMore = ref(false)
+const withdrawalHasMore = ref(false)
+const loadingWithdrawals = ref(false)
+const sourceLabels = {
+  circle_join: '付费入圈',
+  salon: '沙龙',
+  city_partner: '城市合伙',
+  distribution: '分销'
+}
+const incomeFilters = computed(() => [
+  { value: '', label: '全部' },
+  ...sourceTypes.value.map((value) => ({ value, label: sourceLabels[value] || value }))
+])
+const withdrawalFilters = [
+  { value: '', label: '全部' },
+  { value: 'pending', label: '处理中' },
+  { value: 'success', label: '已打款' },
+  { value: 'failed', label: '失败' }
+]
+const hasWithdrawable = computed(() => Number(account.value?.available_balance || 0) >= Number(payout.value.minimum_amount || 1))
 
 const moneyText = (value) => {
   const amount = Number(value || 0)
   return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
 }
+
+const percentText = (value) => `${(Number(value || 0) * 100).toFixed(0)}%`
 
 const statusText = (status) => {
   const map = {
@@ -161,9 +237,48 @@ const statusClass = (status) => {
   return 'status-pending'
 }
 
+const withdrawalStatusText = (status) => {
+  const map = {
+    pending: '处理中',
+    processing: '处理中',
+    success: '已打款',
+    completed: '已打款',
+    rejected: '已驳回',
+    cancelled: '已取消',
+    failed: '失败'
+  }
+  return map[String(status || '').trim().toLowerCase()] || '待处理'
+}
+
+const withdrawalStatusClass = (status) => {
+  const normalized = String(status || '').trim().toLowerCase()
+  if (['success', 'completed'].includes(normalized)) return 'status-success'
+  if (['rejected', 'cancelled', 'failed'].includes(normalized)) return 'status-danger'
+  return 'status-pending'
+}
+
+const showIncomeDetail = (item) => {
+  const fee = Number(item?.platform_fee || 0)
+  const amount = Number(item?.split_amount || 0)
+  uni.showModal({
+    title: '收益详情',
+    content: `收益金额 ¥${moneyText(amount)}\n平台服务费 ¥${moneyText(fee)}\n状态：${statusText(item?.split_status)}${item?.order_no ? `\n订单号：${item.order_no}` : ''}`,
+    showCancel: false,
+    confirmText: '知道了'
+  })
+}
+
+const showWithdrawalDetail = (item) => {
+  uni.showModal({
+    title: '提现详情',
+    content: `提现金额 ¥${moneyText(item?.amount)}\n状态：${withdrawalStatusText(item?.status)}${item?.order_no ? `\n提现单号：${item.order_no}` : ''}${item?.remark ? `\n备注：${item.remark}` : ''}`,
+    showCancel: false,
+    confirmText: '知道了'
+  })
+}
+
 const recordTitle = (item) => {
-  if (item?.biz_type === 'circle_join') return '付费入圈收益'
-  return '收益入账'
+  return `${sourceLabels[item?.biz_type] || item?.biz_type || '其他'}收益`
 }
 
 const dateText = (value) => {
@@ -174,16 +289,26 @@ const dateText = (value) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-const fetchIncome = async () => {
+const fetchIncome = async ({ append = false } = {}) => {
+  if (loading.value) return
   loading.value = true
   loadError.value = ''
   try {
-    const data = await getIncomeOverview({ limit: 30 })
+    const data = await getIncomeOverview({ limit: 30, type: incomeType.value, beforeId: append ? incomeCursor.value : null })
     account.value = {
       ...account.value,
       ...(data?.account || {})
     }
-    records.value = Array.isArray(data?.items) ? data.items : []
+    settlementRule.value = {
+      ...settlementRule.value,
+      ...(data?.rules || {})
+    }
+    payout.value = { ...payout.value, ...(data?.payout || {}) }
+    sourceTypes.value = Array.isArray(data?.source_types) ? data.source_types : []
+    const nextRecords = Array.isArray(data?.items) ? data.items : []
+    records.value = append ? [...records.value, ...nextRecords.filter((item) => !records.value.some((old) => old.id === item.id))] : nextRecords
+    incomeHasMore.value = Boolean(data?.has_more)
+    incomeCursor.value = data?.next_before_id || null
   } catch (error) {
     loadError.value = error?.message || '收益加载失败'
   } finally {
@@ -192,7 +317,51 @@ const fetchIncome = async () => {
   }
 }
 
+const fetchWithdrawals = async ({ append = false } = {}) => {
+  if (loadingWithdrawals.value) return
+  loadingWithdrawals.value = true
+  try {
+    const data = await getWithdrawals({ limit: 30, status: withdrawalStatus.value, beforeId: append ? withdrawalCursor.value : null })
+    const next = Array.isArray(data?.items) ? data.items : []
+    withdrawals.value = append ? [...withdrawals.value, ...next.filter((item) => !withdrawals.value.some((old) => old.id === item.id))] : next
+    withdrawalHasMore.value = Boolean(data?.has_more)
+    withdrawalCursor.value = data?.next_before_id || null
+  } catch (error) {
+    uni.showToast({ title: error?.message || '提现记录加载失败', icon: 'none' })
+  } finally {
+    loadingWithdrawals.value = false
+  }
+}
+
+const refreshAll = async () => {
+  await Promise.all([fetchIncome(), fetchWithdrawals()])
+}
+
+const changeIncomeType = async (value) => {
+  incomeType.value = value
+  await fetchIncome()
+}
+
+const loadMoreRecords = async () => {
+  if (!incomeHasMore.value) return
+  await fetchIncome({ append: true })
+}
+
+const changeWithdrawalStatus = async (value) => {
+  withdrawalStatus.value = value
+  await fetchWithdrawals()
+}
+
+const loadMoreWithdrawals = async () => {
+  if (!withdrawalHasMore.value) return
+  await fetchWithdrawals({ append: true })
+}
+
 const onWithdraw = () => {
+  if (!payout.value.real_name_verified || !payout.value.wechat_bound) {
+    uni.showToast({ title: '请先完成实名认证并绑定微信', icon: 'none' })
+    return
+  }
   if (!hasWithdrawable.value) {
     uni.showToast({ title: '暂无可提现收益', icon: 'none' })
     return
@@ -200,14 +369,14 @@ const onWithdraw = () => {
   const amount = Number(account.value?.available_balance || 0)
   uni.showModal({
     title: '确认提现',
-    content: `申请提现 ¥${moneyText(amount)}，提交后将进入后台人工打款审核。`,
+    content: `申请提现 ¥${moneyText(amount)} 至当前登录微信账户，提交后进入人工打款审核。请确认当前微信为本人收款账户。`,
     success: async (res) => {
       if (!res.confirm || withdrawing.value) return
       withdrawing.value = true
       try {
         await createWithdrawal({ amount, withdraw_type: 'wechat' })
         uni.showToast({ title: '提现申请已提交', icon: 'success' })
-        await fetchIncome()
+        await refreshAll()
       } catch (error) {
         uni.showToast({ title: error?.message || '提现申请失败', icon: 'none' })
       } finally {
@@ -218,11 +387,11 @@ const onWithdraw = () => {
 }
 
 onShow(() => {
-  fetchIncome()
+  refreshAll()
 })
 
 onPullDownRefresh(() => {
-  fetchIncome()
+  refreshAll().finally(() => uni.stopPullDownRefresh())
 })
 </script>
 
@@ -436,6 +605,16 @@ onPullDownRefresh(() => {
   align-items: center;
 }
 
+.payout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 20rpx 6rpx 0;
+  color: #475569;
+  font-size: 21rpx;
+  line-height: 32rpx;
+}
+
 .summary-item {
   flex: 1;
   min-width: 0;
@@ -461,6 +640,10 @@ onPullDownRefresh(() => {
   width: 1rpx;
   height: 46rpx;
   background: #eef2f7;
+}
+
+.summary-strip .summary-value {
+  font-size: 23rpx;
 }
 
 .rule-card,
@@ -568,8 +751,34 @@ onPullDownRefresh(() => {
   padding-top: 28rpx;
 }
 
+.withdrawals-card {
+  margin-bottom: 24rpx;
+}
+
 .records-head {
   padding: 0 28rpx 18rpx;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 0 28rpx 16rpx;
+}
+
+.filter-chip {
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 22rpx;
+  line-height: 28rpx;
+}
+
+.filter-chip-active {
+  background: #dff7f2;
+  color: #0f766e;
+  font-weight: 600;
 }
 
 .status-wrap {
@@ -579,6 +788,10 @@ onPullDownRefresh(() => {
   align-items: center;
   justify-content: center;
   gap: 18rpx;
+}
+
+.compact-status-wrap {
+  min-height: 150rpx;
 }
 
 .loading-mark {
@@ -614,6 +827,22 @@ onPullDownRefresh(() => {
   padding: 0 28rpx 10rpx;
 }
 
+.load-more-btn {
+  width: calc(100% - 56rpx);
+  height: 70rpx;
+  margin: 8rpx 28rpx 22rpx;
+  border: 0;
+  border-radius: 16rpx;
+  background: #f1f5f9;
+  color: #0f766e;
+  font-size: 24rpx;
+  line-height: 70rpx;
+}
+
+.load-more-btn::after {
+  border: 0;
+}
+
 .record-item {
   display: flex;
   gap: 18rpx;
@@ -634,6 +863,15 @@ onPullDownRefresh(() => {
 .record-icon-text {
   font-size: 22rpx;
   font-weight: 700;
+}
+
+.withdrawal-record-icon {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.withdrawal-amount {
+  color: #2563eb;
 }
 
 .record-main {
@@ -688,6 +926,14 @@ onPullDownRefresh(() => {
   color: #94a3b8;
   font-size: 22rpx;
   line-height: 32rpx;
+}
+
+.record-order {
+  display: block;
+  margin-top: 6rpx;
+  color: #cbd5e1;
+  font-size: 20rpx;
+  line-height: 28rpx;
 }
 
 .status-success {

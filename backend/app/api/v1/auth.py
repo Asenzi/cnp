@@ -6,6 +6,7 @@ from app.auth.service import (
     bind_phone_for_user,
     bind_wechat_for_user,
     change_password_with_sms_code,
+    close_account_for_user,
     get_wechat_bind_status,
     login_with_password,
     login_with_sms_code,
@@ -16,6 +17,7 @@ from app.auth.service import (
 )
 from app.core.response import success_response
 from app.schemas.auth import (
+    AccountCloseRequest,
     LoginRequest,
     PasswordChangeRequest,
     PasswordLoginRequest,
@@ -174,3 +176,17 @@ async def password_change(
         new_password=payload.new_password,
     )
     return success_response(data=result.model_dump(), message="密码修改成功")
+
+
+@router.delete("/account", summary="Close current user account")
+async def close_account(
+    payload: AccountCloseRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(db_session),
+):
+    result = close_account_for_user(
+        db=db,
+        current_user_pk=user_id,
+        confirm_text=payload.confirm_text,
+    )
+    return success_response(data=result.model_dump(), message="账号已注销")

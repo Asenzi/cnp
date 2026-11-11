@@ -59,9 +59,7 @@
             </view>
           </view>
 
-          <view v-if="showEmpty" class="status-wrap">
-            <text class="status-text">暂无发布内容</text>
-          </view>
+          <AppEmptyState v-if="showEmpty"><template #title>暂无发布内容</template></AppEmptyState>
 
           <view v-if="loadingMore" class="load-more-wrap">
             <text class="load-more-text">加载中...</text>
@@ -76,6 +74,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, ref } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import {

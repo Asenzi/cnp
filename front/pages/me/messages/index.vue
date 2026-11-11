@@ -29,11 +29,7 @@
       </view>
 
       <!-- 空状态 -->
-      <view v-else-if="currentList.length === 0" class="empty-state">
-        <image class="empty-icon-image" src="https://cos.cnptec.site/static/icon/data-block.png" mode="aspectFit" />
-        <text class="empty-title">暂无{{ currentTabLabel }}</text>
-        <text class="empty-hint">{{ emptyHint }}</text>
-      </view>
+      <AppEmptyState v-else-if="currentList.length === 0"><template #title>暂无{{ currentTabLabel }}</template><template #description>{{ emptyHint }}</template></AppEmptyState>
 
       <!-- 消息列表 -->
       <view v-else class="message-list">
@@ -68,10 +64,12 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import {
-  getCollectionNotifications,
+  getActivityNotifications,
   getSystemNotifications,
   markNotificationAsRead,
   markNotificationsAsRead
@@ -83,28 +81,20 @@ const { statusBarHeight = 0 } = uni.getSystemInfoSync()
 
 // 状态
 const loading = ref(false)
-const activeTab = ref('collection')
+const activeTab = ref('system')
 const collectionList = ref([])
 const systemList = ref([])
 let realtimeRefreshTimer = null
 
 // 选项卡配置
 const tabs = computed(() => [
-  {
-    key: 'collection',
-    label: '收藏通知',
-    badge: collectionList.value.filter(item => !item.read).length
-  },
-  {
-    key: 'system',
-    label: '系统通知',
-    badge: systemList.value.filter(item => !item.read).length
-  }
+ {key:'system',label:'系统通知',badge:systemList.value.filter(item=>!item.read).length},
+ {key:'activity',label:'动态通知',badge:collectionList.value.filter(item=>!item.read).length}
 ])
 
 // 当前选项卡数据
 const currentList = computed(() => {
-  if (activeTab.value === 'collection') return collectionList.value
+  if (activeTab.value === 'activity') return collectionList.value
   return systemList.value
 })
 
@@ -114,11 +104,11 @@ const currentTabLabel = computed(() => {
 })
 
 const emptyIcon = computed(() => {
-  return activeTab.value === 'collection' ? 'https://cos.cnptec.site/static/icon/interested.png' : 'https://cos.cnptec.site/static/icon/block.png'
+  return activeTab.value === 'activity' ? 'https://cos.cnptec.site/static/icon/interested.png' : 'https://cos.cnptec.site/static/icon/block.png'
 })
 const emptyHint = computed(() => {
-  if (activeTab.value === 'collection') {
-    return '别人收藏你的人脉、资源或圈子后会在这里显示'
+  if (activeTab.value === 'activity') {
+    return '谁查看、发起分享或收藏了你的人脉、资源、圈子，会在这里显示'
   }
   return '系统公告和重要通知会在这里显示'
 })
@@ -179,9 +169,9 @@ const mapNotificationItem = (item, fallbackType, fallbackTitle) => ({
 // 加载人脉、资源和圈子收藏通知
 const loadCollectionNotifications = async () => {
   try {
-    const data = await getCollectionNotifications({ limit: 50 })
+    const data = await getActivityNotifications({ limit: 50 })
     const items = Array.isArray(data?.items) ? data.items : []
-    collectionList.value = items.map(item => mapNotificationItem(item, 'collection', '收藏通知'))
+    collectionList.value = items.map(item => mapNotificationItem(item, 'activity', '动态通知'))
   } catch (err) {
     console.error('加载收藏通知失败:', err)
     collectionList.value = []
@@ -203,7 +193,7 @@ const loadSystemNotifications = async () => {
 
 // 切换选项卡
 const getTabList = (key) => {
-  if (key === 'collection') return collectionList.value
+  if (key === 'activity') return collectionList.value
   if (key === 'system') return systemList.value
   return []
 }
@@ -280,7 +270,7 @@ const handleItemTap = async (item) => {
     }
   }
 
-  if (activeTab.value === 'collection' && item.relatedUserId) {
+  if (activeTab.value === 'activity' && item.relatedUserId) {
     uni.navigateTo({
       url: `/pages/me/card/index?userId=${encodeURIComponent(item.relatedUserId)}`
     })

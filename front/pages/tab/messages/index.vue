@@ -28,9 +28,7 @@
           <button class="retry-btn" hover-class="retry-btn-active" @tap="onRetry">重新加载</button>
         </view>
 
-        <view v-else-if="!hasAny" class="status-wrap">
-          <text class="status-text">暂无会话消息</text>
-        </view>
+        <AppEmptyState v-else-if="!hasAny"><template #title>暂无会话消息</template></AppEmptyState>
 
         <view v-else class="section chat-section">
           <view
@@ -55,6 +53,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, onUnmounted, ref } from 'vue'
 import { onHide, onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { getImConversations, getImOverview, getImWebSocketUrl } from '../../../api/im'

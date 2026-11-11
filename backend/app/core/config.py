@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_QUARTERLY: str = Field(default='')
     WECHAT_VIRTUAL_PAY_PRODUCT_ID_MEMBER_MONTHLY: str = Field(default='')
     WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_OWNER: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_PRODUCT_ID_SALON_OWNER: str = Field(default='')
+    WECHAT_VIRTUAL_PAY_PRODUCT_ID_CITY_PARTNER: str = Field(default='')
     WECHAT_VIRTUAL_PAY_PRODUCT_ID_CIRCLE_JOIN: str = Field(default='')
     WECHAT_VIRTUAL_PAY_CIRCLE_JOIN_PRODUCT_IDS: str = Field(default='')
     DEFAULT_AVATAR_URL: str = Field(default='https://cos.cnptec.site/static/logo.png')

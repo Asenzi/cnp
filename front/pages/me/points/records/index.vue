@@ -16,9 +16,7 @@
             </view>
           </view>
         </view>
-        <view v-else class="empty-card">
-          <text class="empty-text">暂无积分记录</text>
-        </view>
+        <AppEmptyState v-else><template #title>暂无积分记录</template></AppEmptyState>
 
         <view v-if="records.length" class="load-state">
           <text class="load-state-text">{{ loadStateText }}</text>
@@ -29,6 +27,8 @@
 </template>
 
 <script setup>
+import AppEmptyState from '../../../../components/AppEmptyState/AppEmptyState.vue'
+
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getPointsRecords } from '../../../../api/points'
